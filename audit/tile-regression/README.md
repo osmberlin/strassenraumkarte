@@ -29,7 +29,7 @@ Production keeps `--metatile 8 --gutter 1`. QGIS-vs-QGIS measurement on the star
 ```bash
 cd audit/tile-regression
 bun install
-chmod +x scripts/render-qgis-tile.sh scripts/render-suite.sh
+chmod +x scripts/render-qgis-tile.sh scripts/render-suite.sh scripts/bench-bbox.sh
 ```
 
 Env (typical local Docker DB on 5433):
@@ -130,6 +130,29 @@ Gallery + metrics land in `runs/<timestamp>/`. DSSIM is included when `dssim` is
 ```
 
 Defaults: `--format png --metatile 1 --gutter 1 --workers 1`. Extra args are forwarded to `render/xyz_tiles.py`.
+
+## Bbox timing bench
+
+Wall-clock comparison on the starter bbox (278 tiles, z15–18):
+
+```bash
+./audit/tile-regression/scripts/bench-bbox.sh
+# skip optional full-style QGIS re-run:
+./audit/tile-regression/scripts/bench-bbox.sh --skip-full-style
+```
+
+Writes `runs/bench-<ts>/` with `tiles.txt`, per-engine PNGs, `timing.json`, and `summary.json`. Report: [`TIMING.md`](TIMING.md).
+
+Rust bbox mode (without the script):
+
+```bash
+./rust/srk-render/target/release/srk-render \
+  --bbox 13.4132,52.4715,13.4312,52.4821 \
+  --zmin 15 --zmax 18 \
+  --layers highway_area \
+  --out /tmp/srk-bench-rust \
+  --format png --quiet
+```
 
 ## Fixture lock
 

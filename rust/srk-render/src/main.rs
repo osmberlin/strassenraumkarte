@@ -6,9 +6,11 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 use anyhow::{bail, Context, Result};
 use clap::Parser;
+use serde::Serialize;
 use geo_types::{Coord, Geometry, LineString, MultiPolygon, Polygon};
 use postgres::{Client, Config, NoTls};
 use tiny_skia::{Color, FillRule, Paint, PathBuilder, Pixmap, Transform};
@@ -22,9 +24,21 @@ const DEFAULT_BACKGROUND: &str = "#ededed";
 #[derive(Parser, Debug)]
 #[command(name = "srk-render", about = "Rust XYZ tile renderer (highway_area slice)")]
 struct Cli {
-    /// Tile specs `z/x/y` (repeatable or comma-separated).
-    #[arg(long = "tiles", required = true, value_delimiter = ',')]
-    tiles: Vec<String>,
+    /// Tile specs `z/x/y` (repeatable or comma-separated). Omit when using `--bbox`.
+    #[arg(long = "tiles", value_delimiter = ',')]
+    tiles: Option<Vec<String>>,
+
+    /// WGS84 extent `xmin,ymin,xmax,ymax` — enumerate XYZ tiles for `--zmin`..`--zmax`.
+    #[arg(long = "bbox")]
+    bbox: Option<String>,
+
+    /// Minimum zoom when using `--bbox` (inclusive).
+    #[arg(long = "zmin", default_value_t = 15)]
+    zmin: u32,
+
+    /// Maximum zoom when using `--bbox` (inclusive).
+    #[arg(long = "zmax", default_value_t = 18)]
+    zmax: u32,
 
     /// Layer isolates (only `highway_area` supported in this slice).
     #[arg(long = "layers", default_value = "highway_area", value_delimiter = ',')]
@@ -37,6 +51,14 @@ struct Cli {
     /// Image format (only `png` for now).
     #[arg(long, default_value = "png")]
     format: String,
+
+    /// Suppress per-tile progress on stderr.
+    #[arg(long)]
+    quiet: bool,
+
+    /// Write `timing.json` next to `--out` (default: on for `--bbox`).
+    #[arg(long)]
+    timing_json: bool,
 
     #[arg(long, env = "DB_HOST", default_value = "localhost")]
     db_host: String,
@@ -53,12 +75,103 @@ struct Cli {
     database_url: Option<String>,
 }
 
+#[derive(Serialize)]
+struct TimingSummary {
+    engine: &'static str,
+    scope: String,
+    bbox: Option<String>,
+    zmin: Option<u32>,
+    zmax: Option<u32>,
+    tiles: usize,
+    tiles_written: usize,
+    wall_ms: u64,
+    ms_per_tile: f64,
+    format: String,
+    layers: Vec<String>,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct TileRange {
+    x0: u32,
+    x1: u32,
+    y0: u32,
+    y1: u32,
+}
+
 #[derive(Clone, Copy, Debug)]
 struct TileBounds {
     minx: f64,
     miny: f64,
     maxx: f64,
     maxy: f64,
+}
+
+fn clamp_lat(lat: f64) -> f64 {
+    lat.clamp(-85.051_128_78, 85.051_128_78)
+}
+
+/// Port of `lon_to_tile_x` in `render/xyz_tiles.py`.
+fn lon_to_tile_x(lon: f64, z: u32) -> u32 {
+    let n = 2f64.powi(z as i32);
+    let x = ((lon + 180.0) / 360.0 * n).floor() as i64;
+    x.clamp(0, (n as i64) - 1) as u32
+}
+
+/// Port of `lat_to_tile_y` in `render/xyz_tiles.py`.
+fn lat_to_tile_y(lat: f64, z: u32) -> u32 {
+    let lat = clamp_lat(lat);
+    let lat_rad = lat.to_radians();
+    let n = 2f64.powi(z as i32);
+    let y = ((1.0 - (lat_rad.tan().asinh() / std::f64::consts::PI)) / 2.0 * n).floor() as i64;
+    y.clamp(0, (n as i64) - 1) as u32
+}
+
+/// Port of `tile_range_for_bbox` in `render/xyz_tiles.py`.
+fn tile_range_for_bbox(xmin: f64, ymin: f64, xmax: f64, ymax: f64, z: u32) -> TileRange {
+    let mut x0 = lon_to_tile_x(xmin, z);
+    let mut x1 = lon_to_tile_x(xmax, z);
+    let mut y0 = lat_to_tile_y(ymax, z);
+    let mut y1 = lat_to_tile_y(ymin, z);
+    if x1 < x0 {
+        std::mem::swap(&mut x0, &mut x1);
+    }
+    if y1 < y0 {
+        std::mem::swap(&mut y0, &mut y1);
+    }
+    TileRange { x0, x1, y0, y1 }
+}
+
+fn parse_bbox(spec: &str) -> Result<(f64, f64, f64, f64)> {
+    let parts: Vec<_> = spec.split(',').map(str::trim).collect();
+    if parts.len() != 4 {
+        bail!("--bbox must be xmin,ymin,xmax,ymax, got {spec}");
+    }
+    Ok((
+        parts[0].parse()?,
+        parts[1].parse()?,
+        parts[2].parse()?,
+        parts[3].parse()?,
+    ))
+}
+
+fn enumerate_bbox_tiles(
+    xmin: f64,
+    ymin: f64,
+    xmax: f64,
+    ymax: f64,
+    zmin: u32,
+    zmax: u32,
+) -> Vec<(u32, u32, u32)> {
+    let mut tiles = Vec::new();
+    for z in zmin..=zmax {
+        let tr = tile_range_for_bbox(xmin, ymin, xmax, ymax, z);
+        for x in tr.x0..=tr.x1 {
+            for y in tr.y0..=tr.y1 {
+                tiles.push((z, x, y));
+            }
+        }
+    }
+    tiles
 }
 
 fn parse_tile_spec(spec: &str) -> Result<(u32, u32, u32)> {
@@ -205,7 +318,14 @@ fn decode_wkb(bytes: &[u8]) -> Result<Geometry<f64>> {
         .map_err(|e| anyhow::anyhow!("WKB decode failed: {e:?}"))
 }
 
-fn render_highway_area(client: &mut Client, z: u32, x: u32, y: u32, out_path: &Path) -> Result<()> {
+fn render_highway_area(
+    client: &mut Client,
+    z: u32,
+    x: u32,
+    y: u32,
+    out_path: &Path,
+    quiet: bool,
+) -> Result<()> {
     let bounds = tile_bounds_3857(x, y, z);
     let mut pixmap = Pixmap::new(TILE_SIZE_PX, TILE_SIZE_PX).context("pixmap alloc")?;
     pixmap.fill(parse_hex_color(DEFAULT_BACKGROUND)?);
@@ -285,13 +405,49 @@ fn render_highway_area(client: &mut Client, z: u32, x: u32, y: u32, out_path: &P
         fs::create_dir_all(parent)?;
     }
     pixmap.save_png(out_path)?;
-    eprintln!(
-        "rendered {z}/{x}/{y} → {} ({} polygon parts, {} features)",
-        out_path.display(),
-        painted,
-        rows.len()
-    );
+    if !quiet {
+        eprintln!(
+            "rendered {z}/{x}/{y} → {} ({} polygon parts, {} features)",
+            out_path.display(),
+            painted,
+            rows.len()
+        );
+    }
     Ok(())
+}
+
+fn collect_tiles(cli: &Cli) -> Result<(Vec<(u32, u32, u32)>, Option<String>)> {
+    match (&cli.tiles, &cli.bbox) {
+        (Some(_), Some(_)) => bail!("provide exactly one of --tiles or --bbox"),
+        (None, None) => bail!("provide --tiles or --bbox"),
+        (Some(specs), None) => {
+            let mut tiles = Vec::new();
+            for spec in specs {
+                for part in spec.split(',') {
+                    let part = part.trim();
+                    if part.is_empty() {
+                        continue;
+                    }
+                    tiles.push(parse_tile_spec(part)?);
+                }
+            }
+            if tiles.is_empty() {
+                bail!("no tiles parsed from --tiles");
+            }
+            Ok((tiles, None))
+        }
+        (None, Some(bbox_spec)) => {
+            if cli.zmin > cli.zmax {
+                bail!("--zmin must be <= --zmax");
+            }
+            let (xmin, ymin, xmax, ymax) = parse_bbox(bbox_spec)?;
+            let tiles = enumerate_bbox_tiles(xmin, ymin, xmax, ymax, cli.zmin, cli.zmax);
+            if tiles.is_empty() {
+                bail!("--bbox produced no tiles for z{}-{}", cli.zmin, cli.zmax);
+            }
+            Ok((tiles, Some(bbox_spec.clone())))
+        }
+    }
 }
 
 fn main() -> Result<()> {
@@ -311,26 +467,61 @@ fn main() -> Result<()> {
         );
     }
 
-    let mut tiles = Vec::new();
-    for spec in &cli.tiles {
-        for part in spec.split(',') {
-            let part = part.trim();
-            if part.is_empty() {
-                continue;
-            }
-            tiles.push(parse_tile_spec(part)?);
-        }
-    }
-    if tiles.is_empty() {
-        bail!("no tiles given");
-    }
+    let (tiles, bbox) = collect_tiles(&cli)?;
+    let tile_count = tiles.len();
 
     let mut client = connect(&cli)?;
     fs::create_dir_all(&cli.out)?;
 
+    let started = Instant::now();
+    let mut tiles_written = 0usize;
     for (z, x, y) in tiles {
         let out_path = cli.out.join(format!("{z}/{x}/{y}.png"));
-        render_highway_area(&mut client, z, x, y, &out_path)?;
+        render_highway_area(&mut client, z, x, y, &out_path, cli.quiet)?;
+        tiles_written += 1;
     }
+    let wall_ms = started.elapsed().as_millis() as u64;
+    let ms_per_tile = if tile_count > 0 {
+        wall_ms as f64 / tile_count as f64
+    } else {
+        0.0
+    };
+
+    let scope = if bbox.is_some() {
+        format!("bbox z{}-{}", cli.zmin, cli.zmax)
+    } else {
+        "tiles".into()
+    };
+    let summary = TimingSummary {
+        engine: "srk-render",
+        scope,
+        bbox: bbox.clone(),
+        zmin: bbox.as_ref().map(|_| cli.zmin),
+        zmax: bbox.as_ref().map(|_| cli.zmax),
+        tiles: tile_count,
+        tiles_written,
+        wall_ms,
+        ms_per_tile,
+        format: cli.format.clone(),
+        layers: cli.layers.clone(),
+    };
+
+    eprintln!(
+        "timing: engine=srk-render tiles={tile_count} wall_ms={wall_ms} ms_per_tile={ms_per_tile:.2}"
+    );
+
+    let write_timing = cli.timing_json || bbox.is_some();
+    if write_timing {
+        let timing_path = cli.out.join("timing.json");
+        if let Some(parent) = timing_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let json = serde_json::to_string_pretty(&summary)?;
+        fs::write(&timing_path, format!("{json}\n"))?;
+        if !cli.quiet {
+            eprintln!("wrote {}", timing_path.display());
+        }
+    }
+
     Ok(())
 }
