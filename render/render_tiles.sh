@@ -1,17 +1,23 @@
 #!/bin/bash
 #
 # Usage:
-#   ./render_tiles.sh [--bbox xmin,ymin,xmax,ymax] [--project path] [--out dir]
+#   ./render_tiles.sh [--bbox xmin,ymin,xmax,ymax] [--tiles z/x/y[,z/x/y...]]
+#                     [--layers name1,name2] [--project path] [--out dir]
 #                     [--zmin N] [--zmax N] [--metatile N] [--gutter N]
 #                     [--dpi N] [--background #rrggbb] [--format png|jpg]
 #
 #   --bbox         Optional WGS84 extent (xmin,ymin,xmax,ymax). Without it, combined
-#                  project layer extent is used.
+#                  project layer extent is used (unless --tiles is set).
+#   --tiles        Exact XYZ tiles (z/x/y). Repeatable or comma-separated.
+#                  Mutually exclusive with --bbox; skips project-extent lookup.
+#                  Forces workers=1 in xyz_tiles.py. Prefer --metatile 1 --gutter 1
+#                  for single-tile compare runs.
+#   --layers       Optional comma-separated QGIS layer names (isolates).
 #   --project      QGIS project (.qgz/.qgs). Default: <repo>/style/strassenraumkarte.qgz
 #   --out          Output directory for XYZ tiles. Default: <repo>/render/tiles
-#   --zmin         Minimum zoom (default: 15)
-#   --zmax         Maximum zoom (default: 20)
-#   --metatile     Metatile size (default: 8)
+#   --zmin         Minimum zoom (default: 15; ignored when --tiles is set)
+#   --zmax         Maximum zoom (default: 20; ignored when --tiles is set)
+#   --metatile     Metatile size (default: 8; ignored for core size when --tiles)
 #   --gutter       Extra tiles around each metatile for labels/symbols (default: 1);
 #                  rendered then discarded (not written)
 #   --dpi          Render DPI (default: 96)
@@ -39,6 +45,8 @@ export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-offscreen}"
 PYTHON="${PYTHON:-python3}"
 
 BBOX=""
+TILES=()
+LAYERS=""
 PROJECT="$REPO_ROOT/style/strassenraumkarte.qgz"
 OUT="$REPO_ROOT/render/tiles"
 ZMIN=15
@@ -57,7 +65,7 @@ log() {
 }
 
 usage() {
-  echo "Usage: $0 [--bbox xmin,ymin,xmax,ymax] [--project path] [--out dir] [--zmin N] [--zmax N] [--metatile N] [--gutter N] [--dpi N] [--background #rrggbb] [--format png|jpg] [--workers N] [--fonts-dir path] [--no-fonts]"
+  echo "Usage: $0 [--bbox xmin,ymin,xmax,ymax] [--tiles z/x/y[,z/x/y...]] [--layers name1,name2] [--project path] [--out dir] [--zmin N] [--zmax N] [--metatile N] [--gutter N] [--dpi N] [--background #rrggbb] [--format png|jpg] [--workers N] [--fonts-dir path] [--no-fonts]"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -65,6 +73,16 @@ while [[ $# -gt 0 ]]; do
     --bbox)
       [[ -z "${2:-}" || "$2" == --* ]] && { log ERROR "--bbox requires xmin,ymin,xmax,ymax"; usage; exit 1; }
       BBOX="$2"
+      shift 2
+      ;;
+    --tiles)
+      [[ -z "${2:-}" || "$2" == --* ]] && { log ERROR "--tiles requires z/x/y[,z/x/y...]"; usage; exit 1; }
+      TILES+=("$2")
+      shift 2
+      ;;
+    --layers)
+      [[ -z "${2:-}" || "$2" == --* ]] && { log ERROR "--layers requires comma-separated names"; usage; exit 1; }
+      LAYERS="$2"
       shift 2
       ;;
     --project)
@@ -189,7 +207,15 @@ case "$FORMAT" in
     ;;
 esac
 
-if [[ -n "$BBOX" ]]; then
+if [[ ${#TILES[@]} -gt 0 && -n "$BBOX" ]]; then
+  log ERROR "--bbox and --tiles are mutually exclusive"
+  exit 1
+fi
+
+EXTENT=""
+if [[ ${#TILES[@]} -gt 0 ]]; then
+  log INFO "Using --tiles mode (exact XYZ indices; extent derived inside xyz_tiles.py)"
+elif [[ -n "$BBOX" ]]; then
   if ! [[ "$BBOX" =~ ^-?[0-9]+(\.[0-9]+)?,-?[0-9]+(\.[0-9]+)?,-?[0-9]+(\.[0-9]+)?,-?[0-9]+(\.[0-9]+)?$ ]]; then
     log ERROR "Invalid --bbox (expected xmin,ymin,xmax,ymax): $BBOX"
     exit 1
@@ -212,7 +238,12 @@ log INFO "Starting PyQGIS metatile renderer..."
 log INFO "  python=$PYTHON"
 log INFO "  project=$PROJECT"
 log INFO "  out=$OUT"
-log INFO "  zoom=${ZMIN}-${ZMAX} metatile=$METATILE gutter=$GUTTER dpi=$DPI format=$FORMAT workers=$WORKERS bg=$BACKGROUND"
+if [[ ${#TILES[@]} -gt 0 ]]; then
+  log INFO "  tiles=${TILES[*]} metatile=$METATILE gutter=$GUTTER dpi=$DPI format=$FORMAT workers=$WORKERS bg=$BACKGROUND"
+else
+  log INFO "  zoom=${ZMIN}-${ZMAX} metatile=$METATILE gutter=$GUTTER dpi=$DPI format=$FORMAT workers=$WORKERS bg=$BACKGROUND"
+fi
+[[ -n "$LAYERS" ]] && log INFO "  layers=$LAYERS"
 
 EXTRA_ARGS=()
 if [[ "$NO_FONTS" -eq 1 ]]; then
@@ -220,24 +251,45 @@ if [[ "$NO_FONTS" -eq 1 ]]; then
 elif [[ -n "$FONTS_DIR" ]]; then
   EXTRA_ARGS+=(--fonts-dir "$(resolve_path "$FONTS_DIR")")
 fi
+if [[ -n "$LAYERS" ]]; then
+  EXTRA_ARGS+=(--layers "$LAYERS")
+fi
 
-DETAIL=$(python3 -c 'import json,sys; print(json.dumps({"project":sys.argv[1],"extent":sys.argv[2],"zmin":sys.argv[3],"zmax":sys.argv[4],"metatile":sys.argv[5],"gutter":sys.argv[6],"workers":sys.argv[7]}))' \
-  "$PROJECT" "$EXTENT" "$ZMIN" "$ZMAX" "$METATILE" "$GUTTER" "$WORKERS")
-# bash 3.2 + set -u: empty "${arr[@]}" is an unbound-variable error
-RENDER_CMD=(
-  "$PYTHON" "$SCRIPT_DIR/xyz_tiles.py"
-  --project "$PROJECT"
-  --extent "$EXTENT"
-  --out "$OUT"
-  --zmin "$ZMIN"
-  --zmax "$ZMAX"
-  --metatile "$METATILE"
-  --gutter "$GUTTER"
-  --dpi "$DPI"
-  --background "$BACKGROUND"
-  --format "$FORMAT"
-  --workers "$WORKERS"
-)
+if [[ ${#TILES[@]} -gt 0 ]]; then
+  DETAIL=$(python3 -c 'import json,sys; print(json.dumps({"project":sys.argv[1],"tiles":sys.argv[2].split("|"),"metatile":sys.argv[3],"gutter":sys.argv[4],"workers":sys.argv[5],"layers":sys.argv[6] or None}))' \
+    "$PROJECT" "$(IFS='|'; echo "${TILES[*]}")" "$METATILE" "$GUTTER" "$WORKERS" "$LAYERS")
+  RENDER_CMD=(
+    "$PYTHON" "$SCRIPT_DIR/xyz_tiles.py"
+    --project "$PROJECT"
+    --out "$OUT"
+    --metatile "$METATILE"
+    --gutter "$GUTTER"
+    --dpi "$DPI"
+    --background "$BACKGROUND"
+    --format "$FORMAT"
+    --workers "$WORKERS"
+  )
+  for t in "${TILES[@]}"; do
+    RENDER_CMD+=(--tiles "$t")
+  done
+else
+  DETAIL=$(python3 -c 'import json,sys; print(json.dumps({"project":sys.argv[1],"extent":sys.argv[2],"zmin":sys.argv[3],"zmax":sys.argv[4],"metatile":sys.argv[5],"gutter":sys.argv[6],"workers":sys.argv[7]}))' \
+    "$PROJECT" "$EXTENT" "$ZMIN" "$ZMAX" "$METATILE" "$GUTTER" "$WORKERS")
+  RENDER_CMD=(
+    "$PYTHON" "$SCRIPT_DIR/xyz_tiles.py"
+    --project "$PROJECT"
+    --extent "$EXTENT"
+    --out "$OUT"
+    --zmin "$ZMIN"
+    --zmax "$ZMAX"
+    --metatile "$METATILE"
+    --gutter "$GUTTER"
+    --dpi "$DPI"
+    --background "$BACKGROUND"
+    --format "$FORMAT"
+    --workers "$WORKERS"
+  )
+fi
 if [[ ${#EXTRA_ARGS[@]} -gt 0 ]]; then
   RENDER_CMD+=("${EXTRA_ARGS[@]}")
 fi

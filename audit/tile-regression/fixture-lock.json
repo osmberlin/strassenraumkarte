@@ -1,0 +1,16 @@
+{
+  "recorded_at": "2026-08-01",
+  "git_sha": "e54c36fed19a11d26a063984da11a4470ca45b2e",
+  "sql_compare_freeze": "pending full freeze",
+  "notes": "Stub for Phase 0. PBF + osm2pgsql + SQL digest freeze via audit/sql-compare/ can be run later; do not treat this file as a verified data pin yet.",
+  "db": {
+    "host": "localhost",
+    "port": 5433,
+    "name": "strassenraumkarte",
+    "user": "postgres"
+  },
+  "bbox": "13.4132,52.4715,13.4312,52.4821",
+  "bbox_source": "docker/.env.example starter (Neukölln); same default as audit/tile-compare/freeze-reference.sh",
+  "example_tile": "17/70422/43008",
+  "example_tile_note": "Inside docker starter BBOX; present under render/tiles/ when a starter render has been run. Note: 17/70439/43023 is outside the starter bbox and renders blank against current DB data."
+}

@@ -68,6 +68,17 @@ audit/tile-compare/candidates/**
 !audit/tile-compare/candidates/.gitkeep
 audit/tile-compare/.venv/
 
+# Tile regression harness runs (keep README, fixture lock, scripts when present)
+audit/tile-regression/runs/**
+!audit/tile-regression/runs/.gitkeep
+
+# Rust crate build artefacts
+rust/**/target/
+
+# Style IR / oracle dumps (generated; keep dir when scripts land)
+style/generated/**
+!style/generated/.gitkeep
+
 # Local notes / legacy (not for remote)
 TODO.txt
 todo_from_post_processing.py

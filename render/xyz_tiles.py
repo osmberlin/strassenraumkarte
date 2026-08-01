@@ -209,6 +209,114 @@ def parse_extent(extent: str) -> Tuple[float, float, float, float]:
     return xmin, ymin, xmax, ymax
 
 
+def parse_tile_spec(spec: str) -> Tuple[int, int, int]:
+    """Parse 'z/x/y' → (z, x, y)."""
+    parts = spec.strip().split("/")
+    if len(parts) != 3:
+        raise ValueError(f"Invalid tile spec (expected z/x/y): {spec}")
+    try:
+        z, x, y = (int(parts[0]), int(parts[1]), int(parts[2]))
+    except ValueError as exc:
+        raise ValueError(f"Invalid tile spec (expected integers z/x/y): {spec}") from exc
+    if z < 0 or x < 0 or y < 0:
+        raise ValueError(f"Invalid tile indices (must be ≥ 0): {spec}")
+    n = 2**z
+    if x >= n or y >= n:
+        raise ValueError(f"Tile out of range for z{z} (0..{n - 1}): {spec}")
+    return z, x, y
+
+
+def parse_tiles_args(tiles_args: Sequence[str]) -> List[Tuple[int, int, int]]:
+    """Parse repeated/comma-separated --tiles values into unique (z, x, y) list."""
+    out: List[Tuple[int, int, int]] = []
+    seen = set()
+    for arg in tiles_args:
+        for part in arg.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            tile = parse_tile_spec(part)
+            if tile in seen:
+                continue
+            seen.add(tile)
+            out.append(tile)
+    if not out:
+        raise ValueError("No tiles parsed from --tiles")
+    return out
+
+
+def tile_bounds_wgs84(x: int, y: int, z: int) -> Tuple[float, float, float, float]:
+    """Return (west, south, east, north) in WGS84 for XYZ tile z/x/y."""
+    n = 2**z
+    west = x / n * 360.0 - 180.0
+    east = (x + 1) / n * 360.0 - 180.0
+
+    def tile_y_to_lat(ty: int) -> float:
+        merc_n = math.pi - (2.0 * math.pi * ty) / n
+        return math.degrees(math.atan(math.sinh(merc_n)))
+
+    north = tile_y_to_lat(y)
+    south = tile_y_to_lat(y + 1)
+    return west, south, east, north
+
+
+def wgs84_extent_for_tiles(
+    tiles: Sequence[Tuple[int, int, int]],
+) -> Tuple[float, float, float, float]:
+    """Union WGS84 bbox covering the listed tiles (xmin, ymin, xmax, ymax)."""
+    xmin = ymin = float("inf")
+    xmax = ymax = float("-inf")
+    for z, x, y in tiles:
+        west, south, east, north = tile_bounds_wgs84(x, y, z)
+        xmin = min(xmin, west)
+        ymin = min(ymin, south)
+        xmax = max(xmax, east)
+        ymax = max(ymax, north)
+    return xmin, ymin, xmax, ymax
+
+
+def metatile_for_single_tile(z: int, x: int, y: int, gutter: int) -> MetaTile:
+    """One core tile with optional gutter for labels/symbols (discarded after render)."""
+    n = 2**z
+    max_xy = n - 1
+    return MetaTile(
+        z=z,
+        x0=x,
+        x1=x,
+        y0=y,
+        y1=y,
+        rx0=max(0, x - gutter),
+        rx1=min(max_xy, x + gutter),
+        ry0=max(0, y - gutter),
+        ry1=min(max_xy, y + gutter),
+    )
+
+
+def parse_layer_names(layers_arg: Optional[str]) -> Optional[List[str]]:
+    """Parse comma-separated layer names; None means all visible layers."""
+    if layers_arg is None:
+        return None
+    names = [n.strip() for n in layers_arg.split(",") if n.strip()]
+    if not names:
+        raise ValueError("--layers was empty (expected comma-separated layer names)")
+    return names
+
+
+def filter_layers_by_name(layers: Sequence, names: Sequence[str]) -> List:
+    """Keep layers whose name() is in names; preserve paint order."""
+    wanted = set(names)
+    filtered = [layer for layer in layers if layer.name() in wanted]
+    found = {layer.name() for layer in filtered}
+    missing = [n for n in names if n not in found]
+    if missing:
+        available = sorted({layer.name() for layer in layers})
+        raise RuntimeError(
+            f"Layer name(s) not found among visible layers: {', '.join(missing)}. "
+            f"Available: {', '.join(available)}"
+        )
+    return filtered
+
+
 def clamp_lat(lat: float) -> float:
     return max(min(lat, 85.05112878), -85.05112878)
 
@@ -537,6 +645,14 @@ def _prepare_project_and_settings(
         raise RuntimeError(f"Failed to read project: {args.project}")
 
     layers = collect_visible_layers(project)
+    layer_names = getattr(args, "layer_names", None)
+    if layer_names:
+        layers = filter_layers_by_name(layers, layer_names)
+        log(
+            "INFO",
+            f"Layer filter (--layers): {len(layers)} layer(s) — "
+            + ", ".join(layer.name() for layer in layers),
+        )
     valid = sum(1 for layer in layers if layer.isValid())
     log("INFO", f"Loaded project with {valid} visible layer(s).")
     if valid == 0:
@@ -602,6 +718,7 @@ def _worker_render_chunk(job: Dict[str, Any]) -> Dict[str, Any]:
     args = argparse.Namespace(
         project=job["project"],
         dpi=job["dpi"],
+        layer_names=job.get("layer_names"),
     )
     xmin, ymin, xmax, ymax = job["bbox"]
     background = QColor(job["background_hex"])
@@ -663,7 +780,23 @@ def _worker_render_chunk(job: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def run(args: argparse.Namespace) -> int:
-    xmin, ymin, xmax, ymax = parse_extent(args.extent)
+    tile_list: Optional[List[Tuple[int, int, int]]] = None
+    if args.tiles:
+        try:
+            tile_list = parse_tiles_args(args.tiles)
+            xmin, ymin, xmax, ymax = wgs84_extent_for_tiles(tile_list)
+        except ValueError as exc:
+            log("ERROR", str(exc))
+            return 1
+    else:
+        xmin, ymin, xmax, ymax = parse_extent(args.extent)
+
+    try:
+        args.layer_names = parse_layer_names(args.layers)
+    except ValueError as exc:
+        log("ERROR", str(exc))
+        return 1
+
     fmt = "jpg" if args.format.lower() in ("jpg", "jpeg") else "png"
     try:
         bg_hex, background = parse_background_color(args.background)
@@ -678,26 +811,58 @@ def run(args: argparse.Namespace) -> int:
         fonts_dir = None
 
     workers = max(1, int(args.workers))
+    if tile_list is not None and workers > 1:
+        log("INFO", f"--tiles forces workers=1 (ignoring --workers {workers})")
+        workers = 1
 
     # Precompute metatiles / totals (no QGIS needed)
     zoom_meta: List[Tuple[int, List[MetaTile]]] = []
     total_tiles = 0
     total_metas = 0
     flat: List[MetaTile] = []
-    for z in range(args.zmin, args.zmax + 1):
-        tr = tile_range_for_bbox(xmin, ymin, xmax, ymax, z)
-        metas = iter_metatiles(tr, z, args.metatile, args.gutter)
-        zoom_meta.append((z, metas))
-        total_tiles += sum(m.tile_count for m in metas)
-        total_metas += len(metas)
-        flat.extend(metas)
-
-    log(
-        "INFO",
-        f"Rendering XYZ tiles z{args.zmin}-{args.zmax} "
-        f"(~{total_tiles} tiles, {total_metas} metatiles, "
-        f"metatile={args.metatile}, gutter={args.gutter}, workers={workers}, "
-        f"bg={bg_hex}) → {args.out}",
+    if tile_list is not None:
+        # One MetaTile per listed tile (core 1×1); metatile size is ignored.
+        by_z: Dict[int, List[MetaTile]] = {}
+        for z, x, y in tile_list:
+            mt = metatile_for_single_tile(z, x, y, args.gutter)
+            by_z.setdefault(z, []).append(mt)
+            flat.append(mt)
+        for z in sorted(by_z):
+            metas = by_z[z]
+            zoom_meta.append((z, metas))
+            total_tiles += sum(m.tile_count for m in metas)
+            total_metas += len(metas)
+        z_label = ",".join(f"{z}/{x}/{y}" for z, x, y in tile_list)
+        log(
+            "INFO",
+            f"Rendering listed tiles ({z_label}) "
+            f"({total_tiles} tiles, {total_metas} metatiles, "
+            f"gutter={args.gutter}, workers={workers}, bg={bg_hex}) → {args.out}",
+        )
+        if args.metatile != 1:
+            log(
+                "INFO",
+                f"--tiles uses one metatile per tile; --metatile {args.metatile} is ignored "
+                "(for single-tile compare prefer --metatile 1 --gutter 1).",
+            )
+    else:
+        for z in range(args.zmin, args.zmax + 1):
+            tr = tile_range_for_bbox(xmin, ymin, xmax, ymax, z)
+            metas = iter_metatiles(tr, z, args.metatile, args.gutter)
+            zoom_meta.append((z, metas))
+            total_tiles += sum(m.tile_count for m in metas)
+            total_metas += len(metas)
+            flat.extend(metas)
+        log(
+            "INFO",
+            f"Rendering XYZ tiles z{args.zmin}-{args.zmax} "
+            f"(~{total_tiles} tiles, {total_metas} metatiles, "
+            f"metatile={args.metatile}, gutter={args.gutter}, workers={workers}, "
+            f"bg={bg_hex}) → {args.out}",
+        )
+    # For progress display when --tiles lists mixed zooms.
+    progress_zmax = (
+        max(z for z, _x, _y in tile_list) if tile_list is not None else args.zmax
     )
     os.makedirs(args.out, exist_ok=True)
 
@@ -760,7 +925,7 @@ def run(args: argparse.Namespace) -> int:
                             metatile_log.flush()
                         print_progress(
                             zoom=z,
-                            zmax=args.zmax,
+                            zmax=progress_zmax,
                             meta_done=done_metas,
                             meta_total=total_metas,
                             done_tiles=done_tiles,
@@ -792,6 +957,7 @@ def run(args: argparse.Namespace) -> int:
                         "quality": args.quality,
                         "background_hex": background.name(),
                         "fonts_dir": fonts_dir,
+                        "layer_names": args.layer_names,
                         "metatiles": [
                             {
                                 "z": m.z,
@@ -829,7 +995,7 @@ def run(args: argparse.Namespace) -> int:
                         done_tiles += int(row["tiles"])
                         print_progress(
                             zoom=int(row["z"]),
-                            zmax=args.zmax,
+                            zmax=progress_zmax,
                             meta_done=done_metas,
                             meta_total=total_metas,
                             done_tiles=done_tiles,
@@ -884,8 +1050,24 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--project", required=True, help="Path to .qgz / .qgs")
     p.add_argument(
         "--extent",
-        required=True,
-        help='Extent as "xmin,xmax,ymin,ymax [EPSG:4326]"',
+        default=None,
+        help='Extent as "xmin,xmax,ymin,ymax [EPSG:4326]" '
+        "(required unless --tiles is set; mutually exclusive with --tiles)",
+    )
+    p.add_argument(
+        "--tiles",
+        action="append",
+        default=None,
+        metavar="Z/X/Y",
+        help="Render exact XYZ tile(s) as out/{z}/{x}/{y}.{fmt}. "
+        "Repeatable or comma-separated. Forces --workers 1. "
+        "Mutually exclusive with --extent. For compare runs use --metatile 1 --gutter 1.",
+    )
+    p.add_argument(
+        "--layers",
+        default=None,
+        help="Comma-separated QGIS layer names to paint (default: all visible). "
+        "Useful for layer isolates (e.g. highway_area).",
     )
     p.add_argument("--out", required=True, help="Output tile directory")
     p.add_argument("--zmin", type=int, default=15)
@@ -926,6 +1108,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
+    if bool(args.extent) == bool(args.tiles):
+        log("ERROR", "Provide exactly one of --extent or --tiles")
+        return 1
     if args.zmin > args.zmax:
         log("ERROR", f"Invalid zoom range: {args.zmin}-{args.zmax}")
         return 1
