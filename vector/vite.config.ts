@@ -44,5 +44,13 @@ export default defineConfig({
     fs: {
       allow: ['.', bunCacheLinks, styleRoot],
     },
+    proxy: {
+      // QGIS raster XYZ from render/preview_server.py (default :8000)
+      '/raster': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/raster/, ''),
+      },
+    },
   },
 })

@@ -31,7 +31,7 @@ todos:
     status: completed
   - id: w6-compare-ui
     content: "Compare UI (/implementer): `vector/locations.ts` with named comparison spots (dense trees, intersection, dense housing, parking street, park/water edge) chosen via a density query over the Neukölln starter bbox; `src/compare/` renders two MapLibre panes (raster proxy vs vector) with synced camera, swipe, and opacity-blend modes, z15-20 clamp, and `?location=&mode=` URL state."
-    status: pending
+    status: completed
   - id: w7-screenshots
     content: "Screenshot + diff harness (/implementer): `playwright.config.ts` plus `scripts/screenshots.ts` capturing each location in raster and vector at a fixed viewport, running `pixelmatch` for a diff PNG and score, and emitting `compare-output/index.html` as a raster/vector/diff gallery sorted by diff score."
     status: pending

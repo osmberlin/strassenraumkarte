@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { LayerSpecification, MapLibreEvent } from 'maplibre-gl'
 import {
   Layer,
@@ -16,6 +16,8 @@ import {
   SOURCE_MAXZOOM,
   SOURCE_MINZOOM,
 } from '../layers'
+import { locationById, modeById, type CompareMode } from '../locations'
+import { ComparePage } from './compare/ComparePage'
 import { Legend } from './components/Legend'
 import { exposeMainMapForDebugging } from './lib/expose-main-map'
 import { installMissingStyleImageResolver } from './lib/missing-style-images'
@@ -30,6 +32,30 @@ const MAP_ID = 'mainMap'
 const allLayers = qgisLayerSpecs() as LayerSpecification[]
 const legend = legendEntries()
 const BASE_STYLE = emptyBaseStyle({ name: 'Straßenraumkarte vector' })
+
+function readRoute(): { compare: boolean; location: string; mode: CompareMode } {
+  const q = new URLSearchParams(window.location.search)
+  return {
+    compare: q.get('compare') === '1' || q.get('view') === 'compare',
+    location: locationById(q.get('location')).id,
+    mode: modeById(q.get('mode')),
+  }
+}
+
+function writeRoute(next: { compare: boolean; location: string; mode: CompareMode }) {
+  const url = new URL(window.location.href)
+  if (next.compare) {
+    url.searchParams.set('compare', '1')
+    url.searchParams.set('location', next.location)
+    url.searchParams.set('mode', next.mode)
+  } else {
+    url.searchParams.delete('compare')
+    url.searchParams.delete('view')
+    url.searchParams.delete('location')
+    url.searchParams.delete('mode')
+  }
+  window.history.replaceState(null, '', url.toString())
+}
 
 function MapCanvas({
   onStatus,
@@ -121,7 +147,6 @@ function MapCanvas({
         maxzoom={SOURCE_MAXZOOM}
       />
       {visibleLayers.map((layer) => (
-        // LayerSpecification → react-map-gl LayerProps (compatible at runtime).
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         <Layer key={layer.id} {...(layer as any)} />
       ))}
@@ -130,10 +155,15 @@ function MapCanvas({
 }
 
 export function App() {
+  const [route, setRoute] = useState(readRoute)
   const [status, setStatus] = useState('Starting…')
   const [error, setError] = useState<string | null>(null)
   const [zoom, setZoom] = useState<number>(DEFAULT_VIEW.zoom)
   const [hidden, setHidden] = useState<ReadonlySet<string>>(() => new Set())
+
+  useEffect(() => {
+    writeRoute(route)
+  }, [route])
 
   const toggle = useCallback((legendId: string) => {
     setHidden((prev) => {
@@ -147,14 +177,35 @@ export function App() {
   const showAll = useCallback(() => setHidden(new Set()), [])
   const hideAll = useCallback(() => setHidden(new Set(legend.map((e) => e.id))), [])
 
+  if (route.compare) {
+    return (
+      <MapProvider>
+        <ComparePage
+          locationId={route.location}
+          mode={route.mode}
+          onLocation={(location) => setRoute((r) => ({ ...r, location }))}
+          onMode={(mode) => setRoute((r) => ({ ...r, mode }))}
+          onBack={() => setRoute((r) => ({ ...r, compare: false }))}
+        />
+      </MapProvider>
+    )
+  }
+
   return (
     <MapProvider>
       <div className="app">
         <header className="bar">
           <strong>Straßenraumkarte · vector preview</strong>
+          <button
+            type="button"
+            className="legend-btn"
+            onClick={() => setRoute((r) => ({ ...r, compare: true }))}
+          >
+            Compare raster
+          </button>
           <span className="muted">
-            QGIS-faithful core paints · hash keeps the view ·{' '}
-            <code>pmtiles://…/strassenraumkarte.pmtiles</code>
+            QGIS-faithful core paints ·{' '}
+            <code>?compare=1&amp;location=&amp;mode=</code>
           </span>
           <span className={error ? 'err' : 'ok'}>{error ?? status}</span>
         </header>
