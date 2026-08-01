@@ -71,6 +71,10 @@ Tile rendering uses a custom **PyQGIS metatile loop** ([`render/xyz_tiles.py`](r
 
 `run.sh` also runs these checks before a full pipeline and can create the DB with `--setup-db` in the same invocation.
 
+## Docker (Berlin test)
+
+For a contained PostGIS + data-prep environment (Berlin PBF via configurable symlink, host QGIS for rendering), see [`docker/README.md`](docker/README.md).
+
 ## Usage
 
 ### Full pipeline (process + render)

@@ -25,12 +25,16 @@
 
 set -euo pipefail
 
-export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-offscreen}"
-
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
+# Prefer macOS QGIS.app PyQGIS when available (override with QGIS_APP / PYTHON).
+# shellcheck source=qgis_env.sh
+source "$SCRIPT_DIR/qgis_env.sh"
 # shellcheck source=../data/db_config.sh
 source "$REPO_ROOT/data/db_config.sh"
+
+export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-offscreen}"
+PYTHON="${PYTHON:-python3}"
 
 BBOX=""
 PROJECT="$REPO_ROOT/style/strassenraumkarte.qgz"
@@ -175,7 +179,7 @@ if [[ -n "$BBOX" ]]; then
   log INFO "Using bbox extent: $EXTENT"
 else
   log INFO "No --bbox given; computing combined project layer extent..."
-  EXTENT=$(python3 "$SCRIPT_DIR/project_extent.py" "$PROJECT") || {
+  EXTENT=$("$PYTHON" "$SCRIPT_DIR/project_extent.py" "$PROJECT") || {
     log ERROR "Failed to determine project extent."
     exit 1
   }
@@ -185,11 +189,12 @@ fi
 mkdir -p "$OUT"
 
 log INFO "Starting PyQGIS metatile renderer..."
+log INFO "  python=$PYTHON"
 log INFO "  project=$PROJECT"
 log INFO "  out=$OUT"
 log INFO "  zoom=${ZMIN}-${ZMAX} metatile=$METATILE gutter=$GUTTER dpi=$DPI format=$FORMAT bg=$BACKGROUND"
 
-exec python3 "$SCRIPT_DIR/xyz_tiles.py" \
+exec "$PYTHON" "$SCRIPT_DIR/xyz_tiles.py" \
   --project "$PROJECT" \
   --extent "$EXTENT" \
   --out "$OUT" \

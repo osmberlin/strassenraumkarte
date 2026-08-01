@@ -163,7 +163,12 @@ fi
 if ! [[ -z "${IMPORT_FILE:-}" ]]; then
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO] Importing OSM Data (CRS EPSG:$CRS)..."
   # CRS is read by lua/osm_import.lua via os.getenv("CRS")
-  osm2pgsql -c -H "$DB_HOST" -P "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -O flex -S $IMPORT_LUA $IMPORT_FILE
+  OSM2PGSQL_ARGS=(-c -H "$DB_HOST" -P "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -O flex -S "$IMPORT_LUA")
+  if [[ -n "${OSM2PGSQL_NUMBER_PROCESSES:-}" ]]; then
+    OSM2PGSQL_ARGS+=(--number-processes "$OSM2PGSQL_NUMBER_PROCESSES")
+    echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - osm2pgsql --number-processes $OSM2PGSQL_NUMBER_PROCESSES"
+  fi
+  osm2pgsql "${OSM2PGSQL_ARGS[@]}" "$IMPORT_FILE"
 
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Snapshot import lanes (for segment splitting on re-runs)..."
   psql_base -d "$DB_NAME" -c "DROP TABLE IF EXISTS lanes_import; CREATE TABLE lanes_import AS SELECT * FROM lanes;"

@@ -17,8 +17,12 @@ set -euo pipefail
 REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PREP_SCRIPT="$REPO_ROOT/data/data_preparation.sh"
 RENDER_SCRIPT="$REPO_ROOT/render/render_tiles.sh"
+# Prefer macOS QGIS.app PyQGIS when available (override with QGIS_APP / PYTHON).
+# shellcheck source=render/qgis_env.sh
+source "$REPO_ROOT/render/qgis_env.sh"
 # shellcheck source=data/db_config.sh
 source "$REPO_ROOT/data/db_config.sh"
+PYTHON="${PYTHON:-python3}"
 
 DATA=""
 BBOX=""
@@ -98,17 +102,26 @@ database_exists() {
 
 check_tools() {
   local ok=0
+  local need_qgis="${1:-true}"
   require_cmd psql "Install PostgreSQL client tools." || ok=1
   require_cmd osm2pgsql "Install osm2pgsql (flex/Lua support required)." || ok=1
   require_cmd osmium "Install osmium-tool (needed for --bbox extracts)." || ok=1
-  require_cmd python3 "Install Python 3 (needed for PyQGIS tile rendering)." || ok=1
-  if command -v python3 >/dev/null 2>&1; then
-    if ! python3 -c "from qgis.core import QgsApplication" >/dev/null 2>&1; then
-      log ERROR "PyQGIS not importable (python3: from qgis.core import QgsApplication). Install QGIS Python bindings."
+  if [[ "$need_qgis" = "true" ]]; then
+    if [[ ! -x "$PYTHON" ]] && ! command -v "$PYTHON" >/dev/null 2>&1; then
+      log ERROR "Missing Python interpreter '$PYTHON'. Install Python 3 or set QGIS_APP / PYTHON (see render/qgis_env.sh)."
       ok=1
     else
-      log INFO "Found PyQGIS (python3 qgis.core)."
+      log INFO "Found Python: $PYTHON"
+      if ! "$PYTHON" -c "from qgis.core import QgsApplication" >/dev/null 2>&1; then
+        log ERROR "PyQGIS not importable ($PYTHON: from qgis.core import QgsApplication)."
+        log ERROR "On macOS, source render/qgis_env.sh or set QGIS_APP to your QGIS.app path."
+        ok=1
+      else
+        log INFO "Found PyQGIS ($PYTHON qgis.core)."
+      fi
     fi
+  else
+    log INFO "Skipping PyQGIS check (--skip-render)."
   fi
   return "$ok"
 }
@@ -308,7 +321,9 @@ if [[ ! -f "$RENDER_SCRIPT" ]]; then
 fi
 
 log INFO "Checking prerequisites..."
-check_tools || { log ERROR "Install missing tools, then retry. See README.md."; exit 1; }
+NEED_QGIS="true"
+[[ "$SKIP_RENDER" = "true" ]] && NEED_QGIS="false"
+check_tools "$NEED_QGIS" || { log ERROR "Install missing tools, then retry. See README.md."; exit 1; }
 
 if [[ "$SETUP_DB" = "true" ]]; then
   setup_database

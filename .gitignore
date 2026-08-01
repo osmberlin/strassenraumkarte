@@ -25,6 +25,7 @@ backup/
 # Local / env
 data/.venv/
 .pgpass
+docker/.env
 
 # Local notes / legacy (not for remote)
 TODO.txt
