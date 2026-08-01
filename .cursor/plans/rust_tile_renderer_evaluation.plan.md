@@ -13,13 +13,13 @@ todos:
     status: pending
   - id: p1-harness
     content: "Phase 1 — tile regression harness (/implementer): create `audit/tile-regression/` per research/tile-visual-regression chapter 7 — `scripts/sample-tiles.ts` (PostGIS `ST_TileEnvelope` stratified sampling → `manifest.json` with smoke/standard/full suites), `scripts/compare-tile.ts` (pixelmatch ratio + DSSIM + SSIMULACRA2 + diff PNG), `scripts/compare-run.ts` (batch, `tiles.jsonl`, `summary.json`, dark HTML gallery sorted by DSSIM, exit 1 on regression), committed `budgets/{z}/{x}/{y}.json` + `ignores.json`, gitignored `runs/{timestamp}-{sha}/`. Bun + TypeScript; mirror `vector/scripts/screenshots.ts` for the gallery and `audit/sql-compare/` for exit-code conventions."
-    status: pending
+    status: in_progress
   - id: p1-calibrate
     content: "Phase 1 — calibrate the harness against known-good and known-bad QGIS variations (/implementer + /verifier): run the harness with QGIS on both sides while varying one thing at a time (workers 1 vs 2, metatile 1 vs 8, DPI 96 vs 97, `--no-fonts`, background colour, one layer hidden). Record measured metric ranges per variation in `audit/tile-regression/CALIBRATION.md` and set the pass/needs-review/fail bands from measurement, not from the research defaults. A harness that cannot separate 'font missing' from 'workers=2' is not trustworthy enough to judge a Rust renderer."
     status: pending
   - id: p1-isolates
     content: "Phase 1 — layer isolates and seam check (/implementer): add `--layers <names>` to the single-tile mode (set `QgsMapSettings` layer list) so a tile can be rendered with one QGIS layer or layer group only, and `scripts/seam-check.ts` comparing each tile against the corresponding crop of a single large 5×5-tile render. Isolates are how a diff gets attributed to a style rule; the seam check is how tile-boundary bugs get caught independently of the gutter."
-    status: pending
+    status: in_progress
   - id: p2-style-ir
     content: "Phase 2 — style IR dump (/implementer): `style/scripts/dump-style.py` (PyQGIS) loads `style/strassenraumkarte.qgz` and emits `style/generated/style-ir.json`: per map layer — datasource table + SQL filter, geometry type, scale range, opacity, blend mode, symbol-levels flag, order-by, labeling settings; per renderer rule — filter expression, scalemin/maxdenom, nesting; per symbol layer — `properties()` map, effect stack `properties()`, and every active data-defined property with its expression string. Plus `style/generated/style-inventory.md` (the counts currently maintained by hand in `docs/maplibre-style-groups.md`, and the authoritative resolution of the data-defined-property and layer-opacity counts that two raw-XML parses disagreed on) and `style/generated/expression-surface.json` (distinct functions + variables with usage counts). This makes the inventory reproducible and is the input contract for the Rust renderer."
     status: pending
@@ -31,7 +31,7 @@ todos:
     status: pending
   - id: p3-crate-skeleton
     content: "Phase 3 — Rust crate skeleton + one vertical slice (/implementer): `rust/srk-render/` binary crate. Read geometries with `tokio-postgres` + `geozero`/`postgis` WKB, tile/metatile/gutter math ported 1:1 from `render/xyz_tiles.py` (ORIGIN_SHIFT, 256 px, EPSG:3857, DPI 96, background `#ededed`), rasterize with `tiny-skia` 0.12, encode PNG. CLI mirrors the new single-tile mode (`--tiles z/x/y --layers … --out …`). Scope of the slice: `highway_area` only, SimpleFill + SimpleLine, no effects, no labels, no SVG. Gate: layer-isolate harness run at z16/z17/z18 across ≥5 locations."
-    status: pending
+    status: in_progress
   - id: p3-effects
     content: "Phase 3 — effects module (/implementer): port `QgsImageOperation::stackBlur` (4-pass box blur), `gaussianBlur`, `overlayColor`, `multiplyOpacity`, `invertPixels` and the Felzenszwalb `distanceTransform`, then build `dropShadow` / `innerShadow` / `outerGlow` / `innerGlow` with QGIS's offset convention (`-dist*cos(angle+π/2)`, `-dist*sin(angle+π/2)`), the `blurLevel*2+10` px bounding-rect padding, and the ≤16-radius stack-vs-gaussian switch. Validate per primitive against QGIS: render a synthetic shape + one effect through PyQGIS and through Rust, compare in isolation before any real tile. 77 dropShadow + 60 innerShadow uses make this the dominant visual risk."
     status: pending
@@ -55,6 +55,12 @@ isProject: false
 
 ## Progress
 
+- **2026-08-01 (later)** — One-tile harness MVP + `highway_area` Rust slice by `/implementer` on Grok (user override).
+  - **Anchor tile:** `17/70422/43008` (starter bbox; 3 `highway_area` features).
+  - `p1-harness` **partial / in_progress:** `audit/tile-regression/scripts/compare-one-tile.ts` (Bun + pngjs + pixelmatch → `runs/<ts>/{ref,cand,diff}.png`, `metrics.json`, dark `index.html`), `scripts/render-qgis-tile.sh`, local `package.json`. Not yet: stratified `sample-tiles`, batch `compare-run`, DSSIM/SSIMULACRA2 budgets (DSSIM optional if `dssim` on PATH).
+  - `p1-isolates` **partial:** `--layers` already on QGIS path; wrapper documents isolate workflow. Seam-check still pending.
+  - `p3-crate-skeleton` **in_progress:** `rust/srk-render/` builds release; CLI `--tiles/--layers/--out/--format`; PostGIS via `postgres` + WKB; `tiny-skia` fill + hairline stroke; palette from `area:highway`. Gate (≥5 locs × z16–18) not yet run.
+  - End-to-end isolate compare: QGIS ref vs Rust cand → pixelmatch **0.096%** (63 / 65536 px) after one stroke-width iteration. Geometry aligned (no Y-flip / CRS / blank). Remaining: AA rim, missing innerShadow blur stack, no surface textures.
 - **2026-08-01** — Phase 0 (partial) + `p1-single-tile` done by `/implementer` on `cursor-grok-4.5-high` (user override; not composer).
   - Pinned `rust-toolchain.toml` to `1.96.1`; `rust/.gitkeep`; `.gitignore` for `rust/**/target/`, `audit/tile-regression/runs/**`, `style/generated/**`.
   - Stub `audit/tile-regression/` (`README.md`, `fixture-lock.json` with HEAD SHA + starter bbox; sql-compare freeze still **pending** → `p0-decisions` remains `in_progress`).

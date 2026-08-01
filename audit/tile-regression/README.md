@@ -4,28 +4,69 @@ Compare QGIS (reference) and Rust (candidate) XYZ tiles at the pixel level so a 
 
 ## Status
 
-Phase 0 skeleton + Phase 1 single-tile render mode. The full harness (`sample-tiles`, `compare-tile`, `compare-run`, budgets, gallery) comes next.
+One-tile MVP is available: render QGIS isolate → render Rust isolate → `compare-one-tile` gallery. Full suite sampling (`sample-tiles`, batch `compare-run`, budgets) comes later.
 
-## Render one tile (QGIS reference)
+**Anchor tile (starter DB bbox):** `17/70422/43008`
 
-Use the deterministic `--tiles` mode on `render/xyz_tiles.py`. For single-tile compare runs, prefer `--metatile 1 --gutter 1` and PNG:
+## Setup
 
 ```bash
+cd audit/tile-regression
+bun install
+chmod +x scripts/render-qgis-tile.sh
+```
+
+## One-tile workflow (`highway_area` isolate)
+
+```bash
+export PATH="$HOME/.cargo/bin:$PATH"
 export PGPASSFILE=/tmp/srk-pgpass/.pgpass PGPASSWORD=postgres
 export PGUSER=postgres DB_HOST=localhost DB_PORT=5433 DB_NAME=strassenraumkarte
-source render/qgis_env.sh
-python3 render/xyz_tiles.py \
-  --project style/strassenraumkarte.qgz \
+
+# 1) QGIS reference (isolate)
+./audit/tile-regression/scripts/render-qgis-tile.sh \
   --tiles 17/70422/43008 \
-  --format png --metatile 1 --gutter 1 --workers 1 \
+  --layers highway_area \
+  --out /tmp/srk-one-tile-ref
+
+# 2) Rust candidate
+(cd rust/srk-render && cargo build --release)
+./rust/srk-render/target/release/srk-render \
+  --tiles 17/70422/43008 \
+  --layers highway_area \
+  --out /tmp/srk-one-tile-cand \
+  --format png
+
+# 3) Pixel diff gallery
+cd audit/tile-regression
+bun run scripts/compare-one-tile.ts \
+  --tiles 17/70422/43008 \
+  --ref-dir /tmp/srk-one-tile-ref \
+  --cand-dir /tmp/srk-one-tile-cand
+```
+
+Gallery + metrics land in `runs/<timestamp>/` (`ref.png`, `cand.png`, `diff.png`, `metrics.json`, `index.html`). Open `index.html` in a browser. DSSIM is included when `dssim` is on `PATH`.
+
+### Direct PNG paths
+
+```bash
+bun run scripts/compare-one-tile.ts \
+  --ref /tmp/srk-one-tile-ref/17/70422/43008.png \
+  --cand /tmp/srk-one-tile-cand/17/70422/43008.png
+```
+
+## Render one tile (QGIS only)
+
+```bash
+./audit/tile-regression/scripts/render-qgis-tile.sh \
+  --tiles 17/70422/43008 \
+  --layers highway_area \
   --out /tmp/srk-one-tile-ref
 ```
 
-Output: `/tmp/srk-one-tile-ref/17/70422/43008.png` (pick a tile inside the loaded PostGIS bbox — e.g. docker starter `13.4132,52.4715,13.4312,52.4821` — or the PNG will be blank background only).
+Defaults: `--format png --metatile 1 --gutter 1 --workers 1`. Extra args are forwarded to `render/xyz_tiles.py`.
 
-`--tiles` can be repeated or comma-separated (`--tiles 17/70439/43023,17/70439/43024`). It forces `--workers 1`. Optional `--layers name1,name2` limits the paint list to those QGIS layer names (for isolates).
-
-You can also pass `--tiles` / `--layers` through `render/render_tiles.sh` (skips `--bbox` / project-extent when `--tiles` is set).
+`--tiles` can be repeated or comma-separated. Optional `--layers name1,name2` limits the paint list (isolates).
 
 ## Fixture lock
 

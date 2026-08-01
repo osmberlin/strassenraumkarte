@@ -71,6 +71,7 @@ audit/tile-compare/.venv/
 # Tile regression harness runs (keep README, fixture lock, scripts when present)
 audit/tile-regression/runs/**
 !audit/tile-regression/runs/.gitkeep
+audit/tile-regression/node_modules/
 
 # Rust crate build artefacts
 rust/**/target/

@@ -1,0 +1,18 @@
+[package]
+name = "srk-render"
+version = "0.1.0"
+edition = "2021"
+description = "Straßenraumkarte PostGIS → XYZ raster tile renderer (Rust vertical slice)"
+publish = false
+
+[[bin]]
+name = "srk-render"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive", "env"] }
+geo-types = "0.7"
+postgres = "0.19"
+tiny-skia = "0.12"
+wkb = "0.7"
