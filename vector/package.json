@@ -18,7 +18,7 @@
     "pmtiles": "^4",
     "react": "^19",
     "react-dom": "^19",
-    "react-map-gl": "^8"
+    "react-map-gl": "8.1.2"
   },
   "devDependencies": {
     "@types/react": "^19",

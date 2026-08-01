@@ -53,6 +53,8 @@ addProtocol('pmtiles', (req, ac) => protocol.tile(req, ac))
 
 Use **`?worker&url`**, not plain `?url` — otherwise the worker chunk is missing shared deps and vector tiles never load.
 
+**react-map-gl ≥ 8.1.2** is required for MapLibre 6 (v6 removed public `map.transform`; older react-map-gl crashed in `transformToViewState` reading `center`). See [visgl/react-map-gl#2598](https://github.com/visgl/react-map-gl/pull/2598).
+
 ## React (react-map-gl)
 
 Preview uses `react-map-gl/maplibre`: `<MapProvider>`, declarative `<Source>` / `<Layer>` (no `addSource`/`addLayer`), Map event props (`onLoad` / `onIdle`), and `window.__mainMap` in dev via `exposeMainMapForDebugging`.
