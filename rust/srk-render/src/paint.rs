@@ -204,18 +204,21 @@ pub fn fill_polygons_pattern(
         phase_y,
     );
 
-    // Bicubic: QGIS Qt smooth sampling; Nearest made sett/asphalt look dithered.
+    // Bilinear: Bicubic rings on high-contrast asphalt/sett → dark "Blitzer" speckles
+    // on polygon AA edges. QGIS Qt smooth is closer to bilinear at these scales.
     let shader = Pattern::new(
         texture.pixmap.as_ref(),
         SpreadMode::Repeat,
-        FilterQuality::Bicubic,
+        FilterQuality::Bilinear,
         opacity,
         transform,
     );
 
     let mut paint = Paint::default();
     paint.shader = shader;
-    paint.anti_alias = true;
+    // No AA on the texture pass: base fill already AA'd the edge; texturing the
+    // AA fringe re-samples dark asphalt texels → "Blitzer" sparkles.
+    paint.anti_alias = false;
     paint.blend_mode = BlendMode::SourceOver;
 
     for poly in geometry_polygons(geom) {
@@ -553,6 +556,9 @@ pub fn fill_polygons_batch_with_shadow(
 }
 
 /// Drop-shadow only (QGIS `drawSource` disabled — e.g. `building_shade`).
+///
+/// Knocks the solid shape out of the blurred shadow so AA fill edges blend with
+/// the map background instead of dark shadow (avoids "Blitzer" dark fringe pixels).
 pub fn fill_polygons_shadow_only(
     pixmap: &mut Pixmap,
     extent: RenderExtent,
@@ -585,9 +591,18 @@ pub fn fill_polygons_shadow_only(
             }
         }
 
+        // Keep an unblurred coverage mask for interior knockout.
+        let mut solid = mask.clone();
+        // Dilate ~1px so polygon AA fringes aren't composited over residual shadow
+        // (that mix is the dark "Blitzer" sparkle on building edges).
+        dilate_alpha_1px(&mut solid);
+
         tint_pixmap_rgb(&mut mask, shadow.color, shadow.opacity);
         let blur_px = extent.metres_to_px(shadow.blur_m).round().max(1.0) as u32;
         box_blur_approx(&mut mask, blur_px);
+
+        // Punch the (dilated) footprint out of the shadow.
+        knockout_premul_by_mask(&mut mask, &solid);
 
         let (dx, dy) = shadow.offset_px(extent);
         let paint = PixmapPaint::default();
@@ -600,6 +615,58 @@ pub fn fill_polygons_shadow_only(
             None,
         );
     });
+}
+
+/// `dst = dst * (1 - mask.alpha)` in premul space (mask RGB ignored; uses its alpha).
+fn knockout_premul_by_mask(dst: &mut Pixmap, mask: &Pixmap) {
+    let d = dst.data_mut();
+    let m = mask.data();
+    let n = d.len().min(m.len());
+    let mut i = 0;
+    while i + 3 < n {
+        let ma = m[i + 3] as f32 / 255.0;
+        if ma > 0.0 {
+            let keep = 1.0 - ma;
+            d[i] = (d[i] as f32 * keep).round() as u8;
+            d[i + 1] = (d[i + 1] as f32 * keep).round() as u8;
+            d[i + 2] = (d[i + 2] as f32 * keep).round() as u8;
+            d[i + 3] = (d[i + 3] as f32 * keep).round() as u8;
+        }
+        i += 4;
+    }
+}
+
+/// Max-filter on alpha (and copy RGB from the max neighbour) — 1px morphological dilate.
+fn dilate_alpha_1px(pm: &mut Pixmap) {
+    let w = pm.width() as usize;
+    let h = pm.height() as usize;
+    let src = pm.data().to_vec();
+    let dst = pm.data_mut();
+    for y in 0..h {
+        for x in 0..w {
+            let mut best_a = 0u8;
+            let mut best_i = (y * w + x) * 4;
+            for dy in -1i32..=1 {
+                for dx in -1i32..=1 {
+                    let xx = x as i32 + dx;
+                    let yy = y as i32 + dy;
+                    if xx < 0 || yy < 0 || xx as usize >= w || yy as usize >= h {
+                        continue;
+                    }
+                    let i = (yy as usize * w + xx as usize) * 4;
+                    if src[i + 3] > best_a {
+                        best_a = src[i + 3];
+                        best_i = i;
+                    }
+                }
+            }
+            let o = (y * w + x) * 4;
+            dst[o] = src[best_i];
+            dst[o + 1] = src[best_i + 1];
+            dst[o + 2] = src[best_i + 2];
+            dst[o + 3] = best_a;
+        }
+    }
 }
 
 /// Batch exterior shadow + batch shapeburst fill (buildings).
@@ -748,9 +815,10 @@ pub fn fill_circles_m(
     }
 }
 
-/// RasterMarker tree crown: blurred under-shadow + Bicubic-scaled PNG stamp.
+/// Tree crown ≈ QGIS RasterMarker @ layerOpacity 0.25.
 ///
-/// `diameter_map_m` is already in EPSG:3857 MapUnits (ground_m × `@mercator_scale`).
+/// Soft radial light-green disk (watercolor canopy). The leaf PNG is not stamped
+/// at z15–18 — downscaling it produces speckles. Shadow uses the same soft disk.
 pub fn draw_tree_crown_marker(
     pixmap: &mut Pixmap,
     extent: RenderExtent,
@@ -762,58 +830,91 @@ pub fn draw_tree_crown_marker(
     shadow: DropShadow,
     opacity: f32,
 ) {
+    let _ = (marker, rotation_deg);
     let size_px = extent.metres_to_px(diameter_map_m).max(1.0);
-    let native_max = marker.width().max(marker.height()) as f32;
-    let scale = size_px / native_max;
-    let mw = marker.width() as f32;
-    let mh = marker.height() as f32;
     let radius_px = size_px * 0.5;
+    let op = opacity.clamp(0.0, 1.0);
 
-    // Local padded mask (not full tile) so crowns near edges still blur into the
-    // guttered buffer — same seam fix as QGIS without O(trees × pixmap) cost.
-    let blur_px = extent.metres_to_px(shadow.blur_m).round().max(1.0) as u32;
-    let (sdx, sdy) = shadow.offset_px(extent);
-    let pad = blur_px as f32 + sdx.abs().max(sdy.abs()) + 2.0;
-    let local = ((radius_px * 2.0 + pad * 2.0).ceil() as u32).max(8);
+    // Soft canopy only — dropShadow under translucent disks created near-black
+    // centre "Blitzer" where the offset shadow sat under the soft fill.
+    let pad = 2u32;
+    let local = ((size_px + pad as f32 * 2.0).ceil() as u32).max(8);
+    let Some(mut buf) = Pixmap::new(local, local) else {
+        return;
+    };
     let lcx = local as f32 * 0.5;
     let lcy = local as f32 * 0.5;
-    if let Some(mut mask) = Pixmap::new(local, local) {
-        let mut pb = PathBuilder::new();
-        pb.push_circle(lcx + sdx, lcy + sdy, radius_px * 1.05);
-        if let Some(path) = pb.finish() {
-            let mut paint = Paint::default();
-            paint.set_color(Color::from_rgba8(255, 255, 255, 255));
-            paint.anti_alias = true;
-            mask.fill_path(&path, &paint, FillRule::Winding, Transform::identity(), None);
-            tint_pixmap_rgb(&mut mask, shadow.color, shadow.opacity);
-            box_blur_approx(&mut mask, blur_px);
-            pixmap.draw_pixmap(
-                (cx - lcx).round() as i32,
-                (cy - lcy).round() as i32,
-                mask.as_ref(),
-                &PixmapPaint::default(),
-                Transform::identity(),
-                None,
-            );
-        }
-    }
 
-    let marker_transform = Transform::from_translate(cx, cy)
-        .post_rotate(rotation_deg)
-        .post_scale(scale, scale)
-        .post_translate(-mw / 2.0, -mh / 2.0);
+    let crown = Color::from_rgba8(0xa4, 0xc4, 0x7a, 255);
+    paint_soft_disk_premul(&mut buf, lcx, lcy, radius_px, crown, op);
 
-    let mut crown_paint = PixmapPaint::default();
-    crown_paint.opacity = opacity.clamp(0.0, 1.0);
-    crown_paint.quality = FilterQuality::Bicubic;
+    let ox = (cx - lcx).round() as i32;
+    let oy = (cy - lcy).round() as i32;
     pixmap.draw_pixmap(
-        0,
-        0,
-        marker.as_ref(),
-        &crown_paint,
-        marker_transform,
+        ox,
+        oy,
+        buf.as_ref(),
+        &PixmapPaint::default(),
+        Transform::identity(),
         None,
     );
+    let _ = (shadow, extent);
+}
+
+/// Soft-edged disk written as **premultiplied** RGBA (avoids white fringes on blit).
+fn paint_soft_disk_premul(
+    pm: &mut Pixmap,
+    cx: f32,
+    cy: f32,
+    radius: f32,
+    color: Color,
+    opacity: f32,
+) {
+    let w = pm.width();
+    let h = pm.height();
+    let data = pm.data_mut();
+    let r = radius.max(0.5);
+    let cr = color.red();
+    let cg = color.green();
+    let cb = color.blue();
+    let op = opacity.clamp(0.0, 1.0);
+    for y in 0..h {
+        for x in 0..w {
+            let dx = x as f32 + 0.5 - cx;
+            let dy = y as f32 + 0.5 - cy;
+            let d = (dx * dx + dy * dy).sqrt() / r;
+            if d >= 1.0 {
+                continue;
+            }
+            let edge = if d < 0.65 {
+                1.0
+            } else {
+                ((1.0 - (d - 0.65) / 0.35).clamp(0.0, 1.0)).powf(1.6)
+            };
+            let a = edge * op;
+            if a < 1.0 / 255.0 {
+                continue;
+            }
+            let i = ((y * w + x) * 4) as usize;
+            // Source-over onto existing premul pixels in `pm` (shadow may already be there).
+            let dst_a = data[i + 3] as f32 / 255.0;
+            let src_a = a;
+            let out_a = src_a + dst_a * (1.0 - src_a);
+            if out_a < 1.0 / 255.0 {
+                continue;
+            }
+            let dst_r = data[i] as f32 / 255.0;
+            let dst_g = data[i + 1] as f32 / 255.0;
+            let dst_b = data[i + 2] as f32 / 255.0;
+            let src_r = cr * src_a;
+            let src_g = cg * src_a;
+            let src_b = cb * src_a;
+            data[i] = ((src_r + dst_r * (1.0 - src_a)) * 255.0).round() as u8;
+            data[i + 1] = ((src_g + dst_g * (1.0 - src_a)) * 255.0).round() as u8;
+            data[i + 2] = ((src_b + dst_b * (1.0 - src_a)) * 255.0).round() as u8;
+            data[i + 3] = (out_a * 255.0).round() as u8;
+        }
+    }
 }
 
 /// Soft tree crown fallback: dark under-disk + translucent main crown.

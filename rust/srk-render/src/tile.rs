@@ -15,6 +15,28 @@ pub struct TileRange {
     pub y1: u32,
 }
 
+/// Core tiles (x0..x1, y0..y1) are written; rx*/ry* include gutter for render.
+#[derive(Clone, Copy, Debug)]
+pub struct MetaTile {
+    pub z: u32,
+    pub x0: u32,
+    pub x1: u32,
+    pub y0: u32,
+    pub y1: u32,
+    pub rx0: u32,
+    pub rx1: u32,
+    pub ry0: u32,
+    pub ry1: u32,
+}
+
+impl MetaTile {
+    pub fn core_count(self) -> usize {
+        let w = self.x1 - self.x0 + 1;
+        let h = self.y1 - self.y0 + 1;
+        (w as usize) * (h as usize)
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct TileBounds {
     pub minx: f64,
@@ -88,6 +110,83 @@ pub fn enumerate_bbox_tiles(
     tiles
 }
 
+/// One core tile with optional gutter (matches QGIS `metatile_for_single_tile`).
+pub fn metatile_for_single_tile(z: u32, x: u32, y: u32, gutter: u32) -> MetaTile {
+    let max_xy = (1u32 << z).saturating_sub(1);
+    MetaTile {
+        z,
+        x0: x,
+        x1: x,
+        y0: y,
+        y1: y,
+        rx0: x.saturating_sub(gutter),
+        rx1: (x + gutter).min(max_xy),
+        ry0: y.saturating_sub(gutter),
+        ry1: (y + gutter).min(max_xy),
+    }
+}
+
+/// Build metatile cores on the grid; expand each by gutter for rendering only.
+/// Matches `render/xyz_tiles.py` `iter_metatiles`.
+pub fn iter_metatiles(tr: TileRange, z: u32, metatile: u32, gutter: u32) -> Vec<MetaTile> {
+    let mut tiles = Vec::new();
+    let max_xy = (1u32 << z).saturating_sub(1);
+    let gx0 = (tr.x0 / metatile) * metatile;
+    let gy0 = (tr.y0 / metatile) * metatile;
+    let mut gy = gy0;
+    while gy <= tr.y1 {
+        let mut gx = gx0;
+        while gx <= tr.x1 {
+            let x0 = tr.x0.max(gx);
+            let x1 = (gx + metatile - 1).min(tr.x1);
+            let y0 = tr.y0.max(gy);
+            let y1 = (gy + metatile - 1).min(tr.y1);
+            if x0 <= x1 && y0 <= y1 {
+                let rx0 = x0.saturating_sub(gutter);
+                let rx1 = (x1 + gutter).min(max_xy);
+                let ry0 = y0.saturating_sub(gutter);
+                let ry1 = (y1 + gutter).min(max_xy);
+                tiles.push(MetaTile {
+                    z,
+                    x0,
+                    x1,
+                    y0,
+                    y1,
+                    rx0,
+                    rx1,
+                    ry0,
+                    ry1,
+                });
+            }
+            gx += metatile;
+        }
+        gy += metatile;
+    }
+    tiles
+}
+
+pub fn enumerate_bbox_metatiles(
+    xmin: f64,
+    ymin: f64,
+    xmax: f64,
+    ymax: f64,
+    zmin: u32,
+    zmax: u32,
+    metatile: u32,
+    gutter: u32,
+) -> Vec<MetaTile> {
+    let mut metas = Vec::new();
+    for z in zmin..=zmax {
+        let tr = tile_range_for_bbox(xmin, ymin, xmax, ymax, z);
+        metas.extend(iter_metatiles(tr, z, metatile, gutter));
+    }
+    metas
+}
+
+pub fn meta_tile_core_count(metas: &[MetaTile]) -> usize {
+    metas.iter().map(|m| m.core_count()).sum()
+}
+
 pub fn parse_tile_spec(spec: &str) -> Result<(u32, u32, u32)> {
     let parts: Vec<_> = spec.trim().split('/').collect();
     if parts.len() != 3 {
@@ -129,13 +228,18 @@ pub struct RenderExtent {
 impl RenderExtent {
     /// Same as QGIS `metatile_for_single_tile(z,x,y,gutter)` then `metatile_extent_3857`.
     pub fn for_tile(x: u32, y: u32, z: u32, gutter: u32) -> Self {
-        let max_xy = (1u32 << z).saturating_sub(1);
-        let rx0 = x.saturating_sub(gutter);
-        let rx1 = (x + gutter).min(max_xy);
-        let ry0 = y.saturating_sub(gutter);
-        let ry1 = (y + gutter).min(max_xy);
-        let nw = tile_bounds_3857(rx0, ry0, z);
-        let se = tile_bounds_3857(rx1, ry1, z);
+        let mt = metatile_for_single_tile(z, x, y, gutter);
+        let mut ext = Self::for_metatile(&mt);
+        ext.core_ox = (x - mt.rx0) * TILE_SIZE_PX;
+        ext.core_oy = (y - mt.ry0) * TILE_SIZE_PX;
+        ext.gutter = gutter;
+        ext
+    }
+
+    /// Extent of the render area (core + gutter) for a metatile.
+    pub fn for_metatile(mt: &MetaTile) -> Self {
+        let nw = tile_bounds_3857(mt.rx0, mt.ry0, mt.z);
+        let se = tile_bounds_3857(mt.rx1, mt.ry1, mt.z);
         Self {
             bounds: TileBounds {
                 minx: nw.minx,
@@ -143,11 +247,11 @@ impl RenderExtent {
                 maxy: nw.maxy,
                 miny: se.miny,
             },
-            width_px: (rx1 - rx0 + 1) * TILE_SIZE_PX,
-            height_px: (ry1 - ry0 + 1) * TILE_SIZE_PX,
-            core_ox: (x - rx0) * TILE_SIZE_PX,
-            core_oy: (y - ry0) * TILE_SIZE_PX,
-            gutter,
+            width_px: (mt.rx1 - mt.rx0 + 1) * TILE_SIZE_PX,
+            height_px: (mt.ry1 - mt.ry0 + 1) * TILE_SIZE_PX,
+            core_ox: 0,
+            core_oy: 0,
+            gutter: mt.rx0.saturating_sub(mt.x0).min(mt.ry0.saturating_sub(mt.y0)),
         }
     }
 
@@ -168,7 +272,33 @@ impl RenderExtent {
     }
 }
 
-/// Crop the core XYZ tile out of a guttered render buffer (QGIS `image.copy(px,py,256,256)`).
+/// Crop one 256×256 core tile from a guttered render buffer (QGIS `image.copy(px,py,256,256)`).
+pub fn crop_tile(
+    src: &tiny_skia::Pixmap,
+    rx0: u32,
+    ry0: u32,
+    tx: u32,
+    ty: u32,
+) -> tiny_skia::Pixmap {
+    let mut dst =
+        tiny_skia::Pixmap::new(TILE_SIZE_PX, TILE_SIZE_PX).expect("core tile pixmap alloc");
+    let sw = src.width() as usize;
+    let ox = (tx - rx0) as usize * TILE_SIZE_PX as usize;
+    let oy = (ty - ry0) as usize * TILE_SIZE_PX as usize;
+    let tw = TILE_SIZE_PX as usize;
+    debug_assert!(ox + tw <= src.width() as usize);
+    debug_assert!(oy + tw <= src.height() as usize);
+    let src_data = src.data();
+    let dst_data = dst.data_mut();
+    for row in 0..tw {
+        let s = ((oy + row) * sw + ox) * 4;
+        let d = row * tw * 4;
+        dst_data[d..d + tw * 4].copy_from_slice(&src_data[s..s + tw * 4]);
+    }
+    dst
+}
+
+/// Crop the core XYZ tile out of a single-tile guttered render buffer.
 pub fn crop_core_tile(src: &tiny_skia::Pixmap, extent: RenderExtent) -> tiny_skia::Pixmap {
     let mut dst =
         tiny_skia::Pixmap::new(TILE_SIZE_PX, TILE_SIZE_PX).expect("core tile pixmap alloc");

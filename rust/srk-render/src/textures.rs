@@ -179,20 +179,31 @@ fn load_from_file(root: &Path, id: &str) -> Option<Pixmap> {
     Pixmap::load_png(&path).ok()
 }
 
-/// Light blur on high-contrast textures so MapUnit downscale matches Qt/JPEG softness.
+/// Light blur on high-contrast textures so MapUnit downscale matches Qt softness
+/// and Bicubic/Bilinear edge ringing ("Blitzer") stays low.
 fn soften_texture(pm: &mut Pixmap, id: &str) {
-    let radius = match id {
-        "surface/sett" | "surface/asphalt" => 2u32,
-        "surface/paving_stones" | "gravel" | "grass" => 1u32,
+    let (radius, passes) = match id {
+        // Asphalt is ~39% dark texels — needs stronger pre-blur than sett.
+        "surface/asphalt" => (3u32, 3u32),
+        "surface/sett" => (2u32, 2u32),
+        "surface/paving_stones" | "gravel" | "grass" => (1u32, 2u32),
         _ => return,
     };
     let w = pm.width() as usize;
     let h = pm.height() as usize;
     let mut buf = pm.data().to_vec();
     let mut tmp = vec![0u8; buf.len()];
-    for _ in 0..2 {
+    for _ in 0..passes {
         box_blur_h_tex(&buf, &mut tmp, w, h, radius);
         box_blur_v_tex(&tmp, &mut buf, w, h, radius);
+    }
+    // Lift crushed blacks so AA edges can't flash near-black texels.
+    if id == "surface/asphalt" || id == "surface/sett" {
+        for px in buf.chunks_exact_mut(4) {
+            px[0] = px[0].saturating_add(18).min(255);
+            px[1] = px[1].saturating_add(18).min(255);
+            px[2] = px[2].saturating_add(18).min(255);
+        }
     }
     pm.data_mut().copy_from_slice(&buf);
 }

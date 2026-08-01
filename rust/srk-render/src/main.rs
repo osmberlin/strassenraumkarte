@@ -11,6 +11,7 @@
 mod layers;
 mod paint;
 mod palette;
+mod pitch_markings;
 mod profile;
 mod sql_cache;
 mod textures;
@@ -19,7 +20,7 @@ mod tree_markers;
 
 use std::collections::BTreeMap;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -31,11 +32,15 @@ use postgres::{Client, Config, NoTls};
 use serde::Serialize;
 
 use layers::{render_full_approx, render_highway_area, LayerPreset, TableCache};
+use pitch_markings::PitchMarkingCatalog;
 use profile::{StageProfile, StageTimers};
 use sql_cache::PreparedCache;
 use textures::TextureCatalog;
+use tile::{
+    enumerate_bbox_metatiles, meta_tile_core_count, metatile_for_single_tile, parse_bbox,
+    parse_tile_spec, MetaTile,
+};
 use tree_markers::TreeMarkerCatalog;
-use tile::{enumerate_bbox_tiles, parse_bbox, parse_tile_spec};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -87,18 +92,18 @@ struct Cli {
     #[arg(long)]
     profile: bool,
 
-    /// Parallel tile workers (each opens its own DB connection). Default 1 for harness stability;
+    /// Parallel metatile workers (each opens its own DB connection). Default 1 for harness stability;
     /// use 4–8 for large bbox benches (`SRK_WORKERS` env override).
     #[arg(long, env = "SRK_WORKERS", default_value_t = 1)]
     workers: usize,
 
-    /// Metatile size (deferred: only 1 is supported today).
+    /// Metatile core size (default 1 for harness; farm benches use 8).
     #[arg(long, default_value_t = 1)]
     metatile: u32,
 
     /// Extra tiles around each core tile for symbol/shadow bleed (QGIS gutter).
-    /// Rendered then cropped. Default 1 matches `render/xyz_tiles.py --gutter 1`.
-    #[arg(long, default_value_t = 1)]
+    /// Rendered then cropped. Default 0 for farm throughput; use `--gutter 1` to match QGIS edge bleed.
+    #[arg(long, default_value_t = 0)]
     gutter: u32,
 
     #[arg(long, env = "DB_HOST", default_value = "localhost")]
@@ -138,21 +143,21 @@ struct TimingSummary {
     quality: Option<f32>,
     layers: Vec<String>,
     workers: usize,
+    metatile: u32,
+    gutter: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     stages: Option<StageProfile>,
     /// Per-zoom breakdown (keys as decimal zoom strings for stable JSON).
     by_zoom: BTreeMap<String, ZoomTiming>,
 }
 
-struct TileJob {
-    z: u32,
-    x: u32,
-    y: u32,
-    out_path: PathBuf,
+struct MetaJob {
+    mt: MetaTile,
 }
 
-struct TileResult {
+struct MetaResult {
     z: u32,
+    cores: usize,
     wall_ms: u64,
     stages: StageTimers,
 }
@@ -162,9 +167,11 @@ struct SharedState {
     table_cache: Option<Arc<TableCache>>,
     texture_catalog: Arc<TextureCatalog>,
     tree_markers: Arc<TreeMarkerCatalog>,
+    pitch_markings: Arc<PitchMarkingCatalog>,
     webp_quality: f32,
     profile: bool,
-    gutter: u32,
+    format_ext: String,
+    out_dir: PathBuf,
 }
 
 fn connect(cli: &Cli) -> Result<Client> {
@@ -191,36 +198,46 @@ fn connect(cli: &Cli) -> Result<Client> {
         })
 }
 
-fn collect_tiles(cli: &Cli) -> Result<(Vec<(u32, u32, u32)>, Option<String>)> {
+fn collect_metatiles(cli: &Cli) -> Result<(Vec<MetaTile>, Option<String>)> {
     match (&cli.tiles, &cli.bbox) {
         (Some(_), Some(_)) => bail!("provide exactly one of --tiles or --bbox"),
         (None, None) => bail!("provide --tiles or --bbox"),
         (Some(specs), None) => {
-            let mut tiles = Vec::new();
+            let mut metas = Vec::new();
             for spec in specs {
                 for part in spec.split(',') {
                     let part = part.trim();
                     if part.is_empty() {
                         continue;
                     }
-                    tiles.push(parse_tile_spec(part)?);
+                    let (z, x, y) = parse_tile_spec(part)?;
+                    metas.push(metatile_for_single_tile(z, x, y, cli.gutter));
                 }
             }
-            if tiles.is_empty() {
+            if metas.is_empty() {
                 bail!("no tiles parsed from --tiles");
             }
-            Ok((tiles, None))
+            Ok((metas, None))
         }
         (None, Some(bbox_spec)) => {
             if cli.zmin > cli.zmax {
                 bail!("--zmin must be <= --zmax");
             }
             let (xmin, ymin, xmax, ymax) = parse_bbox(bbox_spec)?;
-            let tiles = enumerate_bbox_tiles(xmin, ymin, xmax, ymax, cli.zmin, cli.zmax);
-            if tiles.is_empty() {
-                bail!("--bbox produced no tiles for z{}-{}", cli.zmin, cli.zmax);
+            let metas = enumerate_bbox_metatiles(
+                xmin,
+                ymin,
+                xmax,
+                ymax,
+                cli.zmin,
+                cli.zmax,
+                cli.metatile,
+                cli.gutter,
+            );
+            if metas.is_empty() {
+                bail!("--bbox produced no metatiles for z{}-{}", cli.zmin, cli.zmax);
             }
-            Ok((tiles, Some(bbox_spec.clone())))
+            Ok((metas, Some(bbox_spec.clone())))
         }
     }
 }
@@ -234,31 +251,26 @@ fn normalize_format(raw: &str) -> Result<&'static str> {
     }
 }
 
-fn render_one_tile(
+fn render_one_metatile(
     client: &mut Client,
     prep_cache: &mut PreparedCache,
     shared: &SharedState,
-    z: u32,
-    x: u32,
-    y: u32,
-    out_path: &Path,
+    mt: MetaTile,
     quiet: bool,
     timers: &mut Option<&mut StageTimers>,
-) -> Result<()> {
+) -> Result<usize> {
     match shared.preset {
         LayerPreset::HighwayArea => render_highway_area(
             client,
             prep_cache,
-            z,
-            x,
-            y,
-            out_path,
+            mt,
+            &shared.out_dir,
+            &shared.format_ext,
             quiet,
             shared.texture_catalog.as_ref(),
             shared.webp_quality,
             timers,
-            shared.gutter,
-        )?,
+        ),
         LayerPreset::FullApprox => {
             let cache = shared
                 .table_cache
@@ -267,28 +279,26 @@ fn render_one_tile(
             render_full_approx(
                 client,
                 prep_cache,
-                z,
-                x,
-                y,
-                out_path,
+                mt,
+                &shared.out_dir,
+                &shared.format_ext,
                 quiet,
                 cache.as_ref(),
                 shared.texture_catalog.as_ref(),
                 shared.tree_markers.as_ref(),
+                shared.pitch_markings.as_ref(),
                 shared.webp_quality,
                 timers,
-                shared.gutter,
-            )?;
+            )
         }
     }
-    Ok(())
 }
 
 fn worker_loop(
     cli: Cli,
-    rx: Arc<Mutex<Receiver<TileJob>>>,
+    rx: Arc<Mutex<Receiver<MetaJob>>>,
     shared: Arc<SharedState>,
-    results: Sender<TileResult>,
+    results: Sender<MetaResult>,
 ) {
     let mut client = match connect(&cli) {
         Ok(c) => c,
@@ -307,34 +317,36 @@ fn worker_loop(
             }
         };
         let started = Instant::now();
-        let mut tile_timers = StageTimers::default();
+        let mut meta_timers = StageTimers::default();
         let mut timer_slot = if shared.profile {
-            Some(&mut tile_timers)
+            Some(&mut meta_timers)
         } else {
             None
         };
-        let render_result = render_one_tile(
+        let cores = render_one_metatile(
             &mut client,
             &mut prep_cache,
             shared.as_ref(),
-            job.z,
-            job.x,
-            job.y,
-            &job.out_path,
+            job.mt,
             true,
             &mut timer_slot,
-        );
-        if let Err(e) = render_result {
+        )
+        .unwrap_or_else(|e| {
             eprintln!(
-                "tile {}/{} failed: {e:#}",
-                job.z,
-                format!("{}/{}", job.x, job.y)
+                "metatile z{} cores {}x{}-{}x{} failed: {e:#}",
+                job.mt.z,
+                job.mt.x0,
+                job.mt.y0,
+                job.mt.x1,
+                job.mt.y1
             );
-        }
-        let _ = results.send(TileResult {
-            z: job.z,
+            0
+        });
+        let _ = results.send(MetaResult {
+            z: job.mt.z,
+            cores,
             wall_ms: started.elapsed().as_millis() as u64,
-            stages: tile_timers,
+            stages: meta_timers,
         });
     }
 }
@@ -342,9 +354,8 @@ fn worker_loop(
 fn run_sequential(
     cli: &Cli,
     shared: &SharedState,
-    tiles: &[(u32, u32, u32)],
-    format: &str,
-    tile_count: usize,
+    metas: &[MetaTile],
+    core_tile_count: usize,
 ) -> Result<(usize, BTreeMap<u32, u64>, BTreeMap<u32, usize>, StageTimers)> {
     let mut client = connect(cli)?;
     let mut prep_cache = PreparedCache::default();
@@ -354,37 +365,33 @@ fn run_sequential(
     let mut zoom_tiles: BTreeMap<u32, usize> = BTreeMap::new();
     let mut total_stages = StageTimers::default();
 
-    for (z, x, y) in tiles {
-        let tile_started = Instant::now();
-        let out_path = cli.out.join(format!("{z}/{x}/{y}.{format}"));
-        let mut tile_timers = StageTimers::default();
+    for mt in metas {
+        let meta_started = Instant::now();
+        let mut meta_timers = StageTimers::default();
         let mut timer_slot = if cli.profile {
-            Some(&mut tile_timers)
+            Some(&mut meta_timers)
         } else {
             None
         };
-        render_one_tile(
+        let cores = render_one_metatile(
             &mut client,
             &mut prep_cache,
             shared,
-            *z,
-            *x,
-            *y,
-            &out_path,
+            *mt,
             cli.quiet,
             &mut timer_slot,
         )?;
         if cli.profile {
-            total_stages.merge(&tile_timers);
+            total_stages.merge(&meta_timers);
         }
-        tiles_written += 1;
-        *zoom_tiles.entry(*z).or_insert(0) += 1;
-        *zoom_wall_ms.entry(*z).or_insert(0) += tile_started.elapsed().as_millis() as u64;
+        tiles_written += cores;
+        *zoom_tiles.entry(mt.z).or_insert(0) += cores;
+        *zoom_wall_ms.entry(mt.z).or_insert(0) += meta_started.elapsed().as_millis() as u64;
 
         if tiles_written % 500 == 0 {
             let elapsed = started.elapsed().as_millis() as u64;
             eprintln!(
-                "progress: {tiles_written}/{tile_count} wall_ms={elapsed} (~{:.1} ms/tile)",
+                "progress: {tiles_written}/{core_tile_count} wall_ms={elapsed} (~{:.1} ms/tile)",
                 elapsed as f64 / tiles_written as f64
             );
         }
@@ -410,13 +417,12 @@ fn run_sequential(
 fn run_parallel(
     cli: &Cli,
     shared: Arc<SharedState>,
-    tiles: &[(u32, u32, u32)],
-    format: &str,
+    metas: &[MetaTile],
     workers: usize,
-    tile_count: usize,
+    core_tile_count: usize,
 ) -> Result<(usize, BTreeMap<u32, u64>, BTreeMap<u32, usize>, StageTimers)> {
-    let (job_tx, job_rx) = mpsc::channel::<TileJob>();
-    let (result_tx, result_rx) = mpsc::channel::<TileResult>();
+    let (job_tx, job_rx) = mpsc::channel::<MetaJob>();
+    let (result_tx, result_rx) = mpsc::channel::<MetaResult>();
     let job_rx = Arc::new(Mutex::new(job_rx));
 
     let mut handles = Vec::new();
@@ -452,13 +458,8 @@ fn run_parallel(
     }
     drop(result_tx);
 
-    for (z, x, y) in tiles {
-        job_tx.send(TileJob {
-            z: *z,
-            x: *x,
-            y: *y,
-            out_path: cli.out.join(format!("{z}/{x}/{y}.{format}")),
-        })?;
+    for mt in metas {
+        job_tx.send(MetaJob { mt: *mt })?;
     }
     drop(job_tx);
 
@@ -468,17 +469,17 @@ fn run_parallel(
     let mut total_stages = StageTimers::default();
     let mut tiles_written = 0usize;
 
-    for _ in 0..tile_count {
+    for _ in 0..metas.len() {
         let result = result_rx.recv().context("worker result channel closed")?;
-        tiles_written += 1;
-        *zoom_tiles.entry(result.z).or_insert(0) += 1;
+        tiles_written += result.cores;
+        *zoom_tiles.entry(result.z).or_insert(0) += result.cores;
         *zoom_wall_ms.entry(result.z).or_insert(0) += result.wall_ms;
         total_stages.merge(&result.stages);
 
         if tiles_written % 500 == 0 {
             let elapsed = started.elapsed().as_millis() as u64;
             eprintln!(
-                "progress: {tiles_written}/{tile_count} wall_ms={elapsed} (~{:.1} ms/tile)",
+                "progress: {tiles_written}/{core_tile_count} wall_ms={elapsed} (~{:.1} ms/tile)",
                 elapsed as f64 / tiles_written as f64
             );
         }
@@ -493,11 +494,8 @@ fn run_parallel(
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    if cli.metatile != 1 {
-        bail!(
-            "--metatile {} is not supported yet (only --metatile 1; N=4 metatile rendering deferred)",
-            cli.metatile
-        );
+    if cli.metatile < 1 || cli.metatile > 16 {
+        bail!("--metatile must be between 1 and 16 (got {})", cli.metatile);
     }
     if cli.gutter > 4 {
         bail!("--gutter {} is too large (max 4)", cli.gutter);
@@ -512,8 +510,16 @@ fn main() -> Result<()> {
     }
 
     let preset = LayerPreset::parse(&cli.layers)?;
-    let (tiles, bbox) = collect_tiles(&cli)?;
-    let tile_count = tiles.len();
+    let (metas, bbox) = collect_metatiles(&cli)?;
+    let core_tile_count = meta_tile_core_count(&metas);
+    let meta_count = metas.len();
+
+    if cli.tiles.is_some() && cli.metatile != 1 && !cli.quiet {
+        eprintln!(
+            "note: --tiles uses one metatile per tile; --metatile {} is ignored",
+            cli.metatile
+        );
+    }
 
     fs::create_dir_all(&cli.out)?;
 
@@ -530,26 +536,40 @@ fn main() -> Result<()> {
             TreeMarkerCatalog::fallback()
         }),
     );
+    let pitch_markings = Arc::new(
+        PitchMarkingCatalog::load().unwrap_or_else(|e| {
+            eprintln!("warn: {e:#}; pitch markings disabled");
+            PitchMarkingCatalog::fallback()
+        }),
+    );
 
     let shared = Arc::new(SharedState {
         preset,
         table_cache,
         texture_catalog,
         tree_markers,
+        pitch_markings,
         webp_quality: cli.quality,
         profile: cli.profile,
-        gutter: cli.gutter,
+        format_ext: format.to_string(),
+        out_dir: cli.out.clone(),
     });
 
     let started = Instant::now();
     let (tiles_written, zoom_wall_ms, zoom_tiles, total_stages) = if cli.workers > 1 {
-        run_parallel(&cli, Arc::clone(&shared), &tiles, format, cli.workers, tile_count)?
+        run_parallel(
+            &cli,
+            Arc::clone(&shared),
+            &metas,
+            cli.workers,
+            core_tile_count,
+        )?
     } else {
-        run_sequential(&cli, shared.as_ref(), &tiles, format, tile_count)?
+        run_sequential(&cli, shared.as_ref(), &metas, core_tile_count)?
     };
     let wall_ms = started.elapsed().as_millis() as u64;
-    let ms_per_tile = if tile_count > 0 {
-        wall_ms as f64 / tile_count as f64
+    let ms_per_tile = if core_tile_count > 0 {
+        wall_ms as f64 / core_tile_count as f64
     } else {
         0.0
     };
@@ -588,7 +608,7 @@ fn main() -> Result<()> {
         bbox: bbox.clone(),
         zmin: bbox.as_ref().map(|_| cli.zmin),
         zmax: bbox.as_ref().map(|_| cli.zmax),
-        tiles: tile_count,
+        tiles: core_tile_count,
         tiles_written,
         wall_ms,
         ms_per_tile,
@@ -600,12 +620,14 @@ fn main() -> Result<()> {
         },
         layers: cli.layers.clone(),
         workers: cli.workers,
+        metatile: cli.metatile,
+        gutter: cli.gutter,
         stages: stages.clone(),
         by_zoom,
     };
 
     eprintln!(
-        "timing: engine=srk-render preset={preset:?} tiles={tile_count} workers={} wall_ms={wall_ms} ms_per_tile={ms_per_tile:.2}",
+        "timing: engine=srk-render preset={preset:?} metatiles={meta_count} core_tiles={core_tile_count} workers={} wall_ms={wall_ms} ms_per_tile={ms_per_tile:.2}",
         cli.workers
     );
     if let Some(ref s) = stages {

@@ -41,6 +41,10 @@ export PGPASSWORD=postgres
 
 Also supports `--bbox xmin,ymin,xmax,ymax --zmin 15 --zmax 18` (writes `timing.json`).
 
+## Metatile
+
+`--metatile N` (default **1** for harness; farm benches use **8**) packs up to N×N core tiles per paint pass, with `--gutter` extra tiles rendered then cropped (default **0** for farm throughput; use `--gutter 1` to match QGIS `render/xyz_tiles.py` edge bleed). `--tiles` mode uses one metatile per listed tile (N ignored for packing).
+
 ## Output formats
 
 | `--format` | Use |

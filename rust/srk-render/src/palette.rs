@@ -65,6 +65,98 @@ pub fn fill_pitch() -> Color {
     hex("#d1d7c6")
 }
 
+/// QGIS `pitch` fill CASE on `surface:colour` / `surface` / `sport`.
+pub fn fill_for_pitch(
+    surface_colour: Option<&str>,
+    surface: Option<&str>,
+    sport: Option<&str>,
+) -> Color {
+    let colour = surface_colour.unwrap_or("").to_ascii_lowercase();
+    if colour.contains("red") {
+        return hex("#dbc1b9");
+    }
+    if colour.contains("green") {
+        return hex("#b5daa9");
+    }
+    if colour.contains("blue") {
+        return hex("#c3c1d7");
+    }
+    if colour.contains("gray") || colour.contains("grey") {
+        return hex("#c6c9c1");
+    }
+    if colour.contains("yellow") {
+        return hex("#e3e6c0");
+    }
+    let surface = surface.unwrap_or("");
+    match surface {
+        "asphalt" | "compacted" | "concrete" | "fine_gravel" | "gravel" | "paved"
+        | "paving_stones" | "pebblestone" => return hex("#c6c9c1"),
+        _ => {}
+    }
+    if surface.contains("grass") {
+        return hex("#b5daa9");
+    }
+    if surface.contains("sand") {
+        return hex("#e3e6c0");
+    }
+    if sport == Some("table_tennis") {
+        return hex("#c6c9c1");
+    }
+    fill_pitch()
+}
+
+/// `pitch surface` uses the same texture table as `landuse surface`.
+pub fn pitch_surface_texture(surface: &str) -> Option<(&'static str, f32)> {
+    landuse_surface_texture(surface)
+}
+
+/// Map `pitch_markings.sport` (+ hoops / dist_long) → SVG stem in `style/textures/pitches/`.
+pub fn pitch_marking_svg_stem(sport: Option<&str>, hoops: Option<&str>, dist_long: Option<f32>) -> Option<&'static str> {
+    let sport = sport.unwrap_or("");
+    if sport.contains("multi") {
+        return Some("multi");
+    }
+    if sport.contains("soccer") {
+        return if dist_long.unwrap_or(0.0) > 50.0 {
+            Some("soccer")
+        } else {
+            Some("soccer_small")
+        };
+    }
+    if sport.contains("basketball") || sport.contains("streetball") {
+        return if hoops == Some("2") {
+            Some("basketball_2")
+        } else {
+            Some("basketball_1")
+        };
+    }
+    if sport.contains("tennis") && !sport.contains("table_tennis") {
+        return Some("tennis");
+    }
+    if sport.contains("volleyball") {
+        return Some("volleyball");
+    }
+    if sport.contains("badminton") {
+        return Some("badminton");
+    }
+    if sport.contains("handball") {
+        return Some("handball");
+    }
+    if sport.contains("field_hockey") {
+        return Some("field_hockey");
+    }
+    if sport.contains("rugby_league") {
+        return Some("rugby_league");
+    }
+    if sport.contains("rugby_union") {
+        return Some("rugby_union");
+    }
+    if sport.contains("chess") {
+        return Some("chess");
+    }
+    None
+}
+
 pub fn fill_water() -> Color {
     hex("#cac7ed")
 }
@@ -163,11 +255,11 @@ pub const AREA_HIGHWAY_PAINTED: &str = "(\
 /// PNGs otherwise reads as coarse dither vs Qt's softer downscale.
 pub fn highway_surface_texture(surface: &str) -> Option<(&'static str, f32)> {
     match surface {
-        "asphalt" => Some(("surface/asphalt", 0.025)),
+        "asphalt" => Some(("surface/asphalt", 0.018)),
         "concrete" => Some(("surface/concrete", 0.28)),
         "concrete:plates" => Some(("surface/concrete", 0.28)),
         "paving_stones" => Some(("surface/paving_stones", 0.08)),
-        "sett" => Some(("surface/sett", 0.035)),
+        "sett" => Some(("surface/sett", 0.028)),
         _ => None,
     }
 }

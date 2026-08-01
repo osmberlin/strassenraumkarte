@@ -2,103 +2,82 @@
 
 Measured **2026-08-01** on Darwin arm64 10 CPUs · PostGIS `localhost:5433` · bbox `13.3958,52.4243,13.4874,52.4849`.
 
-Plan: [rust_renderer_speedups](../../.cursor/plans/rust_renderer_speedups_b7184fc3.plan.md).
+## Live farm headline (WebP q90)
 
-## Live farm codecs (what we optimize for)
+Production output is **lossy WebP** (default). PNG is harness-only. JPG exists for format parity but is not farm-ready (slow `image` crate encode).
 
-Production-shaped output is **lossy WebP or JPG** (q90), not PNG. PNG stays for the pixelmatch harness only.
+Artefact: `runs/bench-speedups-20260801-201757/` (z18–z20, 102 225 tiles, workers=8).
 
-Codec compare: `./audit/tile-regression/scripts/bench-codecs.sh`  
-Artefact: `runs/bench-codecs-20260801-194104/summary.json` (z18–z20, 102 225 tiles, workers=8, q90).
+| Config | Wall | ms/tile | vs QGIS (1568 s) | Notes |
+| --- | ---: | ---: | ---: | --- |
+| **mt1 gutter0 (farm default)** | **78.8 s** | **0.77** | **~20×** | Max throughput; no neighbour bleed |
+| mt4 gutter1 | 93.0 s | 0.91 | ~17× | Edge bleed + moderate amortise |
+| mt8 gutter1 | 96.2 s | 0.94 | ~16× | QGIS-shaped metatile+gutter |
+| Prior baseline (webp, pre this pass) | 82.5 s | 0.81 | ~19× | Codec bench; no metatile API |
 
-| Format | Role | Wall | ms/tile | vs QGIS (1568 s jpg) | Disk | Avg/tile | Encode stage (∑) | Quality vs PNG\* |
-| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| **webp q90** | **live default** | **82.5 s** | **0.81** | **~19×** | **35.6 MiB** | **365 B** | 240 k ms | ~0.001% mean |
-| jpg q90 | live / QGIS-like | 643 s | 6.29 | ~2.4× | 275 MiB | 2 816 B | **4.5 M ms** | ~0.000% mean |
-| png | harness / lossless ref | 70.4 s | 0.69 | ~22× | 453 MiB | 4 645 B | 154 k ms | — |
+**Cite ~79 s / ~20× QGIS** for live WebP capacity (`--metatile 1 --gutter 0 --workers 8`).
 
-\*Sample of 10 dense tiles, `pixelmatch` threshold 0.1 after decode. Both lossy codecs look essentially identical to PNG at q90 for this metric; size is the differentiator.
+### Metatile lesson (this bbox)
 
-**Takeaways**
+| Zoom / density | Winner | Why |
+| --- | --- | --- |
+| z18 only (dense) | **mt8 g1 ≈ 6.2 s** vs mt1 g1 ≈ 25 s | Amortises SQL/paint; gutter cost shared |
+| z18–z20 (sparse z20) | **mt1 g0 ≈ 79 s** beats mt8 g1 ≈ 96 s | Per-tile empty early-out beats painting 10×10 metas that contain a few hits |
 
-- **WebP is the live number to cite:** ~19× QGIS wall, ~12.7× smaller than PNG, ~7.7× smaller than our JPG output.
-- **JPG encode via the `image` crate is not farm-ready** here (~8× slower wall than WebP; encode stage dominates). Fine for format parity checks; do not use as the throughput target until swapped to a faster JPEG backend (or stick to WebP).
-- Earlier “optimize PNG benches” framing was wrong for live capacity — use `--format webp` (or the codec script) when measuring farm speed.
+Use large metatile when the grid is dense; keep mt1 (+ optional gutter1 for seam parity) when many tiles are empty.
 
-Sample tile sizes (lossy vs same PNG):
+### Codec sizes (unchanged intent)
 
-| Tile | PNG | WebP (% of PNG) | JPG (% of PNG) |
-| --- | ---: | ---: | ---: |
-| 18/140845/86022 | 78 157 | 12 024 (15%) | 20 525 (26%) |
-| 19/281690/172045 | 72 837 | 8 666 (12%) | 16 150 (22%) |
-| 20/563376/344090 | 35 570 | 3 006 (8%) | 8 354 (24%) |
-
-## Historical PNG ladder (harness codec)
-
-Same bbox/zooms; useful for SQL/paint regression only — **not** live farm capacity.
-
-| Engine | Workers | Format | Wall | ms/tile | vs QGIS |
-| --- | ---: | --- | ---: | ---: | ---: |
-| QGIS full style | 2 + metatile 8 | jpg | **1568 s** | ~15.3 | 1.0× |
-| Rust (pre-speed track) | 1 | png | ~891 s | ~8.7 | 1.8× |
-| Rust + workers | 8 | png | 223 s | 2.18 | 7.0× |
-| Rust + workers + prep + empty early-out | 8 | png | 65.8–70.4 s | ~0.64–0.69 | ~22–24× |
-| **Rust + workers + prep + empty early-out** | **8** | **webp q90** | **82.5 s** | **0.81** | **~19×** |
+From `bench-codecs-20260801-194104` (same bbox/zooms): WebP ~36 MiB · JPG ~275 MiB · PNG ~453 MiB. Quality at q90 ≈ visually lossless vs PNG under pixelmatch threshold 0.1.
 
 ## What landed
 
 | Pass | Change | Effect |
 | --- | ---: | ---: |
-| 0 Profile | `--profile` stage timers | Identified SQL-bound under workers |
-| 1 Workers | `--workers N` / `SRK_WORKERS` | ~3.9× wall on z18 (1→8) |
-| 2 Shapeburst | Bbox/batch helpers | Ready; building path uses shadow batch |
-| 3 SQL light WHERE | `geom && env` only | Modest |
-| 4 Metatile | Deferred (`--metatile` = 1 only) | — |
-| **5 Empty early-out** | One `EXISTS` OR probe; skip paint on empty tiles | Big on sparse z20 |
-| **6 Prepared stmts** | Per-worker `PreparedCache` | Cuts parse/plan overhead |
-| **7 Live codecs** | `--format webp\|jpg\|png` + `bench-codecs.sh` | WebP live default; JPG for compare |
+| 0–3 | Profile, workers, shapeburst helpers, light WHERE | Earlier track |
+| **4 Metatile N** | True N×N paint + crop (QGIS `iter_metatiles`) | Wins on dense z18; mixed on sparse z20 |
+| 5 Empty early-out | EXISTS OR probe | Big on sparse z20 (per metatile) |
+| 6 Prepared stmts | Per-worker `PreparedCache` | Cuts parse/plan |
+| 7 Live codecs | webp/jpg/png + `bench-codecs.sh` | WebP live default |
+| **8 WebP method=1** | `encode_advanced` (libwebp method 0–6) | Small wall help; encode still large stage |
+| **9 UNION ALL** | Tried one polygon+line round-trip | **Reverted** — ~2× SQL on local Postgres |
+| **10 Trees z&lt;17** | Skip EXISTS + paint (MapLibre minzoom) | Style-aligned; no z18–20 effect |
+| Gutter default **0** | `--gutter 1` for QGIS-like bleed | Farm speed vs seam parity |
 
-## Worker scaling (z18, 4964 tiles, png)
+## Profile (workers=8, z18–z20, WebP)
 
-| Workers | Wall | ms/tile | Notes |
-| ---: | ---: | ---: | --- |
-| 1 | 41.7 s | 8.40 | before prep/early-out |
-| 8 | 10.7 s | 2.16 | workers only |
-| **8 + prep + early-out** | **~5.0 s** | **~1.0** | smoke after pass 5–6 |
-
-## Profile evolution (workers=8, z18–z20, summed across threads)
-
-| Stage | After workers (png) | After prep+early-out (png) | Live webp q90 |
+| Stage (∑ ms) | Prior webp ~82 s | **Farm mt1 g0 ~79 s** | mt8 g1 ~96 s |
 | --- | ---: | ---: | ---: |
-| sql | 814 116 (~70%) | **71 685 (~21%)** | 98 430 |
-| encode | 191 601 (~16%) | **143 384 (~42%)** | **239 792** |
-| paint | 123 716 (~11%) | 104 078 (~30%) | 116 302 |
-| shadow | 32 000 | 24 414 | 24 929 |
+| sql | 98 430 | 137 723 | **7 203** |
+| paint | 116 302 | **13 208** | 44 601 |
+| shadow | 24 929 | 41 166 | 264 563 |
+| encode | 239 792 | 245 799 | 378 472 |
 
-On WebP, encode is the largest summed stage; still ~19× QGIS wall overall.
+Metatile collapses SQL; shadow/encode grow with buffer size. Empty early-out + mt1 still wins overall on this sparse high-zoom set.
 
-## Next ideas (not done this pass)
+## Next ideas
 
-1. **Metatile N=4/8** — amortize paint/shadow like QGIS (still deferred).
-2. **Faster live encode** — WebP is already acceptable; optional faster JPEG (`mozjpeg`/libjpeg-turbo) only if JPG must ship.
-3. **Multi-layer `UNION ALL` fetch** — one round-trip for landuse+highway+buildings when tile is non-empty.
-4. **Skip texture/tree work at low zoom** if style allows (visual trade-off).
+1. **Zoom-aware metatile** — e.g. mt8 below z19, mt1 at z20 (or density heuristic).
+2. **Faster JPEG** — only if JPG must ship (`mozjpeg` / libjpeg-turbo).
+3. **Remote-DB UNION** — may win when round-trip latency ≫ local socket.
+4. **Blank-tile encode cache** — reuse one encoded empty WebP for early-out cores.
 
 ## How to re-bench
 
 ```bash
-# Live codecs (preferred)
-./audit/tile-regression/scripts/bench-codecs.sh
-
-# Single live run
 cd rust/srk-render && cargo build --release
+
+# Live farm (default gutter 0)
 ./target/release/srk-render \
   --bbox 13.3958,52.4243,13.4874,52.4849 \
   --zmin 18 --zmax 20 --layers full-approx \
   --out /tmp/srk-speed --format webp --quality 90 \
-  --workers 8 --quiet --timing-json --profile
+  --metatile 1 --gutter 0 --workers 8 --quiet --timing-json --profile
+
+# QGIS-shaped parity render
+./target/release/srk-render ... --metatile 8 --gutter 1
 ```
 
 ## Verdict
 
-**Live farm:** WebP q90 @ 8 workers ≈ **83 s / ~19× QGIS** on z18–z20, **~36 MiB** vs **~275 MiB** JPG / **~453 MiB** PNG. JPG is available for size/quality compare but current encode is too slow to be the capacity metric. Visual parity remains a separate track.
+**Live farm WebP:** **~79 s / ~20× QGIS** on z18–z20 with 8 workers (mt1, gutter 0). Metatile 4/8 + gutter 1 stays ~17× and is better for dense zooms / edge bleed. UNION ALL not worth it on local PostGIS. Visual parity remains a separate track.
