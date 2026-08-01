@@ -7,7 +7,7 @@ PostGIS → GeoJSONSeq → tippecanoe → `.pmtiles`, styled with a MapLibre por
 - Running PostGIS with processed Straßenraumkarte tables (defaults: `localhost:5433` / `strassenraumkarte` / `postgres` — same as `data/db_config.sh`)
 - `ogr2ogr` (GDAL), `tippecanoe`, `tile-join`, `bun`
 - `PGPASSWORD` (or `~/.pgpass`) for the DB user
-- Optional for compare: `./render/preview_server.py` on `:8000` (QGIS raster XYZ)
+- Optional for compare: QGIS tiles under `render/tiles/` (Vite serves them at `/raster/…`; `./render/preview_server.py` on `:8000` is only needed for the standalone QGIS preview UI)
 
 ## Workflow
 

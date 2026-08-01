@@ -71,11 +71,14 @@ function MapCanvas({
   onZoom: (z: number) => void
   hidden: ReadonlySet<string>
 }) {
+  const [layersReady, setLayersReady] = useState(false)
+
   const handleLoad = useCallback(
     (event: MapLibreEvent) => {
       const map = event.target
       exposeMainMapForDebugging(map)
       installMissingStyleImageResolver(map)
+      setLayersReady(true)
       onZoom(map.getZoom())
       onStatus('Map loaded')
       onError(null)
@@ -149,10 +152,11 @@ function MapCanvas({
         minzoom={SOURCE_MINZOOM}
         maxzoom={SOURCE_MAXZOOM}
       />
-      {visibleLayers.map((layer) => (
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        <Layer key={layer.id} {...(layer as any)} />
-      ))}
+      {layersReady &&
+        visibleLayers.map((layer) => (
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          <Layer key={layer.id} {...(layer as any)} />
+        ))}
     </Map>
   )
 }

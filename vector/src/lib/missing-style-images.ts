@@ -8,10 +8,14 @@
  *
  * SVGs are rasterized via HTMLImageElement — `createImageBitmap` / `map.loadImage`
  * do not accept SVG (see research/maplibre-ad-hoc-image-loading).
+ *
+ * Install the resolver *before* mounting symbol layers (gate layers on map `load`),
+ * otherwise ImageManager may request icons while `missingImageResolver` is still null.
  */
 import type { Map as MapLibreMap } from 'maplibre-gl'
 
 const SENTINELS = new Set(['', 'null', 'undefined', 'none'])
+const INSTALLED = new WeakSet<MapLibreMap>()
 
 function candidateUrls(id: string): string[] {
   const clean = id.replace(/^\/+/, '').replace(/\.svg$/i, '').replace(/\.png$/i, '')
@@ -69,6 +73,9 @@ async function rasterizeUrl(url: string, size = 64): Promise<ImageData | null> {
 }
 
 export function installMissingStyleImageResolver(map: MapLibreMap): void {
+  if (INSTALLED.has(map)) return
+  INSTALLED.add(map)
+
   map.setMissingStyleImageResolver(async (id) => {
     if (SENTINELS.has(id) || map.hasImage(id)) return
 
@@ -76,7 +83,11 @@ export function installMissingStyleImageResolver(map: MapLibreMap): void {
       const image = await rasterizeUrl(url)
       if (!image) continue
       if (map.hasImage(id)) return
-      map.addImage(id, image, { pixelRatio: 1 })
+      try {
+        map.addImage(id, image, { pixelRatio: 1 })
+      } catch {
+        // Parallel requests for the same id can race past hasImage().
+      }
       return
     }
   })

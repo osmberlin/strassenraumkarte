@@ -44,6 +44,29 @@ describe('osmLayerFilter', () => {
       expect(osmLayerFilter(b.id)).toBeTruthy()
     }
   })
+
+  test('coalesces null/missing layer so MapLibre never compares null as a number', () => {
+    for (const b of OSM_LAYER_BUCKETS) {
+      const filter = osmLayerFilter(b.id) as unknown[]
+      // ['<=|'=='|'>=', ['coalesce', ['get', 'layer'], 0], n]
+      expect(filter[1]).toEqual(['coalesce', ['get', 'layer'], 0])
+    }
+    expect(osmLayerFilter('l0')).toEqual([
+      '==',
+      ['coalesce', ['get', 'layer'], 0],
+      0,
+    ])
+    expect(osmLayerFilter('lm2')).toEqual([
+      '<=',
+      ['coalesce', ['get', 'layer'], 0],
+      -2,
+    ])
+    expect(osmLayerFilter('l3p')).toEqual([
+      '>=',
+      ['coalesce', ['get', 'layer'], 0],
+      3,
+    ])
+  })
 })
 
 describe('effects', () => {

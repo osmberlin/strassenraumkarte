@@ -67,6 +67,7 @@ export function ComparePage({ locationId, mode, onLocation, onMode, onBack }: Pr
   const [view, setView] = useState<View>(() => viewFromLocation(location))
   const [blend, setBlend] = useState(0.5)
   const [swipe, setSwipe] = useState(50)
+  const [vectorReady, setVectorReady] = useState(false)
 
   const jump = useCallback(
     (id: string) => {
@@ -88,8 +89,14 @@ export function ComparePage({ locationId, mode, onLocation, onMode, onBack }: Pr
     })
   }, [])
 
+  const onRasterLoad = useCallback((e: MapLibreEvent) => {
+    installMissingStyleImageResolver(e.target)
+  }, [])
+
   const onVectorLoad = useCallback((e: MapLibreEvent) => {
     installMissingStyleImageResolver(e.target)
+    // Mount symbol layers only after the resolver is wired (MapLibre v6 race).
+    setVectorReady(true)
   }, [])
 
   const shared = useMemo(
@@ -180,7 +187,12 @@ export function ComparePage({ locationId, mode, onLocation, onMode, onBack }: Pr
             }
           >
             <div className="compare-label">Raster (QGIS)</div>
-            <Map id="compare-raster" style={{ width: '100%', height: '100%' }} {...shared}>
+            <Map
+              id="compare-raster"
+              style={{ width: '100%', height: '100%' }}
+              {...shared}
+              onLoad={onRasterLoad}
+            >
               <NavigationControl position="top-right" />
               <Source
                 id={RASTER_SOURCE}
@@ -236,10 +248,11 @@ export function ComparePage({ locationId, mode, onLocation, onMode, onBack }: Pr
               minzoom={SOURCE_MINZOOM}
               maxzoom={SOURCE_MAXZOOM}
             />
-            {vectorLayers.map((layer) => (
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              <Layer key={layer.id} {...(layer as any)} />
-            ))}
+            {vectorReady &&
+              vectorLayers.map((layer) => (
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                <Layer key={layer.id} {...(layer as any)} />
+              ))}
           </Map>
         </div>
       </div>

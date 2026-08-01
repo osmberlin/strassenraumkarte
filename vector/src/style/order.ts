@@ -78,22 +78,30 @@ export const OSM_LAYER_BUCKETS: readonly OsmLayerBucket[] = [
   { id: 'l3p', label: 'layer >= 3', rank: 5 },
 ] as const
 
+/**
+ * OSM `layer` as a number. Missing / null → 0 (QGIS: `"layer" = 0 OR "layer" IS NULL`).
+ * Always coalesce before numeric compares — MapLibre warns and falls back to false on null.
+ */
+export function osmLayerValue(): ExpressionSpecification {
+  return ['coalesce', ['get', 'layer'], 0] as ExpressionSpecification
+}
+
 /** MapLibre filter for one OSM bucket (feature property `layer`). */
 export function osmLayerFilter(bucketId: OsmLayerBucketId): FilterSpecification {
+  const layer = osmLayerValue()
   switch (bucketId) {
     case 'lm2':
-      return ['<=', ['get', 'layer'], -2]
+      return ['<=', layer, -2]
     case 'lm1':
-      return ['==', ['get', 'layer'], -1]
+      return ['==', layer, -1]
     case 'l0':
-      // QGIS: `"layer" = 0 OR "layer" IS NULL`
-      return ['any', ['!', ['has', 'layer']], ['==', ['get', 'layer'], 0]]
+      return ['==', layer, 0]
     case 'l1':
-      return ['==', ['get', 'layer'], 1]
+      return ['==', layer, 1]
     case 'l2':
-      return ['==', ['get', 'layer'], 2]
+      return ['==', layer, 2]
     case 'l3p':
-      return ['>=', ['get', 'layer'], 3]
+      return ['>=', layer, 3]
     default: {
       const _exhaustive: never = bucketId
       return _exhaustive
@@ -158,7 +166,7 @@ export function isOsmStacked(sourceLayer: string): sourceLayer is OsmStackedSour
 
 /** Sort-key expression when a compact single-layer approach is enough (labels, etc.). */
 export function osmLayerSortKey(): ExpressionSpecification {
-  return ['coalesce', ['get', 'layer'], 0] as ExpressionSpecification
+  return osmLayerValue()
 }
 
 /**
