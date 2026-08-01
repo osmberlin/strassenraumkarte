@@ -37,6 +37,16 @@ bun run verify-preview
 | lines | purple |
 | points | red circles (detail layers from **z17**) |
 
+## Zoom (tippecanoe ↔ MapLibre)
+
+| Level | Value | Why |
+| --- | --- | --- |
+| PMTiles archive / vector `source` | **15–18** | tippecanoe group ranges in `layers.ts` (`SOURCE_MINZOOM` / `SOURCE_MAXZOOM`) |
+| Map camera | **15–20** | no empty z14; overzoom z19–20 from parent z18 tiles |
+| Style layer `minzoom` | per layer `-Z` | detail from z17; ground/streets/buildings/labels from z15 |
+
+Do **not** set `source.maxzoom` to 20 — MapLibre would request missing z19/z20 tiles. Keep it at the archive max (18) so higher map zooms overscale.
+
 ## MapLibre 6 + Vite (required)
 
 Per the [v5→v6 migration guide](https://maplibre.org/maplibre-gl-js/docs/guides/v5-to-v6-migration-guide/) and install docs:

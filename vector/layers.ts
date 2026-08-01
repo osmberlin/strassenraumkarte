@@ -193,8 +193,19 @@ export const LAYERS: LayerDef[] = [
 
 export const SOURCE_ID = 'strassenraumkarte'
 
-/** MapLibre vector source maxzoom (highest tippecanoe maxzoom across layers). */
+/** Lowest tippecanoe minzoom across layers — also the PMTiles archive minZoom. */
+export const SOURCE_MINZOOM = Math.min(...LAYERS.map((l) => l.minzoom))
+
+/**
+ * Highest tippecanoe maxzoom across layers — also the PMTiles archive maxZoom.
+ * Keep the MapLibre vector `source.maxzoom` at this value so z19–20 overscale
+ * parent tiles instead of requesting missing archive levels.
+ */
 export const SOURCE_MAXZOOM = Math.max(...LAYERS.map((l) => l.maxzoom))
+
+/** Map camera: no tiles below archive min; overzoom above archive max to z20. */
+export const MAP_MIN_ZOOM = SOURCE_MINZOOM
+export const MAP_MAX_ZOOM = 20
 
 export const TILE_GROUPS = ['ground', 'streets', 'buildings', 'detail', 'labels'] as const
 

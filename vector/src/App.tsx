@@ -10,6 +10,12 @@ import {
 } from 'react-map-gl/maplibre'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
+import {
+  MAP_MAX_ZOOM,
+  MAP_MIN_ZOOM,
+  SOURCE_MAXZOOM,
+  SOURCE_MINZOOM,
+} from '../layers'
 import { exposeMainMapForDebugging } from './lib/expose-main-map'
 import { pmtilesSourceUrl } from './maplibre-setup'
 import { BASE_STYLE, DEFAULT_VIEW, SOURCE_ID, basicLayerSpecs } from './style/basic'
@@ -62,8 +68,8 @@ function MapCanvas({
         latitude: DEFAULT_VIEW.latitude,
         zoom: DEFAULT_VIEW.zoom,
       }}
-      minZoom={14}
-      maxZoom={20}
+      minZoom={MAP_MIN_ZOOM}
+      maxZoom={MAP_MAX_ZOOM}
       hash
       attributionControl={false}
       onLoad={handleLoad}
@@ -73,7 +79,17 @@ function MapCanvas({
       <NavigationControl position="top-right" />
       <ScaleControl position="bottom-left" unit="metric" />
 
-      <Source id={SOURCE_ID} type="vector" url={pmtilesSourceUrl()} minzoom={15} maxzoom={18} />
+      {/*
+        Source min/maxzoom = PMTiles archive (tippecanoe), not MAP_MAX_ZOOM.
+        At map z19–20 MapLibre overscales z18 tiles; raising source maxzoom would 404.
+      */}
+      <Source
+        id={SOURCE_ID}
+        type="vector"
+        url={pmtilesSourceUrl()}
+        minzoom={SOURCE_MINZOOM}
+        maxzoom={SOURCE_MAXZOOM}
+      />
       {layers.map((layer) => (
         <Layer key={layer.id} {...layer} />
       ))}

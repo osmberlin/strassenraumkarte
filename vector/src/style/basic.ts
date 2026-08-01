@@ -2,7 +2,14 @@ import type { CircleLayerSpecification, FillLayerSpecification, LineLayerSpecifi
 
 import { LAYERS, SOURCE_ID } from '../../layers'
 
-/** Prep style: areas = transparent blue, lines = purple, points = red. */
+/**
+ * Prep style: areas = transparent blue, lines = purple, points = red.
+ *
+ * Layer `minzoom` matches tippecanoe `-Z` (features first appear in those tiles).
+ * No layer `maxzoom`: paint while features are present in the current/overscaled tile.
+ * In the joined archive, layers tippecanoe’d only to e.g. z16 (ground) are absent from
+ * z17+ tiles, so they drop out above their tippecanoe maxzoom — that is expected.
+ */
 const FILL = 'rgba(30, 100, 220, 0.35)'
 const FILL_OUTLINE = 'rgba(30, 100, 220, 0.7)'
 const LINE = '#7c3aed'
