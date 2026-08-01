@@ -6,6 +6,8 @@ The appeal of the style, which is aesthetically inspired by architectural plans,
 
 Technically, the style combines a QGIS project (with the layer styling) and an involved data pipeline based on osm2pgsql and SQL post-processing that prepares geometries and attributes for rendering.
 
+A second **vector output channel** lives in [`vector/`](vector/): PostGIS → GeoJSONSeq → tippecanoe → PMTiles, styled in MapLibre (QGIS-faithful core paints) with a raster/vector compare UI. See [`vector/README.md`](vector/README.md).
+
 Note: This repository is a new, modernised version based on an osm2pgsql / SQL / QGIS workflow; the original version (Overpass / Python / QGIS) lives at [osmberlin/strassenraumkarte-neukoelln](https://github.com/osmberlin/strassenraumkarte-neukoelln).
 
 ![Example of the Straßenraumkarte](./docs/example.png)

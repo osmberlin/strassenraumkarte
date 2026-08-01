@@ -4,6 +4,7 @@
   "exclude": [
     "node_modules",
     "scripts/verify-preview.ts",
+    "scripts/screenshots.ts",
     "scripts/debug-tm.ts",
     "src/style/**/*.test.ts"
   ],

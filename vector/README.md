@@ -1,98 +1,79 @@
-# Straßenraumkarte · vector output (prep)
+# Straßenraumkarte · vector output
 
-PostGIS → GeoJSONSeq → tippecanoe → `.pmtiles`, previewed with **react-map-gl/maplibre** and a basic geometry-type style.
+PostGIS → GeoJSONSeq → tippecanoe → `.pmtiles`, styled with a MapLibre port of the QGIS cartography, plus a raster/vector compare harness.
 
 ## Prerequisites
 
 - Running PostGIS with processed Straßenraumkarte tables (defaults: `localhost:5433` / `strassenraumkarte` / `postgres` — same as `data/db_config.sh`)
 - `ogr2ogr` (GDAL), `tippecanoe`, `tile-join`, `bun`
 - `PGPASSWORD` (or `~/.pgpass`) for the DB user
+- Optional for compare: `./render/preview_server.py` on `:8000` (QGIS raster XYZ)
 
-## Commands
+## Workflow
 
 ```bash
 cd vector
 bun install
-bun run export      # PostGIS → out/*.geojsonl
-bun run tiles       # tippecanoe groups + tile-join → public/tiles/strassenraumkarte.pmtiles
-bun run tile-report # sizes
-bun run pipeline    # export + tiles + report
-bun run dev         # MapLibre preview at http://127.0.0.1:5177
-bun run check       # type-check
+PGPASSWORD=… bun run pipeline   # export + tiles + report
+bun run sprite                  # pack style/textures → public/sprites/
+bun run validate-style          # validateStyleMin
+bun run dev                     # http://127.0.0.1:5177
 ```
 
-Optional: export a subset with `bun run export highway_area tree`.
-
-Smoke the map (needs `bun run dev` and Playwright Chromium):
+Preview: http://127.0.0.1:5177/#16/52.4768/13.4222  
+Compare: http://127.0.0.1:5177/?compare=1&location=intersection&mode=side-by-side  
 
 ```bash
-bun run verify-preview
+bun run screenshots   # needs dev (+ raster server) → compare-output/index.html
+bun run e2e           # console-clean Playwright across compare locations
+bun run check         # type-check + validate-style + unit tests
 ```
 
-## Style (prep + foundation)
+## Tippecanoe flags
 
-| Geometry | Paint |
-| --- | --- |
-| polygons / multipolygons | transparent blue fill |
-| lines | purple |
-| points | red circles (detail layers from **z17**) |
+Groups in `layers.ts` with `-r1 --no-tiny-polygon-reduction --simplification=2 --preserve-input-order` (prep also used `--no-tile-compression` for easier debugging). Deliberately **not** `--drop-densest-as-needed`.
 
-Shared modules under `src/style/`:
-
-| Module | Role |
-| --- | --- |
-| `metres.ts` | `metresToPixels` / `mmToPixels` (QGIS MapUnit → CSS px) |
-| `order.ts` | QGIS paint order + OSM `layer` bucket filters (G0.2: one set per bucket) |
-| `source.ts` | vector source zooms, glyphs URL |
-| `effects.ts` | `dropShadow` / `innerShadow` / `outerGlow` (+ highway MM blur table) |
-| `build-style.ts` | `buildStyle()` → StyleSpecification |
-| `basic.ts` | prep geometry-type layers (ordered) |
-
-```bash
-bun run validate-style   # validateStyleMin
-bun test src/style       # metres + style validation
-```
-
+Measured Berlin extract (joined archive ~16 MiB with styled columns): ground ~0.9 MiB, streets ~2.4 MiB, buildings ~21 MiB, detail ~6.7 MiB, labels ~0.6 MiB.
 
 ## Zoom (tippecanoe ↔ MapLibre)
 
 | Level | Value | Why |
 | --- | --- | --- |
-| PMTiles archive / vector `source` | **15–18** | tippecanoe group ranges in `layers.ts` (`SOURCE_MINZOOM` / `SOURCE_MAXZOOM`) |
-| Map camera | **15–20** | no empty z14; overzoom z19–20 from parent z18 tiles |
-| Style layer `minzoom` | per layer `-Z` | detail from z17; ground/streets/buildings/labels from z15 |
+| PMTiles archive / vector `source` | **15–18** | tippecanoe group ranges (`SOURCE_MINZOOM` / `SOURCE_MAXZOOM`) |
+| Map camera | **15–20** | overzoom z19–20 from parent z18 tiles |
+| Style layer `minzoom` | per layer `-Z` | detail from z17 |
 
-Do **not** set `source.maxzoom` to 20 — MapLibre would request missing z19/z20 tiles. Keep it at the archive max (18) so higher map zooms overscale.
+Do **not** set `source.maxzoom` to 20 — MapLibre would request missing tiles.
 
-## MapLibre 6 + Vite (required)
+## Metres → pixels
 
-Per the [v5→v6 migration guide](https://maplibre.org/maplibre-gl-js/docs/guides/v5-to-v6-migration-guide/) and install docs:
+QGIS MapUnit sizes use `@mercator_scale`. MapLibre paints CSS px on 512 tiles:
 
-```ts
-import { setWorkerUrl, addProtocol } from 'maplibre-gl'
-import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
-import { Protocol } from 'pmtiles'
+`px = m * 2^z / (78271.51696 * cos φ)` → `metresToPixels` / `metresToPixelsFromProp` (`src/style/metres.ts`). Paper MM (highway blur stack) use `mmToPixels` (96 DPI). Never nest zoom interpolates — bake scales into stop values.
 
-setWorkerUrl(workerUrl)
-const protocol = new Protocol({ metadata: true })
-addProtocol('pmtiles', (req, ac) => protocol.tile(req, ac))
-```
+## Effects vs QGIS
 
-Use **`?worker&url`**, not plain `?url` — otherwise the worker chunk is missing shared deps and vector tiles never load.
+| QGIS | MapLibre approximation | Known deviation |
+| --- | --- | --- |
+| dropShadow | translated fill + blurred outline | softer / weaker on large offsets |
+| innerShadow | negative `line-offset` + `line-blur` | banded vs continuous |
+| outerGlow | two stacked blurred outlines | join artefacts if too wide |
+| Shapeburst / gradients | deferred / flat fills | roofs, water depth not 1:1 |
+| RasterFill textures | `fill-pattern` from sprite | no per-feature rotation / ground-metre scale |
+| SvgMarker traffic signs | `setMissingStyleImageResolver` | icons only when style requests them |
 
-**react-map-gl ≥ 8.1.2** is required for MapLibre 6 (v6 removed public `map.transform`; older react-map-gl crashed in `transformToViewState` reading `center`). See [visgl/react-map-gl#2598](https://github.com/visgl/react-map-gl/pull/2598).
+## Style modules
 
-## React (react-map-gl)
-
-Preview uses `react-map-gl/maplibre`: `<MapProvider>`, declarative `<Source>` / `<Layer>` (no `addSource`/`addLayer`), Map event props (`onLoad` / `onIdle`), and `window.__mainMap` in dev via `exposeMainMapForDebugging`.
-
-## Layout
-
-| Path | Role |
+| Module | Role |
 | --- | --- |
-| `layers.ts` | Layer list: table, columns, zoom, tippecanoe group, paint kind |
-| `scripts/export.ts` | `ogr2ogr` GeoJSONSeq export |
-| `scripts/build-tiles.ts` | tippecanoe per group + `tile-join` |
-| `src/maplibre-setup.ts` | `setWorkerUrl` + pmtiles `addProtocol` |
-| `src/App.tsx` | react-map-gl preview |
-| `public/tiles/` | Final `.pmtiles` (gitignored except `.gitkeep`) |
+| `layers.ts` | Export columns, tippecanoe zooms/groups |
+| `metres.ts` / `effects.ts` / `order.ts` | Scale, shadows/glows, OSM `layer` buckets |
+| `colors.ts` + `layers/*` | QGIS-faithful paints (w4c) |
+| `scripts/build-sprite.ts` | Texture atlas `@1x`/`@2x` |
+| `locations.ts` + `src/compare/` | Compare viewpoints + UI |
+
+## MapLibre 6 + Vite
+
+Worker: `import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'` then `setWorkerUrl(workerUrl)`.  
+PMTiles: `addProtocol('pmtiles', …)`.  
+react-map-gl **≥ 8.1.2** for MapLibre 6 camera API.

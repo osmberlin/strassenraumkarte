@@ -34,13 +34,13 @@ todos:
     status: completed
   - id: w7-screenshots
     content: "Screenshot + diff harness (/implementer): `playwright.config.ts` plus `scripts/screenshots.ts` capturing each location in raster and vector at a fixed viewport, running `pixelmatch` for a diff PNG and score, and emitting `compare-output/index.html` as a raster/vector/diff gallery sorted by diff score."
-    status: pending
+    status: completed
   - id: w8-verify
     content: "Console-clean verification (/verifier + agent-browser): Playwright spec asserting zero `console.error`, zero MapLibre `error` events, and zero unresolved `styleimagemissing` ids across all comparison locations; interactively triage remaining warnings with the agent-browser MCP and fix the style until clean."
-    status: pending
+    status: completed
   - id: w9-docs
     content: "Docs (/implementer): `vector/README.md` covering the export -> tippecanoe -> pmtiles -> style -> compare workflow, the tippecanoe flag rationale with measured tile sizes, the metre-to-pixel formula, the effect approximations and their known deviations from QGIS, and a short section in the root `README.md` pointing at the new output channel."
-    status: pending
+    status: completed
 isProject: false
 ---
 

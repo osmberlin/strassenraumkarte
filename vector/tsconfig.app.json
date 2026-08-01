@@ -1,7 +1,7 @@
 {
   // Soft-aligned to total-typescript bundler/dom (no extends).
   "include": ["src/**/*.ts", "src/**/*.tsx", "layers.ts", "locations.ts", "vite.config.ts"],
-  "exclude": ["node_modules", "dist", "scripts", "out", "src/**/*.test.ts"],
+  "exclude": ["node_modules", "dist", "scripts", "out", "src/**/*.test.ts", "e2e", "playwright.config.ts"],
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],

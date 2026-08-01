@@ -47,8 +47,10 @@ audit/runs/**
 # Render exploration case outputs (keep scripts + committed RESULTS)
 audit/render-explore/**
 !audit/render-explore/run-explore.sh
+!audit/render-explore/run-large-workers.sh
 !audit/render-explore/README.md
 !audit/render-explore/RESULTS.md
+!audit/render-explore/LARGE_WORKERS.md
 !audit/render-explore/.gitkeep
 
 # SQL before/after fingerprints (reference freeze + candidates)
@@ -83,3 +85,5 @@ vector/public/sprites/**
 vector/dist/
 vector/node_modules/
 vector/.tsbuildinfo-*
+vector/compare-output/**
+!vector/compare-output/.gitkeep
