@@ -21,6 +21,8 @@ style/.*_work/
 # Local backups / editor
 backup/
 .cursor/
+!.cursor/plans/
+!.cursor/plans/**
 
 # Local / env
 data/.venv/
