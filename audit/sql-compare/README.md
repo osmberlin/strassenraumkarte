@@ -19,3 +19,5 @@ LABEL=b1 ./audit/sql-compare/rerun-compare.sh --group building
 Exit `0` = match, `1` = drift. Digests: row count + md5 of id/attrs/geom
 (`tables.json`; `grid_m` snaps geoms). Re-freeze after fixing non-deterministic
 SQL (e.g. tied outline picks).
+
+See [LEARNINGS.md](LEARNINGS.md) for what we tried on hot scripts.
