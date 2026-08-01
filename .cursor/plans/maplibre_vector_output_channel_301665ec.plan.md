@@ -21,7 +21,7 @@ todos:
     content: "Effects module (/implementer + research iteration): `src/style/effects.ts` with `dropShadow` (offset fill via `fill-translate` + blurred outline), `innerShadow` (inward negative `line-offset` + `line-blur`), and `outerGlow` (stacked lighter blurred outlines, matched width/blur/opacity interpolations). Port the QGIS parameters for building_shade, building_parts_dissolved_height, bridge_shade, tree crown, landuse, water body, and the z14-z20 highway innerShadow stack."
     status: pending
   - id: w4c-layers
-    content: "Core layer styling (/implementer): translate the QGIS rules for ground (landuse, water, waterway), streets (highway_area, service, path), structures (building*, building_lines), trees, and road markings (road_marking_*, separation, tactile_paving) into MapLibre layers using `metresToPixels` and `effects.ts`. Prefer `circle`/`line`/`fill` primitives over icons; use `line-dasharray` for marking patterns."
+    content: "Core layer styling (/implementer): work the groups in the order set out in docs/maplibre-style-groups.md - G4 street surface, G5 road markings, G1 land and landcover, G2 water, G9 trees, G10 buildings - using `metresToPixels` and `effects.ts`. That doc carries the extracted QGIS colours, widths, filters and effect parameters per layer, plus the per-group checklists. Prefer `circle`/`line`/`fill` primitives over icons; note that `line-dasharray` is not data-driven, so distinct dash patterns need separate style layers."
     status: pending
   - id: w5-images
     content: "Graphics (/implementer): `scripts/build-sprite.ts` packs `style/textures/*.png` (+ rasterized pitch SVGs) into `sprite.png`/`sprite.json` with @2x for `fill-pattern`; runtime resolver using `map.setMissingStyleImageResolver` rasterizes `style/symbols/**/*.svg` on demand for expression-driven `icon-image` ids, guarded by `hasImage`, filtering `'null'`/`''`, and re-registering after `setStyle`."
@@ -44,6 +44,8 @@ isProject: false
 ## Context (what exists today)
 
 - Pipeline: OSM PBF → osm2pgsql flex → ~40 PostGIS SQL steps → PyQGIS metatile renderer → raster XYZ at `render/tiles/{z}/{x}/{y}.jpg`, **z15–z20**.
+- Per-group porting breakdown of all 64 layers with the extracted QGIS parameters:
+  [docs/maplibre-style-groups.md](docs/maplibre-style-groups.md).
 - Styling lives entirely in `style/strassenraumkarte.qgz`: 64 unique layers, ~812 renderer rules, **1058 SimpleLine / 835 SimpleFill / 803 SimpleMarker / 185 SvgMarker / 133 RasterFill**, **137 enabled dropShadow/innerShadow/outerGlow**, 7 Gradient/Shapeburst fills, **0 geometry generators**.
 - Widths are ground metres: carriageway polygons bake width via `ST_Buffer(metres(...))`; lanes/markings keep `width` as a metre attribute; QGIS scales symbols with `@mercator_scale`.
 - No vector-tile export, no JS tooling in the repo. Preview is Leaflet 1.9.4 + `render/preview_server.py`.
