@@ -142,7 +142,7 @@ Core street space first, then outward. `~L` = unique QGIS layers in the group.
 | 9 | [G3 Landscape, bridges & railway](#g3--landscape-bridges--railway) | 7 | Low | Rare features |
 | 10 | [G11 Foreground POI](#g11--foreground-poi) | 2 | Low | Small |
 | 11 | [G8 Symbol patterns](#g8--symbol-patterns) | 2 | Low | Two pattern fills |
-| 12 | [G7 Parked cars](#g7--parked-cars) | 1 | Blocked | External GeoJSON, not in PostGIS |
+| 12 | [G7 Parked cars](#g7--parked-cars) | 1 | Out of scope | External GeoJSON empty — decided out |
 
 ---
 
@@ -615,11 +615,13 @@ Place ranks for town/city (QGIS z12–14) are styled but sit below the PMTiles a
 
 ## Open questions
 
-1. **G0.2** — one style layer per OSM `layer` bucket, or a single layer with `sort-key`?
+1. ~~**G0.2** — one style layer per OSM `layer` bucket, or a single layer with `sort-key`?~~
+   **Resolved:** one style-layer set per OSM bucket (`order.ts` / G0.2 decision).
 2. ~~**G10** — is `roof shape` (magma gradients on `#990003`) shipped cartography or an experiment?~~ **Resolved:** experiment → skip (see G10 decision).
 3. ~~**G7** — is street parking in scope for the vector output at all?~~
    **Resolved:** out of scope — `data/parking/` empty / gitignored (see G7 decision).
 4. **G1** — is `landuse` → `outdoor_seating` (`#0000ff` base fill) a debugging leftover?
 5. ~~**G11** — is `feature_node (foreground) Kopie` intentional or a stray duplicate?~~
    **Resolved:** intentional foreground set → port (see G11 decision).
-6. **G0.4** — bake pre-scaled/rotated texture variants, or accept fixed-pixel patterns?
+6. ~~**G0.4** — bake pre-scaled/rotated texture variants, or accept fixed-pixel patterns?~~
+   **Resolved for v1:** accept fixed-pixel `fill-pattern` (documented in Known deviations); bake variants later if diffs demand it.
