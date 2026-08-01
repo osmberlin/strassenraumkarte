@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { LayerSpecification, MapLibreEvent } from 'maplibre-gl'
+import type { ViewStateChangeEvent } from 'react-map-gl/maplibre'
 import {
   Layer,
   Map,
@@ -22,10 +23,16 @@ import {
 import { ComparePage } from './compare/ComparePage'
 import { Legend } from './components/Legend'
 import { exposeMainMapForDebugging } from './lib/expose-main-map'
+import {
+  mapParamFallback,
+  parseMapParam,
+  serializeMapParam,
+  type MapParam,
+} from './lib/mapParam'
 import { installMissingStyleImageResolver } from './lib/missing-style-images'
 import { pmtilesSourceUrl } from './maplibre-setup'
 import { emptyBaseStyle } from './style/build-style'
-import { basicLayerSpecs, DEFAULT_VIEW } from './style/basic'
+import { basicLayerSpecs } from './style/basic'
 import { SOURCE_ID, absoluteSpriteUrl } from './style/source'
 import {
   legendEntries,
@@ -46,6 +53,15 @@ const BASE_STYLE = emptyBaseStyle({
 
 /** Cartographic QGIS port vs blue/purple/red tile-contents debug style. */
 export type StyleMode = 'qgis' | 'debug'
+
+type RouteState = {
+  compare: boolean
+  location: string
+  mode: CompareMode
+  panes: ComparePanes
+  style: StyleMode
+  map: MapParam
+}
 
 function styleModeFromParam(raw: string | null): StyleMode {
   return raw === 'debug' || raw === 'basic' || raw === 'prep' ? 'debug' : 'qgis'
@@ -72,49 +88,53 @@ function debugLegendEntries(): LegendEntry[] {
 
 const debugLegend = debugLegendEntries()
 
-function readRoute(): {
-  compare: boolean
-  location: string
-  mode: CompareMode
-  panes: ComparePanes
-  style: StyleMode
-} {
+function mapFallbackForRoute(compare: boolean, locationId: string): MapParam {
+  if (!compare) return mapParamFallback
+  const loc = locationById(locationId)
+  return { zoom: loc.zoom, lat: loc.latitude, lng: loc.longitude }
+}
+
+function readRoute(): RouteState {
   const q = new URLSearchParams(window.location.search)
+  const compare = q.get('compare') === '1' || q.get('view') === 'compare'
+  const location = locationById(q.get('location')).id
+  const map =
+    parseMapParam(q.get('map')) ?? mapFallbackForRoute(compare, location)
   return {
-    compare: q.get('compare') === '1' || q.get('view') === 'compare',
-    location: locationById(q.get('location')).id,
+    compare,
+    location,
     mode: modeById(q.get('mode')),
     panes: panesFromParam(q.get('panes')),
     style: styleModeFromParam(q.get('style')),
+    map,
   }
 }
 
-function writeRoute(next: {
-  compare: boolean
-  location: string
-  mode: CompareMode
-  panes: ComparePanes
-  style: StyleMode
-}) {
-  const url = new URL(window.location.href)
+/**
+ * Build search string with literal `/` in `map=` (URLSearchParams would use %2F).
+ * Matches tanstack-router pretty search serialization for this param.
+ */
+function writeRoute(next: RouteState) {
+  const parts: string[] = []
   if (next.compare) {
-    url.searchParams.set('compare', '1')
-    url.searchParams.set('location', next.location)
-    url.searchParams.set('mode', next.mode)
-    url.searchParams.set('panes', panesToParam(next.panes))
-  } else {
-    url.searchParams.delete('compare')
-    url.searchParams.delete('view')
-    url.searchParams.delete('location')
-    url.searchParams.delete('mode')
-    url.searchParams.delete('panes')
+    parts.push('compare=1')
+    parts.push(`location=${encodeURIComponent(next.location)}`)
+    parts.push(`mode=${encodeURIComponent(next.mode)}`)
+    parts.push(`panes=${encodeURIComponent(panesToParam(next.panes))}`)
   }
-  if (next.style === 'debug') url.searchParams.set('style', 'debug')
-  else url.searchParams.delete('style')
-  window.history.replaceState(null, '', url.toString())
+  if (next.style === 'debug') parts.push('style=debug')
+  parts.push(`map=${serializeMapParam(next.map)}`)
+  const qs = parts.join('&')
+  const nextUrl = `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`
+  const cur = `${window.location.pathname}${window.location.search}${window.location.hash}`
+  if (nextUrl !== cur) {
+    window.history.replaceState(null, '', nextUrl)
+  }
 }
 
 function MapCanvas({
+  map,
+  onMap,
   onStatus,
   onError,
   onZoom,
@@ -123,6 +143,8 @@ function MapCanvas({
   legend,
   layers,
 }: {
+  map: MapParam
+  onMap: (map: MapParam) => void
   onStatus: (s: string) => void
   onError: (s: string | null) => void
   onZoom: (z: number) => void
@@ -135,11 +157,11 @@ function MapCanvas({
 
   const handleLoad = useCallback(
     (event: MapLibreEvent) => {
-      const map = event.target
-      exposeMainMapForDebugging(map)
-      installMissingStyleImageResolver(map)
+      const mapInst = event.target
+      exposeMainMapForDebugging(mapInst)
+      installMissingStyleImageResolver(mapInst)
       setLayersReady(true)
-      onZoom(map.getZoom())
+      onZoom(mapInst.getZoom())
       onStatus(styleMode === 'debug' ? 'Map loaded (debug tile style)' : 'Map loaded')
       onError(null)
     },
@@ -148,21 +170,27 @@ function MapCanvas({
 
   const handleIdle = useCallback(
     (event: MapLibreEvent) => {
-      const map = event.target
-      onZoom(map.getZoom())
+      const mapInst = event.target
+      onZoom(mapInst.getZoom())
       const tag = styleMode === 'debug' ? 'debug · ' : ''
       onStatus(
-        `idle · ${tag}z${map.getZoom().toFixed(1)} · ${map.getCenter().lng.toFixed(5)}, ${map.getCenter().lat.toFixed(5)}`,
+        `idle · ${tag}z${mapInst.getZoom().toFixed(1)} · ${mapInst.getCenter().lng.toFixed(5)}, ${mapInst.getCenter().lat.toFixed(5)}`,
       )
     },
     [onStatus, onZoom, styleMode],
   )
 
-  const handleMove = useCallback(
-    (event: MapLibreEvent) => {
-      onZoom(event.target.getZoom())
+  const writeMapParam = useCallback(
+    (event: ViewStateChangeEvent) => {
+      const { latitude, longitude, zoom } = event.viewState
+      onZoom(zoom)
+      onMap({
+        zoom: Math.min(MAP_MAX_ZOOM, Math.max(MAP_MIN_ZOOM, zoom)),
+        lat: latitude,
+        lng: longitude,
+      })
     },
-    [onZoom],
+    [onMap, onZoom],
   )
 
   const handleError = useCallback(
@@ -180,9 +208,11 @@ function MapCanvas({
         const entry = legend.find((e) => e.id === legendId)
         if (!entry) return false
         if (styleMode === 'debug') {
-          return layer.id === `${entry.id}-fill` ||
+          return (
+            layer.id === `${entry.id}-fill` ||
             layer.id === `${entry.id}-line` ||
             layer.id === `${entry.id}-circle`
+          )
         }
         return layerMatchesLegend(layer.id, entry)
       })
@@ -196,17 +226,16 @@ function MapCanvas({
       style={{ width: '100%', height: '100%' }}
       mapStyle={BASE_STYLE}
       initialViewState={{
-        longitude: DEFAULT_VIEW.longitude,
-        latitude: DEFAULT_VIEW.latitude,
-        zoom: DEFAULT_VIEW.zoom,
+        longitude: map.lng,
+        latitude: map.lat,
+        zoom: map.zoom,
       }}
       minZoom={MAP_MIN_ZOOM}
       maxZoom={MAP_MAX_ZOOM}
-      hash
       attributionControl={false}
       onLoad={handleLoad}
       onIdle={handleIdle}
-      onMove={handleMove}
+      onMoveEnd={writeMapParam}
       onError={handleError}
     >
       <NavigationControl position="top-right" />
@@ -232,7 +261,7 @@ export function App() {
   const [route, setRoute] = useState(readRoute)
   const [status, setStatus] = useState('Starting…')
   const [error, setError] = useState<string | null>(null)
-  const [zoom, setZoom] = useState<number>(DEFAULT_VIEW.zoom)
+  const [zoom, setZoom] = useState<number>(() => route.map.zoom)
   const [hidden, setHidden] = useState<ReadonlySet<string>>(() => new Set())
 
   const styleMode = route.style
@@ -247,6 +276,10 @@ export function App() {
   useEffect(() => {
     setHidden(new Set())
   }, [styleMode])
+
+  const setMap = useCallback((map: MapParam) => {
+    setRoute((r) => ({ ...r, map }))
+  }, [])
 
   const toggle = useCallback((legendId: string) => {
     setHidden((prev) => {
@@ -270,6 +303,8 @@ export function App() {
           locationId={route.location}
           mode={route.mode}
           panes={route.panes}
+          map={route.map}
+          onMap={setMap}
           onLocation={(location) => setRoute((r) => ({ ...r, location }))}
           onMode={(mode) => setRoute((r) => ({ ...r, mode }))}
           onPanes={(panes) => setRoute((r) => ({ ...r, panes }))}
@@ -323,6 +358,8 @@ export function App() {
           />
           <div className="map">
             <MapCanvas
+              map={route.map}
+              onMap={setMap}
               onStatus={setStatus}
               onError={setError}
               onZoom={setZoom}

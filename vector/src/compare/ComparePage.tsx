@@ -21,11 +21,11 @@ import {
   COMPARE_PANES,
   locationById,
   modeById,
-  type CompareLocation,
   type CompareMode,
   type ComparePaneId,
   type ComparePanes,
 } from '../../locations'
+import type { MapParam } from '../lib/mapParam'
 import { installMissingStyleImageResolver } from '../lib/missing-style-images'
 import { pmtilesSourceUrl } from '../maplibre-setup'
 import { emptyBaseStyle } from '../style/build-style'
@@ -40,45 +40,42 @@ const baseStyle = emptyBaseStyle({
   sprite: absoluteSpriteUrl(window.location.origin),
 })
 
-type View = {
-  longitude: number
-  latitude: number
-  zoom: number
-  bearing: number
-  pitch: number
-}
-
-function viewFromLocation(loc: CompareLocation): View {
-  return {
-    longitude: loc.longitude,
-    latitude: loc.latitude,
-    zoom: loc.zoom,
-    bearing: 0,
-    pitch: 0,
-  }
-}
-
 type Props = {
   locationId: string
   mode: CompareMode
   panes: ComparePanes
+  /** Viewport from `?map=zoom/lat/lng` — sole camera source of truth. */
+  map: MapParam
+  onMap: (map: MapParam) => void
   onLocation: (id: string) => void
   onMode: (mode: CompareMode) => void
   onPanes: (panes: ComparePanes) => void
   onBack: () => void
 }
 
+function clampMapFromEvent(e: ViewStateChangeEvent): MapParam {
+  const { latitude, longitude, zoom } = e.viewState
+  return {
+    zoom: Math.min(MAP_MAX_ZOOM, Math.max(MAP_MIN_ZOOM, zoom)),
+    lat: latitude,
+    lng: longitude,
+  }
+}
+
 export function ComparePage({
   locationId,
   mode,
   panes,
+  map,
+  onMap,
   onLocation,
   onMode,
   onPanes,
   onBack,
 }: Props) {
   const location = locationById(locationId)
-  const [view, setView] = useState<View>(() => viewFromLocation(location))
+  // Ephemeral controlled sync across panes; seeded from ?map= and written back on move end.
+  const [view, setView] = useState<MapParam>(map)
   const [blend, setBlend] = useState(0.5)
   const [swipe, setSwipe] = useState(50)
   const [vectorReady, setVectorReady] = useState(false)
@@ -98,10 +95,16 @@ export function ComparePage({
   const jump = useCallback(
     (id: string) => {
       const loc = locationById(id)
+      const next: MapParam = {
+        zoom: loc.zoom,
+        lat: loc.latitude,
+        lng: loc.longitude,
+      }
       onLocation(id)
-      setView(viewFromLocation(loc))
+      setView(next)
+      onMap(next)
     },
-    [onLocation],
+    [onLocation, onMap],
   )
 
   const togglePane = useCallback(
@@ -114,15 +117,17 @@ export function ComparePage({
   )
 
   const onMove = useCallback((e: ViewStateChangeEvent) => {
-    const vs = e.viewState
-    setView({
-      longitude: vs.longitude,
-      latitude: vs.latitude,
-      zoom: Math.min(MAP_MAX_ZOOM, Math.max(MAP_MIN_ZOOM, vs.zoom)),
-      bearing: vs.bearing,
-      pitch: vs.pitch,
-    })
+    setView(clampMapFromEvent(e))
   }, [])
+
+  const onMoveEnd = useCallback(
+    (e: ViewStateChangeEvent) => {
+      const next = clampMapFromEvent(e)
+      setView(next)
+      onMap(next)
+    },
+    [onMap],
+  )
 
   const onRasterLoad = useCallback((e: MapLibreEvent) => {
     installMissingStyleImageResolver(e.target)
@@ -139,14 +144,19 @@ export function ComparePage({
 
   const shared = useMemo(
     () => ({
-      ...view,
+      longitude: view.lng,
+      latitude: view.lat,
+      zoom: view.zoom,
+      bearing: 0,
+      pitch: 0,
       minZoom: MAP_MIN_ZOOM,
       maxZoom: MAP_MAX_ZOOM,
       mapStyle: baseStyle,
       attributionControl: false as const,
       onMove,
+      onMoveEnd,
     }),
-    [view, onMove],
+    [view.lng, view.lat, view.zoom, onMove, onMoveEnd],
   )
 
   const title = COMPARE_PANES.filter((p) => panes[p.id])
@@ -224,7 +234,7 @@ export function ComparePage({
         <span className="muted">
           {location.note}
           {panes.rust
-            ? ' · Rust = full-approx raster (starter bbox; set RUST_TILES_ROOT)'
+            ? ' · Rust = full-approx raster (large bbox z15–20; set RUST_TILES_ROOT)'
             : ''}
         </span>
       </header>
