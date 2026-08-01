@@ -13,6 +13,7 @@ Background colour defaults to #ededed (opaque); override with --background.
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import os
 import re
@@ -20,7 +21,8 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass
-from typing import List, Optional, Sequence, Tuple
+from pathlib import Path
+from typing import List, Optional, Sequence, Tuple, TextIO
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -558,11 +560,23 @@ def run(args: argparse.Namespace) -> int:
     done_tiles = 0
     done_metas = 0
     written_total = 0
+    meta_timings: List[dict] = []
+
+    audit_dir = os.environ.get("PERF_AUDIT_DIR", "").strip()
+    metatile_log: Optional[TextIO] = None
+    if audit_dir:
+        Path(audit_dir).mkdir(parents=True, exist_ok=True)
+        metatile_log = open(  # noqa: SIM115
+            Path(audit_dir) / "render_metatiles.jsonl",
+            "a",
+            encoding="utf-8",
+        )
 
     render_error: Optional[str] = None
     try:
         for z, metas in zoom_meta:
             for mt in metas:
+                t0 = time.time()
                 written = render_metatile(
                     base_settings,
                     layers,
@@ -573,9 +587,25 @@ def run(args: argparse.Namespace) -> int:
                     crs_3857,
                     background,
                 )
+                dt_ms = int((time.time() - t0) * 1000)
                 written_total += written
                 done_tiles += mt.tile_count
                 done_metas += 1
+                row = {
+                    "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                    "z": z,
+                    "x0": mt.x0,
+                    "y0": mt.y0,
+                    "x1": mt.x1,
+                    "y1": mt.y1,
+                    "tiles": mt.tile_count,
+                    "written": written,
+                    "duration_ms": dt_ms,
+                }
+                meta_timings.append(row)
+                if metatile_log is not None:
+                    metatile_log.write(json.dumps(row, ensure_ascii=False) + "\n")
+                    metatile_log.flush()
                 print_progress(
                     zoom=z,
                     zmax=args.zmax,
@@ -589,6 +619,8 @@ def run(args: argparse.Namespace) -> int:
         render_error = str(exc)
     finally:
         finish_progress_line()
+        if metatile_log is not None:
+            metatile_log.close()
         app.exitQgis()
 
     if render_error:
@@ -601,6 +633,27 @@ def run(args: argparse.Namespace) -> int:
         f"Rendering completed in {format_duration(elapsed)} "
         f"({written_total} tiles written).",
     )
+
+    if audit_dir and meta_timings:
+        durations = [r["duration_ms"] for r in meta_timings]
+        summary = {
+            "metatile_count": len(durations),
+            "duration_ms_sum": sum(durations),
+            "duration_ms_min": min(durations),
+            "duration_ms_max": max(durations),
+            "duration_ms_avg": int(sum(durations) / len(durations)),
+            "tiles_written": written_total,
+            "wall_ms": int(elapsed * 1000),
+        }
+        summary_path = Path(audit_dir) / "render_summary.json"
+        summary_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+        log(
+            "INFO",
+            f"Audit render summary: {summary['metatile_count']} metatiles, "
+            f"avg {summary['duration_ms_avg']} ms, max {summary['duration_ms_max']} ms "
+            f"→ {summary_path}",
+        )
+
     return 0
 
 

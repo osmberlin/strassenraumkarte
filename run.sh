@@ -22,6 +22,8 @@ RENDER_SCRIPT="$REPO_ROOT/render/render_tiles.sh"
 source "$REPO_ROOT/render/qgis_env.sh"
 # shellcheck source=data/db_config.sh
 source "$REPO_ROOT/data/db_config.sh"
+# shellcheck source=audit/lib.sh
+source "$REPO_ROOT/audit/lib.sh"
 PYTHON="${PYTHON:-python3}"
 
 DATA=""
@@ -332,6 +334,12 @@ fi
 check_database || { log ERROR "Database not ready. Run: ./run.sh --setup-db"; exit 1; }
 
 log INFO "Starting Straßenraumkarte pipeline (CRS EPSG:$CRS)..."
+
+if perf_enabled && [[ ! -f "$PERF_AUDIT_DIR/meta.json" ]]; then
+  PERF_AUDIT_LABEL="${PERF_AUDIT_LABEL:-run.sh}"
+  perf_init
+fi
+perf_note "pipeline_config" "pipeline" "{\"data\":\"$DATA\",\"bbox\":\"$BBOX\",\"crs\":\"$CRS\",\"refresh\":\"$REFRESH\",\"skip_processing\":\"$SKIP_PROCESSING\",\"skip_render\":\"$SKIP_RENDER\"}"
 
 PREP_ARGS=(--data "$DATA" --crs "$CRS")
 [[ -n "$BBOX" ]] && PREP_ARGS+=(--bbox "$BBOX")

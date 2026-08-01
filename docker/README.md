@@ -60,6 +60,14 @@ Defaults: `--setup-db --refresh --skip-render --data data/osm/berlin-latest.osm.
 
 Starter `BBOX` in [`.env.example`](.env.example): `13.4132,52.4715,13.4312,52.4821`.
 
+### With performance audit
+
+```bash
+PERF_AUDIT_LABEL=berlin-starter ./audit/run-with-audit.sh ./docker/run-berlin.sh
+```
+
+See [`audit/README.md`](../audit/README.md) for raw `steps.jsonl`, `report.md`, and findings.
+
 Equivalent manual Compose invocation:
 
 ```bash

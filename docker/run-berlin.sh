@@ -7,9 +7,9 @@
 #
 # Examples:
 #   ./docker/run-berlin.sh
-#   ./docker/run-berlin.sh --zmax 18          # ignored here (prep-only defaults)
 #   BBOX=13.4,52.47,13.45,52.48 ./docker/run-berlin.sh
-#   ./docker/run-berlin.sh --skip-processing  # forward to run.sh
+#   ./docker/run-berlin.sh --skip-processing
+#   PERF_AUDIT_LABEL=berlin ./audit/run-with-audit.sh ./docker/run-berlin.sh
 #
 
 set -euo pipefail
@@ -48,10 +48,31 @@ fi
 log INFO "Starting database (if needed)..."
 "${COMPOSE[@]}" up -d db
 
+# Map host PERF_AUDIT_DIR into the container (/work is the repo mount).
+if [[ -n "${PERF_AUDIT_DIR:-}" ]]; then
+  case "$PERF_AUDIT_DIR" in
+    "$REPO_ROOT"/*)
+      export PERF_AUDIT_DIR="/work/${PERF_AUDIT_DIR#"$REPO_ROOT"/}"
+      ;;
+    /*)
+      # Already absolute but not under this repo — leave as-is (may fail in container).
+      ;;
+    *)
+      export PERF_AUDIT_DIR="/work/$PERF_AUDIT_DIR"
+      ;;
+  esac
+  log INFO "Container PERF_AUDIT_DIR=$PERF_AUDIT_DIR"
+fi
+
 log INFO "Running data prep: data=$DATA bbox=$BBOX"
 # Defaults: setup DB, refresh schema, import+process, skip host QGIS render.
 # Override bbox with BBOX=...; append extra ./run.sh flags via "$@".
-exec "${COMPOSE[@]}" run --rm tools \
+# Pass BBOX into the container env for audit meta.json.
+exec "${COMPOSE[@]}" run --rm \
+  -e "PERF_AUDIT_DIR=${PERF_AUDIT_DIR:-}" \
+  -e "PERF_AUDIT_LABEL=${PERF_AUDIT_LABEL:-}" \
+  -e "BBOX=$BBOX" \
+  tools \
   ./run.sh \
   --setup-db \
   --refresh \

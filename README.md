@@ -75,6 +75,14 @@ Tile rendering uses a custom **PyQGIS metatile loop** ([`render/xyz_tiles.py`](r
 
 For a contained PostGIS + data-prep environment (Berlin PBF via configurable symlink, host QGIS for rendering), see [`docker/README.md`](docker/README.md).
 
+## Performance audits
+
+To time every pipeline step (ingest / import / SQL / render), write gitignored raw data under `audit/runs/`, and generate a findings report (safe to run beside agent work), see [`audit/README.md`](audit/README.md).
+
+```bash
+PERF_AUDIT_LABEL=berlin-starter ./audit/run-with-audit.sh ./docker/run-berlin.sh
+```
+
 ## Usage
 
 ### Full pipeline (process + render)

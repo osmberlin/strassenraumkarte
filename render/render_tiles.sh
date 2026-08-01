@@ -32,6 +32,8 @@ REPO_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
 source "$SCRIPT_DIR/qgis_env.sh"
 # shellcheck source=../data/db_config.sh
 source "$REPO_ROOT/data/db_config.sh"
+# shellcheck source=../audit/lib.sh
+source "$REPO_ROOT/audit/lib.sh"
 
 export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-offscreen}"
 PYTHON="${PYTHON:-python3}"
@@ -194,7 +196,10 @@ log INFO "  project=$PROJECT"
 log INFO "  out=$OUT"
 log INFO "  zoom=${ZMIN}-${ZMAX} metatile=$METATILE gutter=$GUTTER dpi=$DPI format=$FORMAT bg=$BACKGROUND"
 
-exec "$PYTHON" "$SCRIPT_DIR/xyz_tiles.py" \
+DETAIL=$(python3 -c 'import json,sys; print(json.dumps({"project":sys.argv[1],"extent":sys.argv[2],"zmin":sys.argv[3],"zmax":sys.argv[4],"metatile":sys.argv[5],"gutter":sys.argv[6]}))' \
+  "$PROJECT" "$EXTENT" "$ZMIN" "$ZMAX" "$METATILE" "$GUTTER")
+perf_step "xyz_tiles_render" "render" --detail "$DETAIL" -- \
+  "$PYTHON" "$SCRIPT_DIR/xyz_tiles.py" \
   --project "$PROJECT" \
   --extent "$EXTENT" \
   --out "$OUT" \

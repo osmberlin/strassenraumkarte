@@ -54,6 +54,8 @@ services:
       PGUSER: ${POSTGRES_USER:-postgres}
       CRS: "3857"
       OSM2PGSQL_NUMBER_PROCESSES: ${OSM2PGSQL_NUMBER_PROCESSES:-8}
+      PERF_AUDIT_DIR: ${PERF_AUDIT_DIR:-}
+      PERF_AUDIT_LABEL: ${PERF_AUDIT_LABEL:-}
       TZ: Europe/Berlin
     depends_on:
       db:

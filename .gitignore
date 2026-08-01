@@ -27,6 +27,10 @@ data/.venv/
 .pgpass
 docker/.env
 
+# Performance audit run artefacts (raw timings + reports)
+audit/runs/**
+!audit/runs/.gitkeep
+
 # Local notes / legacy (not for remote)
 TODO.txt
 todo_from_post_processing.py
