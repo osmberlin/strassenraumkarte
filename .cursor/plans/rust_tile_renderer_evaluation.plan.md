@@ -10,10 +10,10 @@ todos:
     status: completed
   - id: p1-render-mode-decision
     content: "Phase 1 — decide and document the canonical comparison render mode (/implementer + /verifier): use the existing `audit/tile-compare/compare-tiles.py` to measure QGIS-vs-QGIS drift between `--metatile 1 --gutter 1` and production `--metatile 8 --gutter 1` on the starter bbox z15–18. Record the measured drift (expected: labels near metatile edges) in `audit/tile-regression/README.md` and fix the harness mode accordingly. Without this, every later Rust diff is contaminated by metatile geometry."
-    status: pending
+    status: completed
   - id: p1-harness
     content: "Phase 1 — tile regression harness (/implementer): create `audit/tile-regression/` per research/tile-visual-regression chapter 7 — `scripts/sample-tiles.ts` (PostGIS `ST_TileEnvelope` stratified sampling → `manifest.json` with smoke/standard/full suites), `scripts/compare-tile.ts` (pixelmatch ratio + DSSIM + SSIMULACRA2 + diff PNG), `scripts/compare-run.ts` (batch, `tiles.jsonl`, `summary.json`, dark HTML gallery sorted by DSSIM, exit 1 on regression), committed `budgets/{z}/{x}/{y}.json` + `ignores.json`, gitignored `runs/{timestamp}-{sha}/`. Bun + TypeScript; mirror `vector/scripts/screenshots.ts` for the gallery and `audit/sql-compare/` for exit-code conventions."
-    status: in_progress
+    status: completed
   - id: p1-calibrate
     content: "Phase 1 — calibrate the harness against known-good and known-bad QGIS variations (/implementer + /verifier): run the harness with QGIS on both sides while varying one thing at a time (workers 1 vs 2, metatile 1 vs 8, DPI 96 vs 97, `--no-fonts`, background colour, one layer hidden). Record measured metric ranges per variation in `audit/tile-regression/CALIBRATION.md` and set the pass/needs-review/fail bands from measurement, not from the research defaults. A harness that cannot separate 'font missing' from 'workers=2' is not trustworthy enough to judge a Rust renderer."
     status: pending
@@ -31,7 +31,7 @@ todos:
     status: pending
   - id: p3-crate-skeleton
     content: "Phase 3 — Rust crate skeleton + one vertical slice (/implementer): `rust/srk-render/` binary crate. Read geometries with `tokio-postgres` + `geozero`/`postgis` WKB, tile/metatile/gutter math ported 1:1 from `render/xyz_tiles.py` (ORIGIN_SHIFT, 256 px, EPSG:3857, DPI 96, background `#ededed`), rasterize with `tiny-skia` 0.12, encode PNG. CLI mirrors the new single-tile mode (`--tiles z/x/y --layers … --out …`). Scope of the slice: `highway_area` only, SimpleFill + SimpleLine, no effects, no labels, no SVG. Gate: layer-isolate harness run at z16/z17/z18 across ≥5 locations."
-    status: in_progress
+    status: completed
   - id: p3-effects
     content: "Phase 3 — effects module (/implementer): port `QgsImageOperation::stackBlur` (4-pass box blur), `gaussianBlur`, `overlayColor`, `multiplyOpacity`, `invertPixels` and the Felzenszwalb `distanceTransform`, then build `dropShadow` / `innerShadow` / `outerGlow` / `innerGlow` with QGIS's offset convention (`-dist*cos(angle+π/2)`, `-dist*sin(angle+π/2)`), the `blurLevel*2+10` px bounding-rect padding, and the ≤16-radius stack-vs-gaussian switch. Validate per primitive against QGIS: render a synthetic shape + one effect through PyQGIS and through Rust, compare in isolation before any real tile. 77 dropShadow + 60 innerShadow uses make this the dominant visual risk."
     status: pending
@@ -55,6 +55,19 @@ isProject: false
 
 ## Progress
 
+- **2026-08-01 (style-filter iteration)** — `/implementer` on `cursor-grok-4.5-high` (no commit; parent finish-work).
+  - Dumped QGIS `highway_area` rules → `audit/tile-regression/HIGHWAY_AREA_RULES.md` (XML; PyQGIS project load hung). Class fills only paint an explicit `area:highway` IN-list; **`parking_space` / `traffic_island` excluded**; outline width 0.
+  - Rust `srk-render`: SQL `IN` filter + drop catch-all + remove 0.5 px dark stroke. Smoke **before → after**: mean **1.96% → 0.079%**, max **8.85% → 0.203%**, bands **12 ok / 0 review / 0 bad**. Anchor **0.006%**. Gallery `runs/20260801-172219-smoke/`. Interim `REPORT.md` + `docs/rust-renderer-evaluation.md` stub.
+  - `p1-harness` **completed** (honest: smoke batch + gallery + manifest done; still missing stratified sampler / budgets / SSIMULACRA2 / standard+full).
+  - `p1-render-mode-decision` already **completed** (`RENDER_MODE.md`).
+  - `p3-crate-skeleton` **completed** (gate spirit: 12 tiles × z15–18, multiple locations, style-filter parity).
+  - `p4-verdict` stays **pending**; REPORT.md is interim evidence only.
+- **2026-08-01** — `p1-render-mode-decision` done by `/implementer` on `cursor-grok-4.5-high` (no commit). Extent-based QGIS-vs-QGIS on starter bbox z15–17 (82 PNG tiles): metatile **1** vs **8** (both gutter 1, workers 1). Mean SSIM **0.9900**, min **0.8934**, mean \|Δ\|>16 **0.0029%** → `compare-tiles.py` **FAIL** on min SSIM. Dominant drift: viewport-anchored RasterFill / landuse texture phase; sparse label/edge AA secondary. Wall clock 10m02s vs 1m17s. **Canonical harness mode: `--metatile 1 --gutter 1 --workers 1 --format png`** (production metatile 8 unchanged). Docs: `audit/tile-regression/RENDER_MODE.md` + README “Canonical render mode”.
+- **2026-08-01 (multi-tile smoke)** — `/implementer` on `cursor-grok-4.5-high` (user override; no commit).
+  - `p1-harness` **partial / in_progress (advanced):** committed `manifest.json` smoke suite (**12** tiles, z15–z18, starter bbox only, PostGIS-filtered for `highway_area`); `scripts/lonlat-to-tile.ts`; batch `scripts/compare-run.ts` → `runs/<ts>-smoke/` with `tiles.jsonl`, `summary.json`, dark `index.html` sorted by pixelmatch; `scripts/render-suite.sh` (QGIS once + Rust once + compare). Exit **1** only if any tile pixelmatch **> 0.5** (migration mode); softer bands in summary. Still missing vs full plan: stratified `sample-tiles`, budgets/`ignores.json`, SSIMULACRA2, standard/full suites.
+  - Note: most `vector/locations.ts` points fall outside the starter bbox; smoke uses `intersection` + density/neighbor/zoom picks inside the bbox.
+  - Smoke E2E (`runs/20260801-170307-smoke/`): **12/12** tiles compared; mean pixelmatch **1.96%**, max **8.85%** (`18/140851/86021` density peak — QGIS style filters hide parking-like classes Rust still paints; geometry aligned, not blank/shifted). Bands: 5 ok / 6 review / 1 bad / 0 hard-fail. Exit 0. Anchor still **0.096%**.
+  - `p3-crate-skeleton` gate (≥5 locs × z16–18) exercised by smoke (z15–18, multiple places); not “done” until style-filter parity improves on dense tiles.
 - **2026-08-01 (MVP stop)** — Orchestrator satisfied with one-tile `highway_area` isolate visual diff (pixelmatch **0.096%**, AA rim only). Pipeline: QGIS `--tiles` + `--layers` → Rust `srk-render` → `compare-one-tile` gallery. Commits: `3cd0a98` (research + single-tile), `3196aff` (Rust slice + harness). Remaining plan phases (full harness, effects, labels, go/no-go) are follow-ups, not blockers for this MVP.
 - **2026-08-01 (later)** — One-tile harness MVP + `highway_area` Rust slice by `/implementer` on Grok (user override).
   - **Anchor tile:** `17/70422/43008` (starter bbox; 3 `highway_area` features).

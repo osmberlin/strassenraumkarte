@@ -11,7 +11,7 @@ use anyhow::{bail, Context, Result};
 use clap::Parser;
 use geo_types::{Coord, Geometry, LineString, MultiPolygon, Polygon};
 use postgres::{Client, Config, NoTls};
-use tiny_skia::{Color, FillRule, Paint, PathBuilder, Pixmap, Stroke, Transform};
+use tiny_skia::{Color, FillRule, Paint, PathBuilder, Pixmap, Transform};
 use wkb::WKBReadExt;
 
 /// Same constant as `render/xyz_tiles.py`.
@@ -96,22 +96,37 @@ fn parse_hex_color(hex: &str) -> Result<Color> {
     Ok(Color::from_rgba8(r, g, b, 255))
 }
 
-/// QGIS / MapLibre highway_area class fills (flat, no texture overlay).
-fn fill_for_area_highway(area: Option<&str>) -> Color {
-    let hex = match area.unwrap_or("") {
+/// QGIS rule-based class fills for `highway_area` (SimpleFill only; no RasterFill textures).
+///
+/// Values mirror the checked rule filters in `style/strassenraumkarte.qgz` — see
+/// `audit/tile-regression/HIGHWAY_AREA_RULES.md`. Classes outside this set are not painted
+/// (no ELSE rule in QGIS). Outline width is 0 in QGIS, so we fill only.
+fn fill_for_area_highway(area: Option<&str>) -> Option<Color> {
+    let hex = match area? {
         "footway" | "path" | "steps" | "bridleway" => "#e1e3bd",
         "pedestrian" => "#d7d8c5",
         "cycleway" | "service" => "#cccccc",
         "living_street" => "#bbbbb2",
-        "parking" | "parking_space" => "#a8a8a7",
+        // QGIS paints `parking` only — not `parking_space` / `traffic_island`.
+        "parking" => "#a8a8a7",
         "motorway" | "trunk" | "motorway_link" | "trunk_link" | "primary" | "primary_link"
         | "secondary" | "secondary_link" | "tertiary" | "tertiary_link" | "residential"
         | "unclassified" | "road" | "bus_guideway" | "bus_bay" | "turning_circle"
         | "turning_loop" => "#a8a8a7",
-        _ => "#a8a8a7",
+        _ => return None,
     };
-    parse_hex_color(hex).expect("static palette hex")
+    Some(parse_hex_color(hex).expect("static palette hex"))
 }
+
+/// Union of QGIS class-fill `area:highway` filters (SQL `IN` list).
+const AREA_HIGHWAY_PAINTED: &str = "(\
+  'footway','path','steps','bridleway',\
+  'pedestrian','cycleway','service','parking','living_street',\
+  'primary','primary_link','secondary','secondary_link',\
+  'tertiary','tertiary_link','residential','unclassified','road',\
+  'bus_guideway','bus_bay','turning_circle','turning_loop',\
+  'motorway','trunk','motorway_link','trunk_link'\
+)";
 
 fn connect(cli: &Cli) -> Result<Client> {
     if let Some(url) = &cli.database_url {
@@ -195,7 +210,8 @@ fn render_highway_area(client: &mut Client, z: u32, x: u32, y: u32, out_path: &P
     let mut pixmap = Pixmap::new(TILE_SIZE_PX, TILE_SIZE_PX).context("pixmap alloc")?;
     pixmap.fill(parse_hex_color(DEFAULT_BACKGROUND)?);
 
-    let rows = client.query(
+    // Filter matches QGIS rule union — see HIGHWAY_AREA_RULES.md.
+    let sql = format!(
         r#"
         SELECT
           "area:highway" AS area_highway,
@@ -212,6 +228,7 @@ fn render_highway_area(client: &mut Client, z: u32, x: u32, y: u32, out_path: &P
           ) AS wkb
         FROM highway_area
         WHERE geom && ST_MakeEnvelope($1::float8, $2::float8, $3::float8, $4::float8, 3857)
+          AND "area:highway" IN {AREA_HIGHWAY_PAINTED}
           AND NOT ST_IsEmpty(
             ST_ClipByBox2D(
               geom,
@@ -219,13 +236,19 @@ fn render_highway_area(client: &mut Client, z: u32, x: u32, y: u32, out_path: &P
             )
           )
         ORDER BY COALESCE(layer, 0), osm_id
-        "#,
+        "#
+    );
+    let rows = client.query(
+        &sql,
         &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
     )?;
 
     let mut painted = 0usize;
     for row in &rows {
         let area: Option<String> = row.get("area_highway");
+        let Some(fill_color) = fill_for_area_highway(area.as_deref()) else {
+            continue;
+        };
         let wkb: Option<Vec<u8>> = row.get("wkb");
         let Some(wkb) = wkb else { continue };
         if wkb.is_empty() {
@@ -240,17 +263,8 @@ fn render_highway_area(client: &mut Client, z: u32, x: u32, y: u32, out_path: &P
         };
 
         let mut fill_paint = Paint::default();
-        fill_paint.set_color(fill_for_area_highway(area.as_deref()));
+        fill_paint.set_color(fill_color);
         fill_paint.anti_alias = true;
-
-        // Optional hairline outline (QGIS SimpleFill often has a dark outline colour).
-        let mut stroke_paint = Paint::default();
-        stroke_paint.set_color_rgba8(0x5a, 0x5a, 0x5a, 0xFF);
-        stroke_paint.anti_alias = true;
-        let stroke = Stroke {
-            width: 0.5,
-            ..Stroke::default()
-        };
 
         for poly in geometry_polygons(geom) {
             let Some(path) = polygon_to_path(bounds, &poly) else {
@@ -263,7 +277,6 @@ fn render_highway_area(client: &mut Client, z: u32, x: u32, y: u32, out_path: &P
                 Transform::identity(),
                 None,
             );
-            pixmap.stroke_path(&path, &stroke_paint, &stroke, Transform::identity(), None);
             painted += 1;
         }
     }
