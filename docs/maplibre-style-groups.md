@@ -452,8 +452,12 @@ SvgMarker `symbols/cars/<@modell>_<@colour>.svg` at 2.4 m, fill `#232323`, dropS
 **Decide first:** is street parking part of the vector output at all? If yes, the exporter needs
 a path for this GeoJSON (or the upstream process that generates it) before styling starts.
 
-- [ ] decide in/out of scope
-- [ ] if in: data path, then icons + rotation
+**Decision — out of scope.** `data/parking/` is empty (only `.gitkeep`); the GeoJSON is
+gitignored and not produced by the PostGIS pipeline. No export path or MapLibre paints until
+upstream parking data lands. Open question #3 closed for the current vector channel.
+
+- [x] decide in/out of scope → **out of scope** (no parking GeoJSON)
+- [ ] if in: data path, then icons + rotation — N/A
 
 ---
 
@@ -613,7 +617,8 @@ Place ranks for town/city (QGIS z12–14) are styled but sit below the PMTiles a
 
 1. **G0.2** — one style layer per OSM `layer` bucket, or a single layer with `sort-key`?
 2. ~~**G10** — is `roof shape` (magma gradients on `#990003`) shipped cartography or an experiment?~~ **Resolved:** experiment → skip (see G10 decision).
-3. **G7** — is street parking in scope for the vector output at all?
+3. ~~**G7** — is street parking in scope for the vector output at all?~~
+   **Resolved:** out of scope — `data/parking/` empty / gitignored (see G7 decision).
 4. **G1** — is `landuse` → `outdoor_seating` (`#0000ff` base fill) a debugging leftover?
 5. ~~**G11** — is `feature_node (foreground) Kopie` intentional or a stray duplicate?~~
    **Resolved:** intentional foreground set → port (see G11 decision).
