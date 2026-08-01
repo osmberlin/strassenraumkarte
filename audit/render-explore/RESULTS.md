@@ -29,4 +29,5 @@ Raw run: `audit/render-explore/20260801T131243Z/` (gitignored).
 
 - ~~Retest `--workers 2–4` on the **large** bbox~~ → see [LARGE_WORKERS.md](./LARGE_WORKERS.md) (z16: ~1.6× with 2 workers; 4≈2).
 - ~~Tile equivalence (SSIM)~~ → see `audit/tile-compare/RESULTS.md` (PASS).
-- Profile layer cost / metatile size at z18 (still the big city-scale pain).
+- ~~Metatile / gutter knobs~~ → see [METATILE.md](./METATILE.md) (keep mt=8 gutter=1; others fail SSIM).
+- Profile **layer cost** at z18 (effects / labels / SVG) — next paint-budget lever.

@@ -48,9 +48,11 @@ audit/runs/**
 audit/render-explore/**
 !audit/render-explore/run-explore.sh
 !audit/render-explore/run-large-workers.sh
+!audit/render-explore/run-metatile-explore.sh
 !audit/render-explore/README.md
 !audit/render-explore/RESULTS.md
 !audit/render-explore/LARGE_WORKERS.md
+!audit/render-explore/METATILE.md
 !audit/render-explore/.gitkeep
 
 # SQL before/after fingerprints (reference freeze + candidates)
