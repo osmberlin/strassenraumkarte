@@ -79,6 +79,9 @@ rust/**/target/
 # Style IR / oracle dumps (generated; keep dir when scripts land)
 style/generated/**
 !style/generated/.gitkeep
+!style/generated/style-inventory.md
+!style/generated/expression-surface.json
+!style/generated/style-ir.json
 
 # Local notes / legacy (not for remote)
 TODO.txt

@@ -133,4 +133,11 @@ Defaults: `--format png --metatile 1 --gutter 1 --workers 1`. Extra args are for
 
 ## Fixture lock
 
-See `fixture-lock.json` for the git SHA, DB connection, and starter bbox. A full `audit/sql-compare/` freeze is still pending.
+See [`fixture-lock.json`](fixture-lock.json) for the git SHA, Docker PostGIS image, PBF checksum, and bbox.
+
+- **Large-bbox SQL freeze:** `audit/sql-compare/reference/baseline.json` (+ `.meta.json`) — recorded under `sql_compare_freeze`.
+- **Live harness DB pin:** `audit/sql-compare/reference/starter.json` — starter bbox digests; does **not** match baseline (different bbox). Re-snapshot with `audit/sql-compare/snapshot.py` after intentional data changes.
+
+## Calibration
+
+QGIS-vs-QGIS bands for the `highway_area` isolate: [`CALIBRATION.md`](CALIBRATION.md). Soft defaults remain `ok≤1%` / `review≤5%` / `bad≤50%` / hard-fail `>50%`.

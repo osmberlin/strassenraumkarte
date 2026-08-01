@@ -4,7 +4,7 @@ overview: "Evaluate replacing only the rendering step (PostGIS → raster XYZ ti
 todos:
   - id: p0-decisions
     content: "Phase 0 — prerequisites (/implementer): install Rust toolchain (cargo/rustc absent on this host; add rust-toolchain.toml pinning a stable version), add `rust/` and harness artefact paths to `.gitignore`, and freeze input data with `audit/sql-compare/` so later diffs are renderer-only. Record the frozen PBF + osm2pgsql + SQL git SHA in `audit/tile-regression/fixture-lock.json`."
-    status: in_progress
+    status: completed
   - id: p1-single-tile
     content: "Phase 1 — deterministic single-tile render mode (/implementer): `render/xyz_tiles.py` currently only takes `--extent \"xmin,xmax,ymin,ymax\"` + `--zmin/--zmax/--metatile`; add a `--tiles z/x/y[,z/x/y...]` mode that derives the extent from tile indices, forces `--workers 1`, and keeps metatile/gutter semantics explicit. Reference runs use `--format png`."
     status: completed
@@ -16,13 +16,13 @@ todos:
     status: completed
   - id: p1-calibrate
     content: "Phase 1 — calibrate the harness against known-good and known-bad QGIS variations (/implementer + /verifier): run the harness with QGIS on both sides while varying one thing at a time (workers 1 vs 2, metatile 1 vs 8, DPI 96 vs 97, `--no-fonts`, background colour, one layer hidden). Record measured metric ranges per variation in `audit/tile-regression/CALIBRATION.md` and set the pass/needs-review/fail bands from measurement, not from the research defaults. A harness that cannot separate 'font missing' from 'workers=2' is not trustworthy enough to judge a Rust renderer."
-    status: pending
+    status: completed
   - id: p1-isolates
     content: "Phase 1 — layer isolates and seam check (/implementer): add `--layers <names>` to the single-tile mode (set `QgsMapSettings` layer list) so a tile can be rendered with one QGIS layer or layer group only, and `scripts/seam-check.ts` comparing each tile against the corresponding crop of a single large 5×5-tile render. Isolates are how a diff gets attributed to a style rule; the seam check is how tile-boundary bugs get caught independently of the gutter."
     status: in_progress
   - id: p2-style-ir
     content: "Phase 2 — style IR dump (/implementer): `style/scripts/dump-style.py` (PyQGIS) loads `style/strassenraumkarte.qgz` and emits `style/generated/style-ir.json`: per map layer — datasource table + SQL filter, geometry type, scale range, opacity, blend mode, symbol-levels flag, order-by, labeling settings; per renderer rule — filter expression, scalemin/maxdenom, nesting; per symbol layer — `properties()` map, effect stack `properties()`, and every active data-defined property with its expression string. Plus `style/generated/style-inventory.md` (the counts currently maintained by hand in `docs/maplibre-style-groups.md`, and the authoritative resolution of the data-defined-property and layer-opacity counts that two raw-XML parses disagreed on) and `style/generated/expression-surface.json` (distinct functions + variables with usage counts). This makes the inventory reproducible and is the input contract for the Rust renderer."
-    status: pending
+    status: completed
   - id: p2-oracle-units
     content: "Phase 2 — unit-conversion oracle (/implementer): `style/scripts/oracle-units.py` dumps `QgsRenderContext.convertToPainterUnits()` results for a grid of (size, RenderUnit, QgsMapUnitScale min/max scale + min/max size, DPI, extent/zoom) into `style/generated/oracle-units.json`. The Rust `units` module must reproduce every row exactly (float tolerance 1e-9). Covers Millimeters, Points, Inches, Pixels, MapUnits, MetersInMapUnits, the min/max-size clamps and `symbologyReferenceScale`, plus `@mercator_scale`. Cheap, exhaustive, and catches the single most likely source of everything-slightly-wrong."
     status: pending
@@ -55,6 +55,10 @@ isProject: false
 
 ## Progress
 
+- **2026-08-01 (p0 + calibrate + style-ir)** — `/implementer` on `cursor-grok-4.5-high` (no commit; parent finish-work).
+  - **`p0-decisions` completed.** Existing `audit/sql-compare/reference/baseline.json` freeze recorded in `fixture-lock.json` (sha256 `bf1a594c…`, mtime 2026-08-01 14:59, freeze git `e3d3df82`, large bbox). Live starter-bbox DB snapshotted as `reference/starter.json` (does not match baseline — expected). Also pinned: HEAD `562ca96`, PostGIS image `imresamu/postgis:17-3.5-bookworm` digests, osm2pgsql 2.1.1, PBF sha256. No multi-hour re-freeze.
+  - **`p1-calibrate` completed.** `audit/tile-regression/CALIBRATION.md`: QGIS A/A on 3 tiles = **0%**; dpi 96 vs 97 on `highway_area` = **0%**; layer swap landuse = **26.3%**; bg wipe = **92.5%**; metatile referenced from `RENDER_MODE.md`. Confirmed bands **ok≤1% / review≤5% / bad≤50% / hard-fail >50%**. `--no-fonts` skipped (isolate has no labels).
+  - **`p2-style-ir` completed** (highway_area-scoped IR + full inventory). `style/scripts/dump-style.py` + README; outputs in `style/generated/` (gitignored): inventory (**256** maplayers / **64** names; labeling **12** unique / **30** entries; opacity **22** unique / **100** entries; DDP **3604**; SvgMarker **185**), `expression-surface.json` (`@mercator_scale` ×2618), `style-ir.json` (**7** `highway_area` entries ×13 rules). Full `--ir-all` still optional.
 - **2026-08-01 (style-filter iteration)** — `/implementer` on `cursor-grok-4.5-high` (no commit; parent finish-work).
   - Dumped QGIS `highway_area` rules → `audit/tile-regression/HIGHWAY_AREA_RULES.md` (XML; PyQGIS project load hung). Class fills only paint an explicit `area:highway` IN-list; **`parking_space` / `traffic_island` excluded**; outline width 0.
   - Rust `srk-render`: SQL `IN` filter + drop catch-all + remove 0.5 px dark stroke. Smoke **before → after**: mean **1.96% → 0.079%**, max **8.85% → 0.203%**, bands **12 ok / 0 review / 0 bad**. Anchor **0.006%**. Gallery `runs/20260801-172219-smoke/`. Interim `REPORT.md` + `docs/rust-renderer-evaluation.md` stub.
