@@ -506,12 +506,17 @@ Tables: `building_shade`, `building_parts_dissolved_height`, `building`, `buildi
   output before investing**; a flat fill may be the correct port.
 - `enableorderby` on `building_parts_dissolved_height` maps to `sort-key` on `["get","height"]`.
 
-**Known deviations:** roof gradients flattened pending the check above.
+**Decision — `roof shape`:** **skipped.** Magma gradients on `#990003` read as an unfinished
+QGIS experiment, not shipped cartography; building mass stays the pink `building_parts` /
+`building` fills. No `roof:shape` column exported.
+
+**Known deviations:** roof shape not ported (see decision above); housenumber uses Open Sans
+at ~10 px from tippecanoe z17 overzoom (style `minzoom` 18 ≈ QGIS 1:1000).
 
 - [x] `building_shade` + `building_parts_dissolved_height` with shadows
 - [x] `building_lines` five classes
-- [ ] `roof shape` — verify intent first
-- [ ] `housenumber` labels
+- [x] `roof shape` — skipped (experimental; documented)
+- [x] `housenumber` labels
 
 ---
 
@@ -570,7 +575,7 @@ dependent filter. The Straßenraumkarte pipeline already produces dedicated labe
 ## Open questions
 
 1. **G0.2** — one style layer per OSM `layer` bucket, or a single layer with `sort-key`?
-2. **G10** — is `roof shape` (magma gradients on `#990003`) shipped cartography or an experiment?
+2. ~~**G10** — is `roof shape` (magma gradients on `#990003`) shipped cartography or an experiment?~~ **Resolved:** experiment → skip (see G10 decision).
 3. **G7** — is street parking in scope for the vector output at all?
 4. **G1** — is `landuse` → `outdoor_seating` (`#0000ff` base fill) a debugging leftover?
 5. **G11** — is `feature_node (foreground) Kopie` intentional or a stray duplicate?

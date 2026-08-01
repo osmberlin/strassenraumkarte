@@ -40,6 +40,61 @@ function groupZoom(layers: LayerDef[]): { minzoom: number; maxzoom: number } {
   }
 }
 
+/**
+ * tippecanoe omits source-layers with zero features, which makes MapLibre
+ * console.error when the style still references them. Seed an empty export
+ * with one tiny stub inside the starter extract so the layer stays in metadata
+ * without expanding PMTiles bounds.
+ */
+async function ensureLayerHasFeatures(layer: LayerDef, geo: string): Promise<void> {
+  const text = (await Bun.file(geo).text()).trim()
+  if (text !== '') return
+
+  // SW corner of the Neukölln starter bbox (~10 m box — tippecanoe drops sub-metre stubs).
+  const lon = 13.3861
+  const lat = 52.4657
+  const d = 0.00012
+
+  const stub =
+    layer.paint === 'fill'
+      ? {
+          type: 'Feature',
+          properties: { _empty_stub: 1 },
+          geometry: {
+            type: 'Polygon',
+            coordinates: [
+              [
+                [lon, lat],
+                [lon + d, lat],
+                [lon + d, lat + d],
+                [lon, lat + d],
+                [lon, lat],
+              ],
+            ],
+          },
+        }
+      : layer.paint === 'line'
+        ? {
+            type: 'Feature',
+            properties: { _empty_stub: 1 },
+            geometry: {
+              type: 'LineString',
+              coordinates: [
+                [lon, lat],
+                [lon + d, lat],
+              ],
+            },
+          }
+        : {
+            type: 'Feature',
+            properties: { _empty_stub: 1 },
+            geometry: { type: 'Point', coordinates: [lon, lat] },
+          }
+
+  await Bun.write(geo, `${JSON.stringify(stub)}\n`)
+  console.log(`[tiles] ${layer.id}: empty export — seeded tippecanoe stub`)
+}
+
 async function buildGroup(group: TileGroup): Promise<string | null> {
   const layers = groupLayers(group)
   if (layers.length === 0) return null
@@ -49,6 +104,7 @@ async function buildGroup(group: TileGroup): Promise<string | null> {
     if (!(await Bun.file(geo).exists())) {
       throw new Error(`Missing export ${geo} — run: bun run export`)
     }
+    await ensureLayerHasFeatures(layer, geo)
   }
 
   const { minzoom, maxzoom } = groupZoom(layers)

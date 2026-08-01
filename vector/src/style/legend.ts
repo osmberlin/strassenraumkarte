@@ -202,6 +202,16 @@ export function legendEntries(): LegendEntry[] {
       layerIds: ['building-parts', 'building-fill', 'building-lines'],
     },
     {
+      id: 'housenumber',
+      label: 'housenumber',
+      group: 'labels',
+      kind: 'circle',
+      color: '#b7b7b7',
+      minzoom: 18,
+      maxzoom: 20,
+      layerIds: ['label-housenumber'],
+    },
+    {
       id: 'markings-poly',
       label: 'road marking (area)',
       group: 'detail',

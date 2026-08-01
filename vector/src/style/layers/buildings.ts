@@ -1,4 +1,7 @@
-import type { LayerSpecification } from '@maplibre/maplibre-gl-style-spec'
+import type {
+  ExpressionSpecification,
+  LayerSpecification,
+} from '@maplibre/maplibre-gl-style-spec'
 
 import {
   BUILDING_LINES,
@@ -9,7 +12,45 @@ import { dropShadow } from '../effects'
 import { base } from '../expr'
 import { metresToPixels } from '../metres'
 
-/** Buildings: shade → parts (sorted by height) → footprint → lines. */
+/** QGIS enableorderby height ascending — shorter parts under taller. */
+const PARTS_SORT_KEY = [
+  'coalesce',
+  ['get', 'height'],
+  0,
+] as ExpressionSpecification
+
+/** Apply the same sort-key to drop-shadow fill/line so overlaps stack correctly. */
+function withPartsSortKey(layers: LayerSpecification[]): LayerSpecification[] {
+  return layers.map((layer) => {
+    if (layer.type === 'fill') {
+      return {
+        ...layer,
+        layout: {
+          ...('layout' in layer ? layer.layout : {}),
+          'fill-sort-key': PARTS_SORT_KEY,
+        },
+      }
+    }
+    if (layer.type === 'line') {
+      return {
+        ...layer,
+        layout: {
+          ...('layout' in layer ? layer.layout : {}),
+          'line-sort-key': PARTS_SORT_KEY,
+        },
+      }
+    }
+    return layer
+  })
+}
+
+/**
+ * Buildings: shade → parts (sorted by height) → footprint → lines.
+ *
+ * Roof-shape gradients (#990003 magma / Shapeburst) are intentionally skipped —
+ * they read as unfinished QGIS experiment rather than shipped cartography
+ * (see docs/maplibre-style-groups.md G10).
+ */
 export function buildingLayers(): LayerSpecification[] {
   const shadeBase = base('building_shade', 15)
   const partsBase = base('building_parts_dissolved_height', 15)
@@ -40,28 +81,29 @@ export function buildingLayers(): LayerSpecification[] {
   })
 
   layers.push(
-    ...dropShadow('building-parts', partsBase, {
-      blurM: 2,
-      offsetM: 1,
-      angleDeg: 40,
-      color: '#232323',
-      opacity: 0.4,
-    }),
+    ...withPartsSortKey(
+      dropShadow('building-parts', partsBase, {
+        blurM: 2,
+        offsetM: 1,
+        angleDeg: 40,
+        color: '#232323',
+        opacity: 0.4,
+      }),
+    ),
   )
 
   layers.push({
     id: 'building-parts-fill',
     type: 'fill',
     ...partsBase,
+    layout: {
+      'fill-sort-key': PARTS_SORT_KEY,
+    },
     paint: {
       'fill-color': BUILDING_PARTS_FILL,
       'fill-opacity': 0.7,
       'fill-outline-color': '#e8c8c8',
     },
-    // Lower height drawn first (under taller parts).
-    layout: {
-      'fill-sort-key': ['coalesce', ['get', 'height'], 0],
-    } as never,
   })
 
   layers.push({

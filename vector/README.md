@@ -31,7 +31,7 @@ bun run check         # type-check + validate-style + unit tests
 
 ## Tippecanoe flags
 
-Groups in `layers.ts` with `-r1 --no-tiny-polygon-reduction --simplification=2 --preserve-input-order` (prep also used `--no-tile-compression` for easier debugging). Deliberately **not** `--drop-densest-as-needed`.
+Groups in `layers.ts` with `-r1 --no-tiny-polygon-reduction --simplification=2 --preserve-input-order` (prep also used `--no-tile-compression` for easier debugging). Deliberately **not** `--drop-densest-as-needed`. Empty exports get a ~10 m stub feature so tippecanoe still registers the source-layer (MapLibre errors on missing layers).
 
 Measured Berlin extract (joined archive ~16 MiB with styled columns): ground ~0.9 MiB, streets ~2.4 MiB, buildings ~21 MiB, detail ~6.7 MiB, labels ~0.6 MiB.
 
@@ -58,7 +58,7 @@ QGIS MapUnit sizes use `@mercator_scale`. MapLibre paints CSS px on 512 tiles:
 | dropShadow | translated fill + blurred outline | softer / weaker on large offsets |
 | innerShadow | negative `line-offset` + `line-blur` | banded vs continuous |
 | outerGlow | two stacked blurred outlines | join artefacts if too wide |
-| Shapeburst / gradients | 2–3 inward blurred `line` bands (`shore_m`) | roofs still flat; water depth green ramp omitted; shoreline banded |
+| Shapeburst / gradients | 2–3 inward blurred `line` bands (`shore_m`) | roof shape skipped (experimental magma/#990003); water depth green ramp omitted; shoreline banded |
 | RasterFill textures | `fill-pattern` from sprite | no per-feature rotation / ground-metre scale (G1 surface table) |
 | pitch_markings SvgMarker | `symbol` + packed `pitches/*` | uniform `icon-size` from `dist_long`; no independent aspect-fit |
 | SvgMarker traffic signs | `setMissingStyleImageResolver` | icons only when style requests them |

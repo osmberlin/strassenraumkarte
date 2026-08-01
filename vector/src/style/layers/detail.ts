@@ -608,6 +608,32 @@ export function detailLayers(): LayerSpecification[] {
     } as never,
   })
 
+  // QGIS trunk labeling: `ref` at 7 pt (only when present).
+  layers.push({
+    id: 'tree-ref',
+    type: 'symbol',
+    ...treeBase,
+    filter: f([
+      'all',
+      ['has', 'ref'],
+      ['!=', ['to-string', ['get', 'ref']], ''],
+    ]),
+    layout: {
+      'text-field': ['to-string', ['get', 'ref']],
+      'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
+      'text-size': 10,
+      'text-offset': [0, 1.1],
+      'text-anchor': 'top',
+      'text-optional': true,
+      'text-allow-overlap': false,
+    },
+    paint: {
+      'text-color': '#5a5740',
+      'text-halo-color': 'rgba(237,237,237,0.9)',
+      'text-halo-width': 1,
+    },
+  })
+
   return layers
 }
 

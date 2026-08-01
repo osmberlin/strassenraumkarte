@@ -202,6 +202,16 @@ export const LAYERS: LayerDef[] = [
     paint: 'line',
     group: 'buildings',
   },
+  {
+    // Point labels only — QGIS `housenumber` layer (addr:housenumber).
+    id: 'housenumber',
+    table: 'housenumber',
+    columns: ['osm_id', '"addr:housenumber"'],
+    minzoom: 15,
+    maxzoom: 17,
+    paint: 'circle',
+    group: 'labels',
+  },
 
   // detail z17–18
   {
@@ -287,6 +297,7 @@ export const LAYERS: LayerDef[] = [
       'COALESCE(diameter_crown, CASE WHEN "natural" = \'shrub\' THEN 4.5 ELSE 7 END) AS diameter_crown',
       'COALESCE(circumference, 1.57) AS circumference',
       'rotation',
+      'ref',
     ],
     minzoom: 17,
     maxzoom: 18,

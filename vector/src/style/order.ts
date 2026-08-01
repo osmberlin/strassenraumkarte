@@ -112,6 +112,7 @@ export const CORE_PAINT_ORDER = [
   'building_parts_dissolved_height',
   'building_lines',
   'tree',
+  'housenumber',
   'label_waterway',
   'label_highway',
 ] as const
