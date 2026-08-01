@@ -161,7 +161,8 @@ if ! [[ "$bg_hex" =~ ^[0-9A-Fa-f]{6}$ ]]; then
   log ERROR "Invalid --background (expected #rrggbb): $BACKGROUND"
   exit 1
 fi
-BACKGROUND="#${bg_hex,,}"
+# bash 3.2 (macOS /bin/bash) has no ${var,,}; use tr
+BACKGROUND="#$(printf '%s' "$bg_hex" | tr '[:upper:]' '[:lower:]')"
 
 case "$FORMAT" in
   png|PNG|jpg|jpeg|JPG|JPEG) ;;

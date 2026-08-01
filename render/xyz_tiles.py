@@ -43,6 +43,22 @@ ORIGIN_SHIFT = 20037508.342789244
 TILE_SIZE_PX = 256
 DEFAULT_BACKGROUND = "#ededed"
 
+
+def _qimage_format(name: str):
+    """Qt5: QImage.Format_*; Qt6/PyQGIS 4: QImage.Format.Format_*."""
+    fmt_ns = getattr(QImage, "Format", None)
+    if fmt_ns is not None and hasattr(fmt_ns, name):
+        return getattr(fmt_ns, name)
+    return getattr(QImage, name)
+
+
+def _qpainter_hint(name: str):
+    """Qt5: QPainter.Antialiasing; Qt6: QPainter.RenderHint.Antialiasing."""
+    hint_ns = getattr(QPainter, "RenderHint", None)
+    if hint_ns is not None and hasattr(hint_ns, name):
+        return getattr(hint_ns, name)
+    return getattr(QPainter, name)
+
 # Qt stderr spam when painting onto a null QImage (engine == 0, type 3 = Image).
 # Empty map data does *not* cause this; QGIS may still emit it for failed internal
 # symbol/label buffers while the main metatile image is fine. Real allocation
@@ -392,7 +408,7 @@ def save_tile_image(
     drops alpha incorrectly and can yield flat gray tiles.
     """
     if fmt == "jpg":
-        opaque = QImage(tile.size(), QImage.Format_RGB888)
+        opaque = QImage(tile.size(), _qimage_format("Format_RGB888"))
         opaque.fill(background.rgb())
         painter = QPainter(opaque)
         painter.drawImage(0, 0, tile)
@@ -429,7 +445,7 @@ def render_metatile(
     context.appendScope(QgsExpressionContextUtils.mapSettingsScope(settings))
     settings.setExpressionContext(context)
 
-    image = QImage(QSize(width_px, height_px), QImage.Format_ARGB32_Premultiplied)
+    image = QImage(QSize(width_px, height_px), _qimage_format("Format_ARGB32_Premultiplied"))
     if image.isNull():
         raise RuntimeError(
             f"Failed to allocate render buffer {width_px}×{height_px} px for "
@@ -443,7 +459,7 @@ def render_metatile(
             f"QPainter.begin failed for {width_px}×{height_px} px "
             f"(z{mt.z} x{mt.rx0}-{mt.rx1} y{mt.ry0}-{mt.ry1})."
         )
-    painter.setRenderHint(QPainter.Antialiasing, True)
+    painter.setRenderHint(_qpainter_hint("Antialiasing"), True)
     job = QgsMapRendererCustomPainterJob(settings, painter)
     job.start()
     job.waitForFinished()
@@ -473,7 +489,14 @@ def run(args: argparse.Namespace) -> int:
         log("ERROR", str(exc))
         return 1
 
-    QgsApplication.setPrefixPath("/usr", True)
+    prefix = os.environ.get("QGIS_PREFIX_PATH", "/usr")
+    QgsApplication.setPrefixPath(prefix, True)
+    plugin_path = os.environ.get("QGIS_PLUGIN_PATH")
+    if plugin_path:
+        QgsApplication.setPluginPath(plugin_path)
+    pkg_data = os.environ.get("QGIS_PKG_DATA_PATH")
+    if pkg_data:
+        QgsApplication.setPkgDataPath(pkg_data)
     app = QgsApplication([], False)
     app.initQgis()
     install_qt_message_filter()

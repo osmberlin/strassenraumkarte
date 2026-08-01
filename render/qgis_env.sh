@@ -20,13 +20,18 @@ if [[ ! -d "$QGIS_APP" ]]; then
   return 0 2>/dev/null || true
 fi
 
-export QGIS_PREFIX_PATH="${QGIS_PREFIX_PATH:-$QGIS_APP/Contents/MacOS}"
-export PATH="$QGIS_PREFIX_PATH:$PATH"
-
-# Bundled wrapper sets PYTHONHOME so the relocatable interpreter finds stdlib + qgis.
-if [[ -x "$QGIS_PREFIX_PATH/python" ]]; then
-  export PYTHON="${PYTHON:-$QGIS_PREFIX_PATH/python}"
+# Binaries (python wrapper, qgis_process) live under Contents/MacOS.
+export PATH="$QGIS_APP/Contents/MacOS:$PATH"
+if [[ -x "$QGIS_APP/Contents/MacOS/python" ]]; then
+  export PYTHON="${PYTHON:-$QGIS_APP/Contents/MacOS/python}"
 fi
+
+# QgsApplication prefix for this QGIS 4 macOS build is the .app bundle root
+# (not Contents/MacOS). Wrong prefix → postgres provider missing → 0 valid layers.
+# Always derive from QGIS_APP (do not keep a stale QGIS_PREFIX_PATH from older setups).
+export QGIS_PREFIX_PATH="$QGIS_APP"
+export QGIS_PLUGIN_PATH="$QGIS_APP/Contents/PlugIns/qgis"
+export QGIS_PKG_DATA_PATH="$QGIS_APP/Contents/Resources/qgis"
 
 # Headless metatile rendering (also set in render_tiles.sh as a fallback).
 export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-offscreen}"
