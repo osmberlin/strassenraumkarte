@@ -306,9 +306,10 @@ export function labelLayers(): LayerSpecification[] {
       'text-keep-upright': true,
     },
     paint: {
-      'text-color': '#dddddd',
-      'text-halo-color': 'rgba(168,168,167,0.75)',
-      'text-halo-width': 1.2,
+      // QGIS street names read as near-white on carriageway / coloured lanes.
+      'text-color': '#f7f7f7',
+      'text-halo-color': 'rgba(80,80,80,0.85)',
+      'text-halo-width': 1.4,
       // QGIS FontOpacity: scale < 2000 → 50%, else 100% (≈ z > 18).
       'text-opacity': [
         'interpolate',
@@ -338,9 +339,9 @@ export function labelLayers(): LayerSpecification[] {
       'text-keep-upright': true,
     },
     paint: {
-      'text-color': '#dddddd',
-      'text-halo-color': 'rgba(168,168,167,0.75)',
-      'text-halo-width': 1.2,
+      'text-color': '#f7f7f7',
+      'text-halo-color': 'rgba(80,80,80,0.85)',
+      'text-halo-width': 1.4,
       'text-opacity': 1,
     },
   })

@@ -16,7 +16,9 @@ import { metresToPixels } from '../metres'
 import { styleLayerId, type OsmLayerBucketId } from '../order'
 
 const ICON_PIXELS = 64
+/** Most furniture stays z17 (tippecanoe). Playground has no QGIS scale gate → z15. */
 const MINZ = 17
+const PLAYGROUND_MINZ = 15
 
 const PLAYGROUND_FILL = '#d2c8a0'
 const PLAYGROUND_OUTLINE = '#b7916e'
@@ -159,12 +161,13 @@ function pushCircle(
     opacity?: number
     stroke?: string
     strokeWidthM?: number
+    minzoom?: number
   },
 ): void {
   layers.push({
     id: styleLayerId(sourceLayer, role, bucketId),
     type: 'circle',
-    ...withOsmBucket(sourceLayer, MINZ, bucketId, filter),
+    ...withOsmBucket(sourceLayer, opts.minzoom ?? MINZ, bucketId, filter),
     paint: {
       'circle-color': opts.color,
       'circle-opacity': opts.opacity ?? 1,
@@ -222,12 +225,14 @@ function pushFill(
     opacity?: number
     outline?: string
     outlineWidthM?: number
+    minzoom?: number
   },
 ): void {
+  const z = opts.minzoom ?? MINZ
   layers.push({
     id: styleLayerId(sourceLayer, role, bucketId),
     type: 'fill',
-    ...withOsmBucket(sourceLayer, MINZ, bucketId, filter),
+    ...withOsmBucket(sourceLayer, z, bucketId, filter),
     paint: {
       'fill-color': opts.color,
       'fill-opacity': opts.opacity ?? 1,
@@ -242,7 +247,7 @@ function pushFill(
     layers.push({
       id: styleLayerId(sourceLayer, `${role}-outline`, bucketId),
       type: 'line',
-      ...withOsmBucket(sourceLayer, MINZ, bucketId, filter),
+      ...withOsmBucket(sourceLayer, z, bucketId, filter),
       paint: {
         'line-color': opts.outline,
         'line-width': metresToPixels(opts.outlineWidthM ?? 0.1),
@@ -262,12 +267,13 @@ function pushLine(
     widthM: number
     opacity?: number
     dash?: [number, number]
+    minzoom?: number
   },
 ): void {
   layers.push({
     id: styleLayerId(sourceLayer, role, bucketId),
     type: 'line',
-    ...withOsmBucket(sourceLayer, MINZ, bucketId, filter),
+    ...withOsmBucket(sourceLayer, opts.minzoom ?? MINZ, bucketId, filter),
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
       'line-color': opts.color,
@@ -503,14 +509,16 @@ export function furnitureLayersForBucket(bucketId: OsmLayerBucketId): LayerSpeci
     spacingM: 0.2,
   })
 
-  // --- playground ---
+  // --- playground (QGIS: no scale gate → archive minzoom) ---
   pushLine(layers, 'playground_way', 'casing', b, f(['has', 'playground']), {
     color: PLAYGROUND_OUTLINE,
     widthM: 0.5,
+    minzoom: PLAYGROUND_MINZ,
   })
   pushLine(layers, 'playground_way', 'fill', b, f(['has', 'playground']), {
     color: PLAYGROUND_FILL,
     widthM: 0.36,
+    minzoom: PLAYGROUND_MINZ,
   })
   pushFill(
     layers,
@@ -518,7 +526,7 @@ export function furnitureLayersForBucket(bucketId: OsmLayerBucketId): LayerSpeci
     'climbingframe',
     b,
     f(['==', ['get', 'playground'], 'climbingframe']),
-    { color: PLAYGROUND_CLIMB, outline: '#232323', outlineWidthM: 0.26 },
+    { color: PLAYGROUND_CLIMB, outline: '#232323', outlineWidthM: 0.26, minzoom: PLAYGROUND_MINZ },
   )
   pushFill(
     layers,
@@ -526,13 +534,14 @@ export function furnitureLayersForBucket(bucketId: OsmLayerBucketId): LayerSpeci
     'default',
     b,
     f(['!=', ['get', 'playground'], 'climbingframe']),
-    { color: PLAYGROUND_FILL, outline: PLAYGROUND_OUTLINE, outlineWidthM: 0.12 },
+    { color: PLAYGROUND_FILL, outline: PLAYGROUND_OUTLINE, outlineWidthM: 0.12, minzoom: PLAYGROUND_MINZ },
   )
   pushCircle(layers, 'playground_node', 'dot', b, f(['has', 'playground']), {
     color: PLAYGROUND_FILL,
     diameterM: 0.75,
     stroke: PLAYGROUND_OUTLINE,
     strokeWidthM: 0.12,
+    minzoom: PLAYGROUND_MINZ,
   })
 
   // --- feature_polygon (middleground) ---

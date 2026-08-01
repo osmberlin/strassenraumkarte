@@ -15,10 +15,10 @@ export const COMPARE_LOCATIONS: CompareLocation[] = [
   {
     id: 'intersection',
     label: 'Intersection',
-    longitude: 13.4222,
-    latitude: 52.4768,
-    zoom: 17,
-    note: 'Docker BBOX centre — mixed street space',
+    longitude: 13.4235,
+    latitude: 52.4771,
+    zoom: 18,
+    note: 'Herrfurthstraße — red cycle lane + nearby playground',
   },
   {
     id: 'dense-trees',

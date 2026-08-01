@@ -22,6 +22,9 @@ const ROAD_MARKING_DASHARRAYS = ['0.5;0.25', '1;1', '3;3', '5;1'] as const
 
 const MARKING_REF_WIDTH_M = 0.12
 
+/** QGIS road markings / separation have no scale gate — match archive minzoom. */
+const MARKING_MINZ = 15
+
 /** Rasterized SVG size used by `missing-style-images` resolver. */
 const ICON_PIXELS = 64
 
@@ -97,11 +100,23 @@ function markingColor(): ExpressionSpecification {
 }
 
 function surfaceColourFill(): ExpressionSpecification {
+  // QGIS: CASE WHEN colour = 'green' THEN '#00c503' ELSE colour END.
+  // Map named CSS colours to hex so red bike lanes stay vivid in MapLibre.
   return [
     'match',
-    ['coalesce', ['get', 'colour'], ''],
+    ['downcase', ['to-string', ['coalesce', ['get', 'colour'], '']]],
     'green',
     '#00c503',
+    'red',
+    '#e31a1c',
+    'yellow',
+    '#ffd52b',
+    'blue',
+    '#1f78b4',
+    'orange',
+    '#ff7f00',
+    'white',
+    '#ffffff',
     ['get', 'colour'],
   ] as ExpressionSpecification
 }
@@ -134,8 +149,8 @@ function pushMarkingLine(
     id: styleLayerId('road_marking_way', role, bucketId),
     type: 'line',
     ...withOsmBucket(
-      'road_marking_way',
-      17,
+        'road_marking_way',
+        MARKING_MINZ,
       bucketId,
       f(['all', extra, dashFilter] as ExpressionSpecification),
     ),
@@ -205,7 +220,7 @@ export function markingFurnitureLayers(): LayerSpecification[] {
       type: 'fill',
       ...withOsmBucket(
         'road_marking_polygon',
-        17,
+        MARKING_MINZ,
         b,
         f([
           'all',
@@ -236,7 +251,7 @@ export function markingFurnitureLayers(): LayerSpecification[] {
       type: 'line',
       ...withOsmBucket(
         'road_marking_polygon',
-        17,
+        MARKING_MINZ,
         b,
         f([
           'all',
@@ -268,8 +283,8 @@ export function markingFurnitureLayers(): LayerSpecification[] {
         id: styleLayerId('road_marking_polygon', `fill-${pattern}`, b),
         type: 'fill',
         ...withOsmBucket(
-          'road_marking_polygon',
-          17,
+        'road_marking_polygon',
+        MARKING_MINZ,
           b,
           f([
             'all',
@@ -286,8 +301,8 @@ export function markingFurnitureLayers(): LayerSpecification[] {
         id: styleLayerId('road_marking_polygon', `outline-${pattern}`, b),
         type: 'line',
         ...withOsmBucket(
-          'road_marking_polygon',
-          17,
+        'road_marking_polygon',
+        MARKING_MINZ,
           b,
           f([
             'all',
@@ -308,7 +323,7 @@ export function markingFurnitureLayers(): LayerSpecification[] {
       type: 'line',
       ...withOsmBucket(
         'road_marking_polygon',
-        17,
+        MARKING_MINZ,
         b,
         f([
           'all',
@@ -328,7 +343,7 @@ export function markingFurnitureLayers(): LayerSpecification[] {
       type: 'fill',
       ...withOsmBucket(
         'road_marking_polygon',
-        17,
+        MARKING_MINZ,
         b,
         f(['==', ['get', 'road_marking'], 'zebra_stripe']),
       ),
@@ -344,7 +359,7 @@ export function markingFurnitureLayers(): LayerSpecification[] {
       type: 'fill',
       ...withOsmBucket(
         'road_marking_polygon',
-        17,
+        MARKING_MINZ,
         b,
         f([
           'all',
@@ -355,6 +370,7 @@ export function markingFurnitureLayers(): LayerSpecification[] {
       ),
       paint: {
         'fill-color': surfaceColourFill(),
+        // QGIS surface-colour symbol alpha is 0.45 for all colours.
         'fill-opacity': 0.45,
       },
     })
@@ -366,7 +382,9 @@ export function markingFurnitureLayers(): LayerSpecification[] {
     layers.push({
       id: styleLayerId('road_marking_way', 'sharks-teeth', b),
       type: 'symbol',
-      ...withOsmBucket('road_marking_way', 17, b, f(isSharksTeeth())),
+      ...withOsmBucket(
+        'road_marking_way',
+        MARKING_MINZ, b, f(isSharksTeeth())),
       layout: {
         'symbol-placement': 'line',
         'symbol-spacing': metresToPixels(0.75),
@@ -406,7 +424,7 @@ export function markingFurnitureLayers(): LayerSpecification[] {
       type: 'symbol',
       ...withOsmBucket(
         'road_marking_node',
-        17,
+        MARKING_MINZ,
         b,
         f(['==', ['get', 'road_marking'], 'arrow']),
       ),
@@ -435,7 +453,7 @@ export function markingFurnitureLayers(): LayerSpecification[] {
       type: 'symbol',
       ...withOsmBucket(
         'road_marking_node',
-        17,
+        MARKING_MINZ,
         b,
         f(['==', ['get', 'road_marking'], 'traffic_sign']),
       ),
@@ -466,7 +484,7 @@ export function markingFurnitureLayers(): LayerSpecification[] {
       type: 'symbol',
       ...withOsmBucket(
         'road_marking_node',
-        17,
+        MARKING_MINZ,
         b,
         f([
           'all',
@@ -505,8 +523,8 @@ export function markingFurnitureLayers(): LayerSpecification[] {
         id: styleLayerId('separation', kind, b),
         type: 'symbol',
         ...withOsmBucket(
-          'separation',
-          17,
+        'separation',
+        MARKING_MINZ,
           b,
           f(['in', kind, ['coalesce', ['get', 'separation'], '']]),
         ),
@@ -533,7 +551,7 @@ export function markingFurnitureLayers(): LayerSpecification[] {
       type: 'line',
       ...withOsmBucket(
         'separation',
-        17,
+        MARKING_MINZ,
         b,
         f(['in', 'bump', ['coalesce', ['get', 'separation'], '']]),
       ),
