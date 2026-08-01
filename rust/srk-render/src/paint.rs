@@ -264,26 +264,91 @@ impl ShapeburstFill {
 }
 
 /// Solid fill plus optional inner-edge darkening (shapeburst stand-in).
-#[allow(dead_code)]
 pub fn fill_polygons_shapeburst(
     pixmap: &mut Pixmap,
     bounds: TileBounds,
     geom: Geometry<f64>,
     base: Color,
     burst: ShapeburstFill,
+    timers: &mut Option<&mut StageTimers>,
 ) {
     for poly in geometry_polygons(geom) {
-        fill_polygon_shapeburst(pixmap, bounds, &poly, base, burst);
+        fill_polygon_shapeburst(pixmap, bounds, &poly, base, burst, timers);
     }
 }
 
-#[allow(dead_code)]
+/// Batch shapeburst: one shared mask → one blur → edge darken, then base fills.
+pub fn fill_polygons_batch_shapeburst(
+    pixmap: &mut Pixmap,
+    bounds: TileBounds,
+    geoms: &[Geometry<f64>],
+    fill: Color,
+    burst: ShapeburstFill,
+    timers: &mut Option<&mut StageTimers>,
+) {
+    if geoms.is_empty() {
+        return;
+    }
+    for geom in geoms {
+        fill_polygons(pixmap, bounds, geom.clone(), fill);
+    }
+    let band_px = metres_to_px(burst.band_m, bounds).round().max(1.0) as u32;
+    if band_px <= 1 {
+        return;
+    }
+    crate::profile::time_stage(timers, StageSlot::Shapeburst, || {
+        apply_batch_shapeburst_edge(pixmap, bounds, geoms, burst, band_px);
+    });
+}
+
+fn apply_batch_shapeburst_edge(
+    pixmap: &mut Pixmap,
+    bounds: TileBounds,
+    geoms: &[Geometry<f64>],
+    burst: ShapeburstFill,
+    band_px: u32,
+) {
+    let Some((x0, y0, rw, rh)) = union_polygon_px_bbox(bounds, geoms, band_px) else {
+        return;
+    };
+    if (rw as u64) * (rh as u64) < 16 {
+        return;
+    }
+
+    let Some(mut mask) = Pixmap::new(rw, rh) else {
+        return;
+    };
+    let mut mask_paint = Paint::default();
+    mask_paint.set_color(Color::from_rgba8(255, 255, 255, 255));
+    mask_paint.anti_alias = true;
+    let offset = Transform::from_translate(-(x0 as f32), -(y0 as f32));
+    for geom in geoms {
+        for poly in geometry_polygons(geom.clone()) {
+            let Some(path) = polygon_to_path(bounds, &poly) else {
+                continue;
+            };
+            mask.fill_path(
+                &path,
+                &mask_paint,
+                FillRule::EvenOdd,
+                offset,
+                None,
+            );
+        }
+    }
+
+    let mut blurred = mask.clone();
+    box_blur_approx(&mut blurred, band_px);
+    apply_shapeburst_edge_region(pixmap, &mask, &blurred, burst, x0, y0, rw, rh);
+}
+
 fn fill_polygon_shapeburst(
     pixmap: &mut Pixmap,
     bounds: TileBounds,
     poly: &Polygon<f64>,
     base: Color,
     burst: ShapeburstFill,
+    timers: &mut Option<&mut StageTimers>,
 ) {
     let Some(path) = polygon_to_path(bounds, poly) else {
         return;
@@ -300,24 +365,114 @@ fn fill_polygon_shapeburst(
         None,
     );
 
-    let Some(mut mask) = Pixmap::new(TILE_SIZE_PX, TILE_SIZE_PX) else {
+    let band_px = metres_to_px(burst.band_m, bounds).round().max(1.0) as u32;
+    if band_px <= 1 {
+        return;
+    }
+    let Some((x0, y0, rw, rh)) = polygon_px_bbox(bounds, poly, band_px) else {
         return;
     };
-    let mut mask_paint = Paint::default();
-    mask_paint.set_color(Color::from_rgba8(255, 255, 255, 255));
-    mask_paint.anti_alias = true;
-    mask.fill_path(
-        &path,
-        &mask_paint,
-        FillRule::EvenOdd,
-        Transform::identity(),
-        None,
-    );
+    if (rw as u64) * (rh as u64) < 16 {
+        return;
+    }
 
-    let band_px = metres_to_px(burst.band_m, bounds).round().max(1.0) as u32;
-    let mut blurred = mask.clone();
-    box_blur_approx(&mut blurred, band_px);
+    crate::profile::time_stage(timers, StageSlot::Shapeburst, || {
+        let Some(mut mask) = Pixmap::new(rw, rh) else {
+            return;
+        };
+        let mut mask_paint = Paint::default();
+        mask_paint.set_color(Color::from_rgba8(255, 255, 255, 255));
+        mask_paint.anti_alias = true;
+        let offset = Transform::from_translate(-(x0 as f32), -(y0 as f32));
+        mask.fill_path(
+            &path,
+            &mask_paint,
+            FillRule::EvenOdd,
+            offset,
+            None,
+        );
 
+        let mut blurred = mask.clone();
+        box_blur_approx(&mut blurred, band_px);
+        apply_shapeburst_edge_region(pixmap, &mask, &blurred, burst, x0, y0, rw, rh);
+    });
+}
+
+fn polygon_px_bbox(
+    bounds: TileBounds,
+    poly: &Polygon<f64>,
+    pad: u32,
+) -> Option<(u32, u32, u32, u32)> {
+    let mut min_x = f32::MAX;
+    let mut min_y = f32::MAX;
+    let mut max_x = f32::MIN;
+    let mut max_y = f32::MIN;
+    for ring in std::iter::once(poly.exterior()).chain(poly.interiors()) {
+        for c in ring.coords() {
+            let (x, y) = map_to_px(bounds, *c);
+            min_x = min_x.min(x);
+            min_y = min_y.min(y);
+            max_x = max_x.max(x);
+            max_y = max_y.max(y);
+        }
+    }
+    if min_x > max_x || min_y > max_y {
+        return None;
+    }
+    let tile = TILE_SIZE_PX as f32;
+    let x0 = (min_x.floor() as i32 - pad as i32).clamp(0, tile as i32 - 1) as u32;
+    let y0 = (min_y.floor() as i32 - pad as i32).clamp(0, tile as i32 - 1) as u32;
+    let x1 = (max_x.ceil() as i32 + pad as i32).clamp(0, tile as i32) as u32;
+    let y1 = (max_y.ceil() as i32 + pad as i32).clamp(0, tile as i32) as u32;
+    let rw = x1.saturating_sub(x0).max(1);
+    let rh = y1.saturating_sub(y0).max(1);
+    Some((x0, y0, rw, rh))
+}
+
+fn union_polygon_px_bbox(
+    bounds: TileBounds,
+    geoms: &[Geometry<f64>],
+    pad: u32,
+) -> Option<(u32, u32, u32, u32)> {
+    let mut min_x = f32::MAX;
+    let mut min_y = f32::MAX;
+    let mut max_x = f32::MIN;
+    let mut max_y = f32::MIN;
+    let mut any = false;
+    for geom in geoms {
+        for poly in geometry_polygons(geom.clone()) {
+            if let Some((x0, y0, rw, rh)) = polygon_px_bbox(bounds, &poly, 0) {
+                any = true;
+                min_x = min_x.min(x0 as f32);
+                min_y = min_y.min(y0 as f32);
+                max_x = max_x.max((x0 + rw) as f32);
+                max_y = max_y.max((y0 + rh) as f32);
+            }
+        }
+    }
+    if !any {
+        return None;
+    }
+    let tile = TILE_SIZE_PX as f32;
+    let x0 = (min_x.floor() as i32 - pad as i32).clamp(0, tile as i32 - 1) as u32;
+    let y0 = (min_y.floor() as i32 - pad as i32).clamp(0, tile as i32 - 1) as u32;
+    let x1 = (max_x.ceil() as i32 + pad as i32).clamp(0, tile as i32) as u32;
+    let y1 = (max_y.ceil() as i32 + pad as i32).clamp(0, tile as i32) as u32;
+    let rw = x1.saturating_sub(x0).max(1);
+    let rh = y1.saturating_sub(y0).max(1);
+    Some((x0, y0, rw, rh))
+}
+
+fn apply_shapeburst_edge_region(
+    pixmap: &mut Pixmap,
+    mask: &Pixmap,
+    blurred: &Pixmap,
+    burst: ShapeburstFill,
+    x0: u32,
+    y0: u32,
+    rw: u32,
+    rh: u32,
+) {
     let edge_r = burst.edge_color.red();
     let edge_g = burst.edge_color.green();
     let edge_b = burst.edge_color.blue();
@@ -326,35 +481,41 @@ fn fill_polygon_shapeburst(
     let mask_data = mask.data();
     let blur_data = blurred.data();
     let px_data = pixmap.data_mut();
-    let px_count = (TILE_SIZE_PX * TILE_SIZE_PX) as usize;
+    let tile_w = TILE_SIZE_PX as usize;
 
-    for i in 0..px_count {
-        let idx = i * 4;
-        let ma = mask_data[idx + 3] as f32 / 255.0;
-        if ma < 1.0 / 255.0 {
-            continue;
+    for ly in 0..rh {
+        let ty = y0 + ly;
+        for lx in 0..rw {
+            let tx = x0 + lx;
+            let tile_idx = (ty as usize * tile_w + tx as usize) * 4;
+            let local_idx = (ly as usize * rw as usize + lx as usize) * 4;
+
+            let ma = mask_data[local_idx + 3] as f32 / 255.0;
+            if ma < 1.0 / 255.0 {
+                continue;
+            }
+            let ba = blur_data[local_idx + 3] as f32 / 255.0;
+            let edge = ((ma - ba) / ma).clamp(0.0, 1.0) * strength;
+            if edge < 0.001 {
+                continue;
+            }
+
+            let a = px_data[tile_idx + 3] as f32 / 255.0;
+            if a < 0.001 {
+                continue;
+            }
+            let mut r = px_data[tile_idx] as f32 / 255.0 / a;
+            let mut g = px_data[tile_idx + 1] as f32 / 255.0 / a;
+            let mut b = px_data[tile_idx + 2] as f32 / 255.0 / a;
+
+            r = r * (1.0 - edge) + edge_r * edge;
+            g = g * (1.0 - edge) + edge_g * edge;
+            b = b * (1.0 - edge) + edge_b * edge;
+
+            px_data[tile_idx] = (r * a * 255.0).round() as u8;
+            px_data[tile_idx + 1] = (g * a * 255.0).round() as u8;
+            px_data[tile_idx + 2] = (b * a * 255.0).round() as u8;
         }
-        let ba = blur_data[idx + 3] as f32 / 255.0;
-        let edge = ((ma - ba) / ma).clamp(0.0, 1.0) * strength;
-        if edge < 0.001 {
-            continue;
-        }
-
-        let a = px_data[idx + 3] as f32 / 255.0;
-        if a < 0.001 {
-            continue;
-        }
-        let mut r = px_data[idx] as f32 / 255.0 / a;
-        let mut g = px_data[idx + 1] as f32 / 255.0 / a;
-        let mut b = px_data[idx + 2] as f32 / 255.0 / a;
-
-        r = r * (1.0 - edge) + edge_r * edge;
-        g = g * (1.0 - edge) + edge_g * edge;
-        b = b * (1.0 - edge) + edge_b * edge;
-
-        px_data[idx] = (r * a * 255.0).round() as u8;
-        px_data[idx + 1] = (g * a * 255.0).round() as u8;
-        px_data[idx + 2] = (b * a * 255.0).round() as u8;
     }
 }
 
@@ -383,11 +544,12 @@ pub fn fill_polygons_batch_with_shadow(
     geoms: &[Geometry<f64>],
     fill: Color,
     shadow: DropShadow,
+    timers: &mut Option<&mut StageTimers>,
 ) {
     if geoms.is_empty() {
         return;
     }
-    fill_polygons_shadow_only(pixmap, bounds, geoms, shadow);
+    fill_polygons_shadow_only(pixmap, bounds, geoms, shadow, timers);
     for geom in geoms {
         fill_polygons(pixmap, bounds, geom.clone(), fill);
     }
@@ -399,49 +561,51 @@ pub fn fill_polygons_shadow_only(
     bounds: TileBounds,
     geoms: &[Geometry<f64>],
     shadow: DropShadow,
+    timers: &mut Option<&mut StageTimers>,
 ) {
     if geoms.is_empty() {
         return;
     }
-    let Some(mut mask) = Pixmap::new(TILE_SIZE_PX, TILE_SIZE_PX) else {
-        return;
-    };
-    let mut mask_paint = Paint::default();
-    mask_paint.set_color(Color::from_rgba8(255, 255, 255, 255));
-    mask_paint.anti_alias = true;
-    for geom in geoms {
-        for poly in geometry_polygons(geom.clone()) {
-            let Some(path) = polygon_to_path(bounds, &poly) else {
-                continue;
-            };
-            mask.fill_path(
-                &path,
-                &mask_paint,
-                FillRule::EvenOdd,
-                Transform::identity(),
-                None,
-            );
+    crate::profile::time_stage(timers, StageSlot::Shadow, || {
+        let Some(mut mask) = Pixmap::new(TILE_SIZE_PX, TILE_SIZE_PX) else {
+            return;
+        };
+        let mut mask_paint = Paint::default();
+        mask_paint.set_color(Color::from_rgba8(255, 255, 255, 255));
+        mask_paint.anti_alias = true;
+        for geom in geoms {
+            for poly in geometry_polygons(geom.clone()) {
+                let Some(path) = polygon_to_path(bounds, &poly) else {
+                    continue;
+                };
+                mask.fill_path(
+                    &path,
+                    &mask_paint,
+                    FillRule::EvenOdd,
+                    Transform::identity(),
+                    None,
+                );
+            }
         }
-    }
 
-    tint_pixmap_rgb(&mut mask, shadow.color, shadow.opacity);
-    let blur_px = metres_to_px(shadow.blur_m, bounds).round().max(1.0) as u32;
-    box_blur_approx(&mut mask, blur_px);
+        tint_pixmap_rgb(&mut mask, shadow.color, shadow.opacity);
+        let blur_px = metres_to_px(shadow.blur_m, bounds).round().max(1.0) as u32;
+        box_blur_approx(&mut mask, blur_px);
 
-    let (dx, dy) = shadow.offset_px(bounds);
-    let paint = PixmapPaint::default();
-    pixmap.draw_pixmap(
-        dx.round() as i32,
-        dy.round() as i32,
-        mask.as_ref(),
-        &paint,
-        Transform::identity(),
-        None,
-    );
+        let (dx, dy) = shadow.offset_px(bounds);
+        let paint = PixmapPaint::default();
+        pixmap.draw_pixmap(
+            dx.round() as i32,
+            dy.round() as i32,
+            mask.as_ref(),
+            &paint,
+            Transform::identity(),
+            None,
+        );
+    });
 }
 
-/// Batch exterior shadow + per-polygon shapeburst fill (buildings).
-#[allow(dead_code)]
+/// Batch exterior shadow + batch shapeburst fill (buildings).
 pub fn fill_polygons_batch_with_shadow_shapeburst(
     pixmap: &mut Pixmap,
     bounds: TileBounds,
@@ -449,52 +613,13 @@ pub fn fill_polygons_batch_with_shadow_shapeburst(
     fill: Color,
     shadow: DropShadow,
     burst: ShapeburstFill,
+    timers: &mut Option<&mut StageTimers>,
 ) {
     if geoms.is_empty() {
         return;
     }
-    let Some(mut mask) = Pixmap::new(TILE_SIZE_PX, TILE_SIZE_PX) else {
-        for geom in geoms {
-            fill_polygons_shapeburst(pixmap, bounds, geom.clone(), fill, burst);
-        }
-        return;
-    };
-    let mut mask_paint = Paint::default();
-    mask_paint.set_color(Color::from_rgba8(255, 255, 255, 255));
-    mask_paint.anti_alias = true;
-    for geom in geoms {
-        for poly in geometry_polygons(geom.clone()) {
-            let Some(path) = polygon_to_path(bounds, &poly) else {
-                continue;
-            };
-            mask.fill_path(
-                &path,
-                &mask_paint,
-                FillRule::EvenOdd,
-                Transform::identity(),
-                None,
-            );
-        }
-    }
-
-    tint_pixmap_rgb(&mut mask, shadow.color, shadow.opacity);
-    let blur_px = metres_to_px(shadow.blur_m, bounds).round().max(1.0) as u32;
-    box_blur_approx(&mut mask, blur_px);
-
-    let (dx, dy) = shadow.offset_px(bounds);
-    let paint = PixmapPaint::default();
-    pixmap.draw_pixmap(
-        dx.round() as i32,
-        dy.round() as i32,
-        mask.as_ref(),
-        &paint,
-        Transform::identity(),
-        None,
-    );
-
-    for geom in geoms {
-        fill_polygons_shapeburst(pixmap, bounds, geom.clone(), fill, burst);
-    }
+    fill_polygons_shadow_only(pixmap, bounds, geoms, shadow, timers);
+    fill_polygons_batch_shapeburst(pixmap, bounds, geoms, fill, burst, timers);
 }
 
 fn tint_pixmap_rgb(pixmap: &mut Pixmap, tint: Color, opacity: f32) {
@@ -716,6 +841,12 @@ pub fn envelope_sql() -> &'static str {
 }
 
 pub fn clip_polygon_wkb_sql(geom_col: &str) -> String {
+    clip_polygon_wkb_sql_fast(geom_col, 0)
+}
+
+/// Polygon clip → WKB. Always `ST_MakeValid` (skipping it at z≥18 caused WKB EOF decode errors).
+/// Speed comes from lighter WHERE (`geom && env` only) in callers, not from dropping MakeValid.
+pub fn clip_polygon_wkb_sql_fast(geom_col: &str, _z: u32) -> String {
     let env = envelope_sql();
     format!(
         r#"ST_AsBinary(
@@ -730,6 +861,10 @@ pub fn clip_polygon_wkb_sql(geom_col: &str) -> String {
 }
 
 pub fn clip_line_wkb_sql(geom_col: &str) -> String {
+    clip_line_wkb_sql_fast(geom_col, 0)
+}
+
+pub fn clip_line_wkb_sql_fast(geom_col: &str, _z: u32) -> String {
     let env = envelope_sql();
     format!(
         r#"ST_AsBinary(

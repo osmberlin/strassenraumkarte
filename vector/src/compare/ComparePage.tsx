@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useState } from 'react'
-import type { MapLibreEvent } from 'maplibre-gl'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import type { Map as MaplibreMap, MapLibreEvent } from 'maplibre-gl'
 import type { ViewStateChangeEvent } from 'react-map-gl/maplibre'
 import {
   Layer,
@@ -80,6 +80,10 @@ export function ComparePage({
   const [blend, setBlend] = useState(0.5)
   const [swipe, setSwipe] = useState(50)
   const [vectorReady, setVectorReady] = useState(false)
+  const [showTileIds, setShowTileIds] = useState(false)
+  const mapsRef = useRef(new Set<MaplibreMap>())
+  const showTileIdsRef = useRef(false)
+  showTileIdsRef.current = showTileIds
   const split = mode === 'side-by-side'
   const showQgis = panes.qgis
   const showRustSplit = split && panes.rust
@@ -139,18 +143,48 @@ export function ComparePage({
     [locationId, onLocation, onMap],
   )
 
-  const onRasterLoad = useCallback((e: MapLibreEvent) => {
-    installMissingStyleImageResolver(e.target)
+  const registerMap = useCallback((map: MaplibreMap) => {
+    mapsRef.current.add(map)
+    map.showTileBoundaries = showTileIdsRef.current
+    map.once('remove', () => {
+      mapsRef.current.delete(map)
+    })
   }, [])
 
-  const onRustLoad = useCallback((e: MapLibreEvent) => {
-    installMissingStyleImageResolver(e.target)
+  const toggleTileIds = useCallback(() => {
+    setShowTileIds((prev) => {
+      const next = !prev
+      for (const m of mapsRef.current) {
+        m.showTileBoundaries = next
+      }
+      return next
+    })
   }, [])
 
-  const onVectorLoad = useCallback((e: MapLibreEvent) => {
-    installMissingStyleImageResolver(e.target)
-    setVectorReady(true)
-  }, [])
+  const onRasterLoad = useCallback(
+    (e: MapLibreEvent) => {
+      installMissingStyleImageResolver(e.target)
+      registerMap(e.target)
+    },
+    [registerMap],
+  )
+
+  const onRustLoad = useCallback(
+    (e: MapLibreEvent) => {
+      installMissingStyleImageResolver(e.target)
+      registerMap(e.target)
+    },
+    [registerMap],
+  )
+
+  const onVectorLoad = useCallback(
+    (e: MapLibreEvent) => {
+      installMissingStyleImageResolver(e.target)
+      registerMap(e.target)
+      setVectorReady(true)
+    },
+    [registerMap],
+  )
 
   const shared = useMemo(
     () => ({
@@ -225,6 +259,15 @@ export function ComparePage({
             ))}
           </select>
         </label>
+        <button
+          type="button"
+          className="legend-btn"
+          aria-pressed={showTileIds}
+          onClick={toggleTileIds}
+          title="MapLibre tile outlines + z/x/y labels"
+        >
+          {showTileIds ? 'Hide tile IDs' : 'Show tile IDs'}
+        </button>
         {mode === 'blend' && showVector && (
           <label className="compare-field compare-field--grow">
             Vector opacity {Math.round(blend * 100)}%

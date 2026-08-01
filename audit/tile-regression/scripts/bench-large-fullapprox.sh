@@ -70,8 +70,8 @@ set +e
     --zmax "$ZMAX" \
     --layers full-approx \
     --out "$RUST_OUT" \
-    --format webp \
-    --quality 90 \
+    --format png \
+    --workers "${WORKERS:-8}" \
     --quiet \
     --timing-json \
   >"$RUN_DIR/rust-stdout.log" 2>"$RUN_DIR/rust-stderr.log"
@@ -120,7 +120,7 @@ doc = {
     "cpus": cpus,
     "rust": {
         "preset": "full-approx",
-        "format": timing.get("format", "webp"),
+        "format": timing.get("format", "png"),
         "quality": timing.get("quality"),
         "tiles_written": int(tiles),
         "wall_ms_internal": int(rust_ms),

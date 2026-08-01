@@ -130,6 +130,12 @@ body,
   border-color: #aaa;
 }
 
+.legend-btn[aria-pressed='true'] {
+  background: #2f6fed;
+  border-color: #2f6fed;
+  color: #fff;
+}
+
 .legend-body {
   overflow: auto;
   padding: 0.5rem 0.65rem 1.25rem;

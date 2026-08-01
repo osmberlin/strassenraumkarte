@@ -5,10 +5,10 @@ use postgres::Client;
 use tiny_skia::Pixmap;
 
 use crate::paint::{
-    clip_line_wkb_sql, clip_point_wkb_sql, clip_polygon_wkb_sql, decode_wkb, draw_tree_crown_marker,
-    envelope_sql, fill_circles_m, fill_polygons, fill_polygons_batch_with_shadow,
-    fill_polygons_shadow_only, fill_polygons_textured, fill_tree_crown_soft, geometry_points,
-    map_to_px, stroke_lines, DropShadow,
+    clip_line_wkb_sql_fast, clip_point_wkb_sql, clip_polygon_wkb_sql_fast, decode_wkb,
+    draw_tree_crown_marker, envelope_sql, fill_circles_m, fill_polygons,
+    fill_polygons_batch_with_shadow, fill_polygons_shadow_only, fill_polygons_textured,
+    fill_tree_crown_soft, geometry_points, map_to_px, stroke_lines, DropShadow,
 };
 use crate::palette::{
     fill_building, fill_for_area_highway, fill_for_landuse, fill_pitch, fill_tree_crown,
@@ -16,6 +16,7 @@ use crate::palette::{
     landuse_surface_texture, stroke_path, stroke_service, stroke_waterway, surface_colour,
     AREA_HIGHWAY_PAINTED,
 };
+use crate::profile::{StageSlot, StageTimers};
 use crate::textures::TextureCatalog;
 use crate::tile::{
     mercator_scale, parse_hex_color, tile_bounds_3857, TileBounds, DEFAULT_BACKGROUND, TILE_SIZE_PX,
@@ -61,7 +62,12 @@ fn empty_pixmap() -> Result<Pixmap> {
 
 /// Write a tile image. Extension selects codec: `.png` (lossless) or `.webp`
 /// (lossy at `webp_quality`, matching production JPEG-q90 intent).
-pub fn save_tile(pixmap: &Pixmap, out_path: &std::path::Path, webp_quality: f32) -> Result<()> {
+pub fn save_tile(
+    pixmap: &Pixmap,
+    out_path: &std::path::Path,
+    webp_quality: f32,
+    timers: &mut Option<&mut StageTimers>,
+) -> Result<()> {
     if let Some(parent) = out_path.parent() {
         std::fs::create_dir_all(parent)?;
     }
@@ -70,21 +76,24 @@ pub fn save_tile(pixmap: &Pixmap, out_path: &std::path::Path, webp_quality: f32)
         .and_then(|e| e.to_str())
         .unwrap_or("")
         .to_ascii_lowercase();
-    match ext.as_str() {
-        "png" => {
-            pixmap.save_png(out_path)?;
+    crate::profile::time_stage(timers, StageSlot::Encode, || {
+        match ext.as_str() {
+            "png" => {
+                pixmap.save_png(out_path)?;
+            }
+            "webp" => {
+                let w = pixmap.width();
+                let h = pixmap.height();
+                let encoder = webp::Encoder::from_rgba(pixmap.data(), w, h);
+                let q = webp_quality.clamp(0.0, 100.0);
+                let memory = encoder.encode(q);
+                std::fs::write(out_path, memory.as_ref())
+                    .with_context(|| format!("write webp {}", out_path.display()))?;
+            }
+            other => anyhow::bail!("unsupported tile extension .{other} (use png or webp)"),
         }
-        "webp" => {
-            let w = pixmap.width();
-            let h = pixmap.height();
-            let encoder = webp::Encoder::from_rgba(pixmap.data(), w, h);
-            let q = webp_quality.clamp(0.0, 100.0);
-            let memory = encoder.encode(q);
-            std::fs::write(out_path, memory.as_ref())
-                .with_context(|| format!("write webp {}", out_path.display()))?;
-        }
-        other => anyhow::bail!("unsupported tile extension .{other} (use png or webp)"),
-    }
+        Ok::<(), anyhow::Error>(())
+    })?;
     Ok(())
 }
 
@@ -129,11 +138,12 @@ pub fn render_highway_area(
     quiet: bool,
     textures: &TextureCatalog,
     webp_quality: f32,
+    timers: &mut Option<&mut StageTimers>,
 ) -> Result<()> {
     let bounds = tile_bounds_3857(x, y, z);
     let mut pixmap = empty_pixmap()?;
-    let painted = paint_highway_area(client, &mut pixmap, bounds, textures)?;
-    save_tile(&pixmap, out_path, webp_quality)?;
+    let painted = paint_highway_area(client, &mut pixmap, bounds, z, textures, timers)?;
+    save_tile(&pixmap, out_path, webp_quality, timers)?;
     if !quiet {
         eprintln!(
             "rendered {z}/{x}/{y} → {} (highway_area parts≈{painted})",
@@ -147,10 +157,12 @@ fn paint_highway_area(
     client: &mut Client,
     pixmap: &mut Pixmap,
     bounds: TileBounds,
+    z: u32,
     textures: &TextureCatalog,
+    timers: &mut Option<&mut StageTimers>,
 ) -> Result<usize> {
     let env = envelope_sql();
-    let wkb_sql = clip_polygon_wkb_sql("geom");
+    let wkb_sql = clip_polygon_wkb_sql_fast("geom", z);
     let sql = format!(
         r#"
         SELECT
@@ -160,36 +172,39 @@ fn paint_highway_area(
         FROM highway_area
         WHERE geom && {env}
           AND "area:highway" IN {AREA_HIGHWAY_PAINTED}
-          AND NOT ST_IsEmpty(ST_ClipByBox2D(geom, {env}))
         ORDER BY COALESCE(layer, 0), osm_id
         "#
     );
-    let rows = client.query(
-        &sql,
-        &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
-    )?;
+    let rows = crate::profile::time_stage(timers, StageSlot::Sql, || {
+        client.query(
+            &sql,
+            &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
+        )
+    })?;
     let mut painted = 0usize;
-    for row in &rows {
-        let area: Option<String> = row.get("area_highway");
-        let Some(fill_color) = fill_for_area_highway(area.as_deref()) else {
-            continue;
-        };
-        let surface: Option<String> = row.try_get("surface").ok().flatten();
-        let texture = surface
-            .as_deref()
-            .and_then(highway_surface_texture)
-            .and_then(|(id, opacity)| textures.get(id).map(|t| (t, opacity)));
-        let Some(wkb) = wkb_from_row(row, "wkb") else {
-            continue;
-        };
-        match decode_wkb(&wkb) {
-            Ok(geom) => {
-                fill_polygons_textured(pixmap, bounds, geom, fill_color, texture);
-                painted += 1;
+    crate::profile::time_stage(timers, StageSlot::Paint, || {
+        for row in &rows {
+            let area: Option<String> = row.get("area_highway");
+            let Some(fill_color) = fill_for_area_highway(area.as_deref()) else {
+                continue;
+            };
+            let surface: Option<String> = row.try_get("surface").ok().flatten();
+            let texture = surface
+                .as_deref()
+                .and_then(highway_surface_texture)
+                .and_then(|(id, opacity)| textures.get(id).map(|t| (t, opacity)));
+            let Some(wkb) = wkb_from_row(row, "wkb") else {
+                continue;
+            };
+            match decode_wkb(&wkb) {
+                Ok(geom) => {
+                    fill_polygons_textured(pixmap, bounds, geom, fill_color, texture);
+                    painted += 1;
+                }
+                Err(e) => eprintln!("warn: skip highway_area WKB: {e:?}"),
             }
-            Err(e) => eprintln!("warn: skip highway_area WKB: {e:?}"),
         }
-    }
+    });
     Ok(painted)
 }
 
@@ -204,37 +219,38 @@ pub fn render_full_approx(
     y: u32,
     out_path: &std::path::Path,
     quiet: bool,
-    cache: &mut TableCache,
+    cache: &TableCache,
     textures: &TextureCatalog,
     tree_markers: &TreeMarkerCatalog,
     webp_quality: f32,
+    timers: &mut Option<&mut StageTimers>,
 ) -> Result<()> {
     let bounds = tile_bounds_3857(x, y, z);
     let mut pixmap = empty_pixmap()?;
 
-    paint_landuse(client, &mut pixmap, bounds, textures)?;
+    paint_landuse(client, &mut pixmap, bounds, z, textures, timers)?;
     if cache.pitch {
-        paint_pitch(client, &mut pixmap, bounds)?;
+        paint_pitch(client, &mut pixmap, bounds, z, timers)?;
     }
     if cache.water_body {
-        paint_water_body(client, &mut pixmap, bounds)?;
+        paint_water_body(client, &mut pixmap, bounds, z, timers)?;
     }
     if cache.waterway {
-        paint_waterway(client, &mut pixmap, bounds)?;
+        paint_waterway(client, &mut pixmap, bounds, z, timers)?;
     }
     // Streets: path → service → highway_area (matches QGIS / MapLibre sandwich).
     if cache.highway {
-        paint_highway_path(client, &mut pixmap, bounds)?;
+        paint_highway_path(client, &mut pixmap, bounds, z, timers)?;
     }
     if cache.highway_service {
-        paint_highway_service(client, &mut pixmap, bounds)?;
+        paint_highway_service(client, &mut pixmap, bounds, z, timers)?;
     }
-    paint_highway_area(client, &mut pixmap, bounds, textures)?;
+    paint_highway_area(client, &mut pixmap, bounds, z, textures, timers)?;
     if cache.road_marking_polygon {
-        paint_road_marking_polygon(client, &mut pixmap, bounds)?;
+        paint_road_marking_polygon(client, &mut pixmap, bounds, z, timers)?;
     }
     if cache.building_shade {
-        paint_building_shade(client, &mut pixmap, bounds)?;
+        paint_building_shade(client, &mut pixmap, bounds, z, timers)?;
     }
     // QGIS paints `building_parts_dissolved_height` only (no separate `building` maplayer).
     if cache.building_parts {
@@ -242,21 +258,23 @@ pub fn render_full_approx(
             client,
             &mut pixmap,
             bounds,
+            z,
             cache.building_parts_has_height,
+            timers,
         )?;
     }
     if cache.tree {
-        paint_tree(client, &mut pixmap, bounds, cache, tree_markers)?;
+        paint_tree(client, &mut pixmap, bounds, z, cache, tree_markers, timers)?;
     }
 
-    save_tile(&pixmap, out_path, webp_quality)?;
+    save_tile(&pixmap, out_path, webp_quality, timers)?;
     if !quiet {
         eprintln!("rendered {z}/{x}/{y} → {} (full-approx)", out_path.display());
     }
     Ok(())
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct TableCache {
     pub pitch: bool,
     pub water_body: bool,
@@ -299,123 +317,155 @@ fn paint_landuse(
     client: &mut Client,
     pixmap: &mut Pixmap,
     bounds: TileBounds,
+    z: u32,
     textures: &TextureCatalog,
+    timers: &mut Option<&mut StageTimers>,
 ) -> Result<()> {
     let env = envelope_sql();
-    let wkb_sql = clip_polygon_wkb_sql("geom");
+    let wkb_sql = clip_polygon_wkb_sql_fast("geom", z);
     let sql = format!(
         r#"
         SELECT class, surface, {wkb_sql} AS wkb
         FROM landuse
         WHERE geom && {env}
-          AND NOT ST_IsEmpty(ST_ClipByBox2D(geom, {env}))
         ORDER BY COALESCE(layer, 0), osm_id
         "#
     );
-    let rows = client.query(
-        &sql,
-        &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
-    )?;
-    for row in &rows {
-        let class: Option<String> = row.get("class");
-        let surface: Option<String> = row.try_get("surface").ok().flatten();
-        let Some(wkb) = wkb_from_row(row, "wkb") else {
-            continue;
-        };
-        let base = fill_for_landuse(class.as_deref());
-        let texture = surface
-            .as_deref()
-            .and_then(landuse_surface_texture)
-            .or_else(|| class.as_deref().and_then(landuse_class_texture))
-            .and_then(|(id, opacity)| textures.get(id).map(|t| (t, opacity)));
-        match decode_wkb(&wkb) {
-            Ok(geom) => fill_polygons_textured(pixmap, bounds, geom, base, texture),
-            Err(e) => eprintln!("warn: skip landuse WKB: {e:?}"),
+    let rows = crate::profile::time_stage(timers, StageSlot::Sql, || {
+        client.query(
+            &sql,
+            &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
+        )
+    })?;
+    crate::profile::time_stage(timers, StageSlot::Paint, || {
+        for row in &rows {
+            let class: Option<String> = row.get("class");
+            let surface: Option<String> = row.try_get("surface").ok().flatten();
+            let Some(wkb) = wkb_from_row(row, "wkb") else {
+                continue;
+            };
+            let base = fill_for_landuse(class.as_deref());
+            let texture = surface
+                .as_deref()
+                .and_then(landuse_surface_texture)
+                .or_else(|| class.as_deref().and_then(landuse_class_texture))
+                .and_then(|(id, opacity)| textures.get(id).map(|t| (t, opacity)));
+            match decode_wkb(&wkb) {
+                Ok(geom) => fill_polygons_textured(pixmap, bounds, geom, base, texture),
+                Err(e) => eprintln!("warn: skip landuse WKB: {e:?}"),
+            }
         }
-    }
+    });
     Ok(())
 }
 
-fn paint_pitch(client: &mut Client, pixmap: &mut Pixmap, bounds: TileBounds) -> Result<()> {
+fn paint_pitch(
+    client: &mut Client,
+    pixmap: &mut Pixmap,
+    bounds: TileBounds,
+    z: u32,
+    timers: &mut Option<&mut StageTimers>,
+) -> Result<()> {
     let env = envelope_sql();
-    let wkb_sql = clip_polygon_wkb_sql("geom");
+    let wkb_sql = clip_polygon_wkb_sql_fast("geom", z);
     let sql = format!(
         r#"
         SELECT {wkb_sql} AS wkb
         FROM pitch
         WHERE geom && {env}
-          AND NOT ST_IsEmpty(ST_ClipByBox2D(geom, {env}))
         ORDER BY COALESCE(layer, 0), osm_id
         "#
     );
-    let rows = client.query(
-        &sql,
-        &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
-    )?;
-    for row in &rows {
-        let Some(wkb) = wkb_from_row(row, "wkb") else {
-            continue;
-        };
-        if let Ok(geom) = decode_wkb(&wkb) {
-            fill_polygons(pixmap, bounds, geom, fill_pitch());
+    let rows = crate::profile::time_stage(timers, StageSlot::Sql, || {
+        client.query(
+            &sql,
+            &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
+        )
+    })?;
+    crate::profile::time_stage(timers, StageSlot::Paint, || {
+        for row in &rows {
+            let Some(wkb) = wkb_from_row(row, "wkb") else {
+                continue;
+            };
+            if let Ok(geom) = decode_wkb(&wkb) {
+                fill_polygons(pixmap, bounds, geom, fill_pitch());
+            }
         }
-    }
+    });
     Ok(())
 }
 
-fn paint_water_body(client: &mut Client, pixmap: &mut Pixmap, bounds: TileBounds) -> Result<()> {
+fn paint_water_body(
+    client: &mut Client,
+    pixmap: &mut Pixmap,
+    bounds: TileBounds,
+    z: u32,
+    timers: &mut Option<&mut StageTimers>,
+) -> Result<()> {
     let env = envelope_sql();
-    let wkb_sql = clip_polygon_wkb_sql("geom");
+    let wkb_sql = clip_polygon_wkb_sql_fast("geom", z);
     let sql = format!(
         r#"
         SELECT {wkb_sql} AS wkb
         FROM water_body_dissolved
         WHERE geom && {env}
-          AND NOT ST_IsEmpty(ST_ClipByBox2D(geom, {env}))
         "#
     );
-    let rows = client.query(
-        &sql,
-        &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
-    )?;
-    for row in &rows {
-        let Some(wkb) = wkb_from_row(row, "wkb") else {
-            continue;
-        };
-        if let Ok(geom) = decode_wkb(&wkb) {
-            fill_polygons(pixmap, bounds, geom, fill_water());
+    let rows = crate::profile::time_stage(timers, StageSlot::Sql, || {
+        client.query(
+            &sql,
+            &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
+        )
+    })?;
+    crate::profile::time_stage(timers, StageSlot::Paint, || {
+        for row in &rows {
+            let Some(wkb) = wkb_from_row(row, "wkb") else {
+                continue;
+            };
+            if let Ok(geom) = decode_wkb(&wkb) {
+                fill_polygons(pixmap, bounds, geom, fill_water());
+            }
         }
-    }
+    });
     Ok(())
 }
 
-fn paint_waterway(client: &mut Client, pixmap: &mut Pixmap, bounds: TileBounds) -> Result<()> {
+fn paint_waterway(
+    client: &mut Client,
+    pixmap: &mut Pixmap,
+    bounds: TileBounds,
+    z: u32,
+    timers: &mut Option<&mut StageTimers>,
+) -> Result<()> {
     let env = envelope_sql();
-    let wkb_sql = clip_line_wkb_sql("geom");
+    let wkb_sql = clip_line_wkb_sql_fast("geom", z);
     let sql = format!(
         r#"
         SELECT width, {wkb_sql} AS wkb
         FROM waterway_clipped
         WHERE geom && {env}
-          AND NOT ST_IsEmpty(ST_ClipByBox2D(geom, {env}))
         "#
     );
-    let rows = client.query(
-        &sql,
-        &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
-    )?;
-    for row in &rows {
-        let width_m = opt_f32(row, "width")
-            .filter(|w| *w > 0.0)
-            .map(f64::from)
-            .unwrap_or(2.0);
-        let Some(wkb) = wkb_from_row(row, "wkb") else {
-            continue;
-        };
-        if let Ok(geom) = decode_wkb(&wkb) {
-            stroke_lines(pixmap, bounds, geom, stroke_waterway(), width_m);
+    let rows = crate::profile::time_stage(timers, StageSlot::Sql, || {
+        client.query(
+            &sql,
+            &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
+        )
+    })?;
+    crate::profile::time_stage(timers, StageSlot::Paint, || {
+        for row in &rows {
+            let width_m = opt_f32(row, "width")
+                .filter(|w| *w > 0.0)
+                .map(f64::from)
+                .unwrap_or(2.0);
+            let Some(wkb) = wkb_from_row(row, "wkb") else {
+                continue;
+            };
+            if let Ok(geom) = decode_wkb(&wkb) {
+                stroke_lines(pixmap, bounds, geom, stroke_waterway(), width_m);
+            }
         }
-    }
+    });
     Ok(())
 }
 
@@ -423,91 +473,106 @@ fn paint_highway_service(
     client: &mut Client,
     pixmap: &mut Pixmap,
     bounds: TileBounds,
+    z: u32,
+    timers: &mut Option<&mut StageTimers>,
 ) -> Result<()> {
     let env = envelope_sql();
-    let wkb_sql = clip_line_wkb_sql("geom");
+    let wkb_sql = clip_line_wkb_sql_fast("geom", z);
     let sql = format!(
         r#"
         SELECT class, width, {wkb_sql} AS wkb
         FROM highway_service
         WHERE geom && {env}
-          AND NOT ST_IsEmpty(ST_ClipByBox2D(geom, {env}))
         ORDER BY COALESCE(layer, 0)
         "#
     );
-    let rows = client.query(
-        &sql,
-        &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
-    )?;
-    for row in &rows {
-        let class: Option<String> = row.try_get("class").ok().flatten();
-        let default_m = match class.as_deref() {
-            None | Some("alley") => 4.0,
-            _ => 3.0,
-        };
-        let width_m = opt_f32(row, "width")
-            .filter(|w| *w > 0.0)
-            .map(f64::from)
-            .unwrap_or(default_m);
-        let Some(wkb) = wkb_from_row(row, "wkb") else {
-            continue;
-        };
-        if let Ok(geom) = decode_wkb(&wkb) {
-            let width_map = width_m * mercator_scale(bounds);
-            stroke_lines(pixmap, bounds, geom, stroke_service(), width_map);
+    let rows = crate::profile::time_stage(timers, StageSlot::Sql, || {
+        client.query(
+            &sql,
+            &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
+        )
+    })?;
+    crate::profile::time_stage(timers, StageSlot::Paint, || {
+        for row in &rows {
+            let class: Option<String> = row.try_get("class").ok().flatten();
+            let default_m = match class.as_deref() {
+                None | Some("alley") => 4.0,
+                _ => 3.0,
+            };
+            let width_m = opt_f32(row, "width")
+                .filter(|w| *w > 0.0)
+                .map(f64::from)
+                .unwrap_or(default_m);
+            let Some(wkb) = wkb_from_row(row, "wkb") else {
+                continue;
+            };
+            if let Ok(geom) = decode_wkb(&wkb) {
+                let width_map = width_m * mercator_scale(bounds);
+                stroke_lines(pixmap, bounds, geom, stroke_service(), width_map);
+            }
         }
-    }
+    });
     Ok(())
 }
 
-fn paint_highway_path(client: &mut Client, pixmap: &mut Pixmap, bounds: TileBounds) -> Result<()> {
+fn paint_highway_path(
+    client: &mut Client,
+    pixmap: &mut Pixmap,
+    bounds: TileBounds,
+    z: u32,
+    timers: &mut Option<&mut StageTimers>,
+) -> Result<()> {
     let env = envelope_sql();
-    let wkb_sql = clip_line_wkb_sql("geom");
+    let wkb_sql = clip_line_wkb_sql_fast("geom", z);
     let sql = format!(
         r#"
         SELECT highway, width, {wkb_sql} AS wkb
         FROM highway
         WHERE type = 'path'
           AND geom && {env}
-          AND NOT ST_IsEmpty(ST_ClipByBox2D(geom, {env}))
         ORDER BY COALESCE(layer, 0), osm_id
         "#
     );
-    let rows = client.query(
-        &sql,
-        &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
-    )?;
-    for row in &rows {
-        let highway: Option<String> = row.try_get("highway").ok().flatten();
-        let width_m = opt_f32(row, "width")
-            .filter(|w| *w > 0.0)
-            .map(f64::from)
-            .unwrap_or(1.8);
-        let Some(wkb) = wkb_from_row(row, "wkb") else {
-            continue;
-        };
-        if let Ok(geom) = decode_wkb(&wkb) {
-            let width_map = width_m * mercator_scale(bounds);
-            stroke_lines(
-                pixmap,
-                bounds,
-                geom,
-                stroke_path(highway.as_deref()),
-                width_map,
-            );
+    let rows = crate::profile::time_stage(timers, StageSlot::Sql, || {
+        client.query(
+            &sql,
+            &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
+        )
+    })?;
+    crate::profile::time_stage(timers, StageSlot::Paint, || {
+        for row in &rows {
+            let highway: Option<String> = row.try_get("highway").ok().flatten();
+            let width_m = opt_f32(row, "width")
+                .filter(|w| *w > 0.0)
+                .map(f64::from)
+                .unwrap_or(1.8);
+            let Some(wkb) = wkb_from_row(row, "wkb") else {
+                continue;
+            };
+            if let Ok(geom) = decode_wkb(&wkb) {
+                let width_map = width_m * mercator_scale(bounds);
+                stroke_lines(
+                    pixmap,
+                    bounds,
+                    geom,
+                    stroke_path(highway.as_deref()),
+                    width_map,
+                );
+            }
         }
-    }
+    });
     Ok(())
 }
 
-/// QGIS `road_marking_polygon` surface_colour / coloured crossing — α 0.45.
 fn paint_road_marking_polygon(
     client: &mut Client,
     pixmap: &mut Pixmap,
     bounds: TileBounds,
+    z: u32,
+    timers: &mut Option<&mut StageTimers>,
 ) -> Result<()> {
     let env = envelope_sql();
-    let wkb_sql = clip_polygon_wkb_sql("geom");
+    let wkb_sql = clip_polygon_wkb_sql_fast("geom", z);
     let sql = format!(
         r#"
         SELECT road_marking, colour, {wkb_sql} AS wkb
@@ -516,27 +581,30 @@ fn paint_road_marking_polygon(
           AND road_marking IN ('surface_colour', 'crossing')
           AND colour IS NOT NULL
           AND colour NOT IN ('', 'no', 'none')
-          AND NOT ST_IsEmpty(ST_ClipByBox2D(geom, {env}))
         ORDER BY osm_id
         "#
     );
-    let rows = client.query(
-        &sql,
-        &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
-    )?;
-    for row in &rows {
-        let colour: Option<String> = row.try_get("colour").ok().flatten();
-        let Some(mut fill) = surface_colour(colour.as_deref()) else {
-            continue;
-        };
-        fill.set_alpha(0.45);
-        let Some(wkb) = wkb_from_row(row, "wkb") else {
-            continue;
-        };
-        if let Ok(geom) = decode_wkb(&wkb) {
-            fill_polygons(pixmap, bounds, geom, fill);
+    let rows = crate::profile::time_stage(timers, StageSlot::Sql, || {
+        client.query(
+            &sql,
+            &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
+        )
+    })?;
+    crate::profile::time_stage(timers, StageSlot::Paint, || {
+        for row in &rows {
+            let colour: Option<String> = row.try_get("colour").ok().flatten();
+            let Some(mut fill) = surface_colour(colour.as_deref()) else {
+                continue;
+            };
+            fill.set_alpha(0.45);
+            let Some(wkb) = wkb_from_row(row, "wkb") else {
+                continue;
+            };
+            if let Ok(geom) = decode_wkb(&wkb) {
+                fill_polygons(pixmap, bounds, geom, fill);
+            }
         }
-    }
+    });
     Ok(())
 }
 
@@ -544,21 +612,24 @@ fn paint_building_shade(
     client: &mut Client,
     pixmap: &mut Pixmap,
     bounds: TileBounds,
+    z: u32,
+    timers: &mut Option<&mut StageTimers>,
 ) -> Result<()> {
     let env = envelope_sql();
-    let wkb_sql = clip_polygon_wkb_sql("geom");
+    let wkb_sql = clip_polygon_wkb_sql_fast("geom", z);
     let sql = format!(
         r#"
         SELECT {wkb_sql} AS wkb
         FROM building_shade
         WHERE geom && {env}
-          AND NOT ST_IsEmpty(ST_ClipByBox2D(geom, {env}))
         "#
     );
-    let rows = client.query(
-        &sql,
-        &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
-    )?;
+    let rows = crate::profile::time_stage(timers, StageSlot::Sql, || {
+        client.query(
+            &sql,
+            &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
+        )
+    })?;
     let mut geoms = Vec::new();
     for row in &rows {
         let Some(wkb) = wkb_from_row(row, "wkb") else {
@@ -569,7 +640,7 @@ fn paint_building_shade(
         }
     }
     // QGIS: dropShadow enabled, drawSource DISABLED — soft shadow only.
-    fill_polygons_shadow_only(pixmap, bounds, &geoms, DropShadow::building_shade());
+    fill_polygons_shadow_only(pixmap, bounds, &geoms, DropShadow::building_shade(), timers);
     Ok(())
 }
 
@@ -577,10 +648,12 @@ fn paint_building_parts(
     client: &mut Client,
     pixmap: &mut Pixmap,
     bounds: TileBounds,
+    z: u32,
     order_by_height: bool,
+    timers: &mut Option<&mut StageTimers>,
 ) -> Result<()> {
     let env = envelope_sql();
-    let wkb_sql = clip_polygon_wkb_sql("geom");
+    let wkb_sql = clip_polygon_wkb_sql_fast("geom", z);
     let order = if order_by_height {
         "ORDER BY COALESCE(height, 0)"
     } else {
@@ -591,14 +664,15 @@ fn paint_building_parts(
         SELECT {wkb_sql} AS wkb
         FROM building_parts_dissolved_height
         WHERE geom && {env}
-          AND NOT ST_IsEmpty(ST_ClipByBox2D(geom, {env}))
         {order}
         "#
     );
-    let rows = client.query(
-        &sql,
-        &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
-    )?;
+    let rows = crate::profile::time_stage(timers, StageSlot::Sql, || {
+        client.query(
+            &sql,
+            &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
+        )
+    })?;
     // QGIS: flat `#ffe9e9` @ symbol α 0.7 + dropShadow (no ShapeburstFill).
     let mut color = fill_building();
     color.set_alpha(0.78);
@@ -612,7 +686,7 @@ fn paint_building_parts(
             Err(e) => eprintln!("warn: skip building_parts WKB: {e:?}"),
         }
     }
-    fill_polygons_batch_with_shadow(pixmap, bounds, &geoms, color, DropShadow::building());
+    fill_polygons_batch_with_shadow(pixmap, bounds, &geoms, color, DropShadow::building(), timers);
     Ok(())
 }
 
@@ -620,8 +694,10 @@ fn paint_tree(
     client: &mut Client,
     pixmap: &mut Pixmap,
     bounds: TileBounds,
+    _z: u32,
     cache: &TableCache,
     tree_markers: &TreeMarkerCatalog,
+    timers: &mut Option<&mut StageTimers>,
 ) -> Result<()> {
     let env = envelope_sql();
     let wkb_sql = clip_point_wkb_sql("geom");
@@ -650,12 +726,15 @@ fn paint_tree(
         ORDER BY osm_id
         "#
     );
-    let rows = client.query(
-        &sql,
-        &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
-    )?;
+    let rows = crate::profile::time_stage(timers, StageSlot::Sql, || {
+        client.query(
+            &sql,
+            &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
+        )
+    })?;
     let mscale = mercator_scale(bounds);
-    for row in &rows {
+    crate::profile::time_stage(timers, StageSlot::Paint, || {
+        for row in &rows {
         let natural: Option<String> = row.try_get("natural_tag").ok().flatten();
         let diameter = opt_f32(row, "diameter_crown");
         let circumference = opt_f32(row, "circumference");
@@ -731,5 +810,6 @@ fn paint_tree(
             );
         }
     }
+    });
     Ok(())
 }

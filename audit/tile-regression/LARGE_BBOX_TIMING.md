@@ -71,10 +71,14 @@ Those starter numbers used a smaller area and (for the 332 ms/tile bench) a cold
 ## Caveats (read before citing speedups)
 
 1. **Style depth** — QGIS paints labels, SVG furniture, RasterFill textures, full effect stacks. Rust `full-approx` is landuse → water → roads → buildings (+ soft shadow) → trees. Throughput is not parity.
-2. **Parallelism** — QGIS: 2 workers. Rust: single-threaded. A multi-threaded Rust would widen the gap.
+2. **Parallelism** — QGIS: 2 workers + metatile 8. Rust now supports `--workers N` (see [`SPEED_ITERATIONS.md`](SPEED_ITERATIONS.md)).
 3. **Format** — Rust PNG vs QGIS JPG (encode cost differs).
-4. **Metatile** — QGIS amortizes project/paint over 8×8 tiles; Rust paints one 256² tile at a time.
+4. **Metatile** — QGIS amortizes project/paint over 8×8 tiles; Rust still paints one 256² tile at a time (metatile deferred).
 5. **Coverage** — Tile counts match at every zoom (103 915 each). Compare UI serves both from Vite.
+
+## Speed iterations (2026-08-01)
+
+After `--workers 8` + SQL WHERE lightening + profile tooling: **z18–z20 wall 223 s** vs QGIS **1568 s** → **~7.0×** (was ~1.8× at 1 thread). Full write-up: [`SPEED_ITERATIONS.md`](SPEED_ITERATIONS.md).
 
 ## Preview / clean compare
 
@@ -100,4 +104,6 @@ and zoom 15–20 — both raster panes resolve tiles across the large bbox (incl
 
 ## Verdict (performance only)
 
-On the production-shaped large bbox, Rust `full-approx` finished **all six zooms (~104k tiles) in ~15 minutes**. Against QGIS full style on the same host (metatile 8, 2 workers, jpg), matched z18–z20 wall is **~1.8×** in Rust’s favour (15 min vs ~26 min for those three zooms alone). That remains a real throughput win — separate from visual parity (~11% pixelmatch on the small full-style smoke suite).
+**Updated 2026-08-01 (speed iterations):** with `--workers 8`, Rust full-approx z18–z20 finishes in **~3.7 minutes** vs QGIS **~26 minutes** on the same bbox → **~7×**. See [`SPEED_ITERATIONS.md`](SPEED_ITERATIONS.md).
+
+Earlier single-thread full z15–z20 (~15 min, ~1.8× vs QGIS on z18–z20) remains a useful baseline for “one core” comparisons.

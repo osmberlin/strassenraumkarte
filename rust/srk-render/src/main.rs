@@ -11,13 +11,17 @@
 mod layers;
 mod paint;
 mod palette;
+mod profile;
 mod textures;
 mod tile;
 mod tree_markers;
 
 use std::collections::BTreeMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::{Arc, Mutex};
+use std::thread;
 use std::time::Instant;
 
 use anyhow::{bail, Context, Result};
@@ -26,6 +30,7 @@ use postgres::{Client, Config, NoTls};
 use serde::Serialize;
 
 use layers::{render_full_approx, render_highway_area, LayerPreset, TableCache};
+use profile::{StageProfile, StageTimers};
 use textures::TextureCatalog;
 use tree_markers::TreeMarkerCatalog;
 use tile::{enumerate_bbox_tiles, parse_bbox, parse_tile_spec};
@@ -76,6 +81,19 @@ struct Cli {
     #[arg(long)]
     timing_json: bool,
 
+    /// Per-stage timing breakdown (sql/paint/shapeburst/shadow/encode) in timing.json + stderr.
+    #[arg(long)]
+    profile: bool,
+
+    /// Parallel tile workers (each opens its own DB connection). Default 1 for harness stability;
+    /// use 4–8 for large bbox benches (`SRK_WORKERS` env override).
+    #[arg(long, env = "SRK_WORKERS", default_value_t = 1)]
+    workers: usize,
+
+    /// Metatile size (deferred: only 1 is supported today).
+    #[arg(long, default_value_t = 1)]
+    metatile: u32,
+
     #[arg(long, env = "DB_HOST", default_value = "localhost")]
     db_host: String,
     #[arg(long, env = "DB_PORT", default_value = "5433")]
@@ -112,8 +130,33 @@ struct TimingSummary {
     format: String,
     quality: Option<f32>,
     layers: Vec<String>,
+    workers: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    stages: Option<StageProfile>,
     /// Per-zoom breakdown (keys as decimal zoom strings for stable JSON).
     by_zoom: BTreeMap<String, ZoomTiming>,
+}
+
+struct TileJob {
+    z: u32,
+    x: u32,
+    y: u32,
+    out_path: PathBuf,
+}
+
+struct TileResult {
+    z: u32,
+    wall_ms: u64,
+    stages: StageTimers,
+}
+
+struct SharedState {
+    preset: LayerPreset,
+    table_cache: Option<Arc<TableCache>>,
+    texture_catalog: Arc<TextureCatalog>,
+    tree_markers: Arc<TreeMarkerCatalog>,
+    webp_quality: f32,
+    profile: bool,
 }
 
 fn connect(cli: &Cli) -> Result<Client> {
@@ -182,8 +225,265 @@ fn normalize_format(raw: &str) -> Result<&'static str> {
     }
 }
 
+fn render_one_tile(
+    client: &mut Client,
+    shared: &SharedState,
+    z: u32,
+    x: u32,
+    y: u32,
+    out_path: &Path,
+    quiet: bool,
+    timers: &mut Option<&mut StageTimers>,
+) -> Result<()> {
+    match shared.preset {
+        LayerPreset::HighwayArea => render_highway_area(
+            client,
+            z,
+            x,
+            y,
+            out_path,
+            quiet,
+            shared.texture_catalog.as_ref(),
+            shared.webp_quality,
+            timers,
+        )?,
+        LayerPreset::FullApprox => {
+            let cache = shared
+                .table_cache
+                .as_ref()
+                .expect("table cache for full-approx");
+            render_full_approx(
+                client,
+                z,
+                x,
+                y,
+                out_path,
+                quiet,
+                cache.as_ref(),
+                shared.texture_catalog.as_ref(),
+                shared.tree_markers.as_ref(),
+                shared.webp_quality,
+                timers,
+            )?;
+        }
+    }
+    Ok(())
+}
+
+fn worker_loop(
+    cli: Cli,
+    rx: Arc<Mutex<Receiver<TileJob>>>,
+    shared: Arc<SharedState>,
+    results: Sender<TileResult>,
+) {
+    let mut client = match connect(&cli) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("worker connect failed: {e:#}");
+            return;
+        }
+    };
+    loop {
+        let job = {
+            let guard = rx.lock().expect("job queue mutex");
+            match guard.recv() {
+                Ok(j) => j,
+                Err(_) => break,
+            }
+        };
+        let started = Instant::now();
+        let mut tile_timers = StageTimers::default();
+        let mut timer_slot = if shared.profile {
+            Some(&mut tile_timers)
+        } else {
+            None
+        };
+        let render_result = render_one_tile(
+            &mut client,
+            shared.as_ref(),
+            job.z,
+            job.x,
+            job.y,
+            &job.out_path,
+            true,
+            &mut timer_slot,
+        );
+        if let Err(e) = render_result {
+            eprintln!(
+                "tile {}/{} failed: {e:#}",
+                job.z,
+                format!("{}/{}", job.x, job.y)
+            );
+        }
+        let _ = results.send(TileResult {
+            z: job.z,
+            wall_ms: started.elapsed().as_millis() as u64,
+            stages: tile_timers,
+        });
+    }
+}
+
+fn run_sequential(
+    cli: &Cli,
+    shared: &SharedState,
+    tiles: &[(u32, u32, u32)],
+    format: &str,
+    tile_count: usize,
+) -> Result<(usize, BTreeMap<u32, u64>, BTreeMap<u32, usize>, StageTimers)> {
+    let mut client = connect(cli)?;
+    let started = Instant::now();
+    let mut tiles_written = 0usize;
+    let mut zoom_wall_ms: BTreeMap<u32, u64> = BTreeMap::new();
+    let mut zoom_tiles: BTreeMap<u32, usize> = BTreeMap::new();
+    let mut total_stages = StageTimers::default();
+
+    for (z, x, y) in tiles {
+        let tile_started = Instant::now();
+        let out_path = cli.out.join(format!("{z}/{x}/{y}.{format}"));
+        let mut tile_timers = StageTimers::default();
+        let mut timer_slot = if cli.profile {
+            Some(&mut tile_timers)
+        } else {
+            None
+        };
+        render_one_tile(
+            &mut client,
+            shared,
+            *z,
+            *x,
+            *y,
+            &out_path,
+            cli.quiet,
+            &mut timer_slot,
+        )?;
+        if cli.profile {
+            total_stages.merge(&tile_timers);
+        }
+        tiles_written += 1;
+        *zoom_tiles.entry(*z).or_insert(0) += 1;
+        *zoom_wall_ms.entry(*z).or_insert(0) += tile_started.elapsed().as_millis() as u64;
+
+        if tiles_written % 500 == 0 {
+            let elapsed = started.elapsed().as_millis() as u64;
+            eprintln!(
+                "progress: {tiles_written}/{tile_count} wall_ms={elapsed} (~{:.1} ms/tile)",
+                elapsed as f64 / tiles_written as f64
+            );
+        }
+    }
+
+    if !cli.quiet {
+        for (z, n) in &zoom_tiles {
+            let ms = *zoom_wall_ms.get(z).unwrap_or(&0);
+            eprintln!(
+                "zoom done: z{z} tiles={n} wall_ms={ms} ms_per_tile={:.2}",
+                if *n > 0 {
+                    ms as f64 / *n as f64
+                } else {
+                    0.0
+                }
+            );
+        }
+    }
+
+    Ok((tiles_written, zoom_wall_ms, zoom_tiles, total_stages))
+}
+
+fn run_parallel(
+    cli: &Cli,
+    shared: Arc<SharedState>,
+    tiles: &[(u32, u32, u32)],
+    format: &str,
+    workers: usize,
+    tile_count: usize,
+) -> Result<(usize, BTreeMap<u32, u64>, BTreeMap<u32, usize>, StageTimers)> {
+    let (job_tx, job_rx) = mpsc::channel::<TileJob>();
+    let (result_tx, result_rx) = mpsc::channel::<TileResult>();
+    let job_rx = Arc::new(Mutex::new(job_rx));
+
+    let mut handles = Vec::new();
+    for _ in 0..workers {
+        let rx = Arc::clone(&job_rx);
+        let tx = result_tx.clone();
+        let cli_clone = Cli {
+            tiles: cli.tiles.clone(),
+            bbox: cli.bbox.clone(),
+            zmin: cli.zmin,
+            zmax: cli.zmax,
+            layers: cli.layers.clone(),
+            out: cli.out.clone(),
+            format: cli.format.clone(),
+            quality: cli.quality,
+            quiet: cli.quiet,
+            timing_json: cli.timing_json,
+            profile: cli.profile,
+            workers: cli.workers,
+            metatile: cli.metatile,
+            db_host: cli.db_host.clone(),
+            db_port: cli.db_port,
+            db_user: cli.db_user.clone(),
+            db_name: cli.db_name.clone(),
+            db_password: cli.db_password.clone(),
+            database_url: cli.database_url.clone(),
+        };
+        let shared_clone = Arc::clone(&shared);
+        handles.push(thread::spawn(move || {
+            worker_loop(cli_clone, rx, shared_clone, tx);
+        }));
+    }
+    drop(result_tx);
+
+    for (z, x, y) in tiles {
+        job_tx.send(TileJob {
+            z: *z,
+            x: *x,
+            y: *y,
+            out_path: cli.out.join(format!("{z}/{x}/{y}.{format}")),
+        })?;
+    }
+    drop(job_tx);
+
+    let started = Instant::now();
+    let mut zoom_wall_ms: BTreeMap<u32, u64> = BTreeMap::new();
+    let mut zoom_tiles: BTreeMap<u32, usize> = BTreeMap::new();
+    let mut total_stages = StageTimers::default();
+    let mut tiles_written = 0usize;
+
+    for _ in 0..tile_count {
+        let result = result_rx.recv().context("worker result channel closed")?;
+        tiles_written += 1;
+        *zoom_tiles.entry(result.z).or_insert(0) += 1;
+        *zoom_wall_ms.entry(result.z).or_insert(0) += result.wall_ms;
+        total_stages.merge(&result.stages);
+
+        if tiles_written % 500 == 0 {
+            let elapsed = started.elapsed().as_millis() as u64;
+            eprintln!(
+                "progress: {tiles_written}/{tile_count} wall_ms={elapsed} (~{:.1} ms/tile)",
+                elapsed as f64 / tiles_written as f64
+            );
+        }
+    }
+
+    for handle in handles {
+        let _ = handle.join();
+    }
+
+    Ok((tiles_written, zoom_wall_ms, zoom_tiles, total_stages))
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
+    if cli.metatile != 1 {
+        bail!(
+            "--metatile {} is not supported yet (only --metatile 1; N=4 metatile rendering deferred)",
+            cli.metatile
+        );
+    }
+    if cli.workers == 0 {
+        bail!("--workers must be >= 1");
+    }
+
     let format = normalize_format(&cli.format)?;
     if !(0.0..=100.0).contains(&cli.quality) {
         bail!("--quality must be between 0 and 100");
@@ -193,104 +493,37 @@ fn main() -> Result<()> {
     let (tiles, bbox) = collect_tiles(&cli)?;
     let tile_count = tiles.len();
 
-    let mut client = connect(&cli)?;
     fs::create_dir_all(&cli.out)?;
 
-    let mut table_cache = if preset == LayerPreset::FullApprox {
-        Some(TableCache::probe(&mut client)?)
+    let table_cache = if preset == LayerPreset::FullApprox {
+        let mut client = connect(&cli)?;
+        Some(Arc::new(TableCache::probe(&mut client)?))
     } else {
         None
     };
-    let texture_catalog = TextureCatalog::load()?;
-    let tree_markers = TreeMarkerCatalog::load().unwrap_or_else(|e| {
-        eprintln!("warn: {e:#}; using procedural tree crowns");
-        TreeMarkerCatalog::fallback()
+    let texture_catalog = Arc::new(TextureCatalog::load()?);
+    let tree_markers = Arc::new(
+        TreeMarkerCatalog::load().unwrap_or_else(|e| {
+            eprintln!("warn: {e:#}; using procedural tree crowns");
+            TreeMarkerCatalog::fallback()
+        }),
+    );
+
+    let shared = Arc::new(SharedState {
+        preset,
+        table_cache,
+        texture_catalog,
+        tree_markers,
+        webp_quality: cli.quality,
+        profile: cli.profile,
     });
 
     let started = Instant::now();
-    let mut tiles_written = 0usize;
-    let mut zoom_wall_ms: BTreeMap<u32, u64> = BTreeMap::new();
-    let mut zoom_tiles: BTreeMap<u32, usize> = BTreeMap::new();
-    let mut zoom_started = Instant::now();
-    let mut current_z: Option<u32> = None;
-    for (z, x, y) in tiles {
-        if current_z != Some(z) {
-            if let Some(prev) = current_z {
-                let elapsed = zoom_started.elapsed().as_millis() as u64;
-                *zoom_wall_ms.entry(prev).or_insert(0) += elapsed;
-                if !cli.quiet {
-                    let n = *zoom_tiles.get(&prev).unwrap_or(&0);
-                    let ms = *zoom_wall_ms.get(&prev).unwrap_or(&0);
-                    eprintln!(
-                        "zoom done: z{prev} tiles={n} wall_ms={ms} ms_per_tile={:.2}",
-                        if n > 0 {
-                            ms as f64 / n as f64
-                        } else {
-                            0.0
-                        }
-                    );
-                }
-            }
-            current_z = Some(z);
-            zoom_started = Instant::now();
-        }
-        let out_path = cli.out.join(format!("{z}/{x}/{y}.{format}"));
-        match preset {
-            LayerPreset::HighwayArea => {
-                render_highway_area(
-                    &mut client,
-                    z,
-                    x,
-                    y,
-                    &out_path,
-                    cli.quiet,
-                    &texture_catalog,
-                    cli.quality,
-                )?;
-            }
-            LayerPreset::FullApprox => {
-                let cache = table_cache.as_mut().expect("table cache");
-                render_full_approx(
-                    &mut client,
-                    z,
-                    x,
-                    y,
-                    &out_path,
-                    cli.quiet,
-                    cache,
-                    &texture_catalog,
-                    &tree_markers,
-                    cli.quality,
-                )?;
-            }
-        }
-        tiles_written += 1;
-        *zoom_tiles.entry(z).or_insert(0) += 1;
-        // Progress every 500 tiles even when quiet (large bbox benches).
-        if tiles_written % 500 == 0 {
-            let elapsed = started.elapsed().as_millis() as u64;
-            eprintln!(
-                "progress: {tiles_written}/{tile_count} wall_ms={elapsed} (~{:.1} ms/tile)",
-                elapsed as f64 / tiles_written as f64
-            );
-        }
-    }
-    if let Some(prev) = current_z {
-        let elapsed = zoom_started.elapsed().as_millis() as u64;
-        *zoom_wall_ms.entry(prev).or_insert(0) += elapsed;
-        if !cli.quiet {
-            let n = *zoom_tiles.get(&prev).unwrap_or(&0);
-            let ms = *zoom_wall_ms.get(&prev).unwrap_or(&0);
-            eprintln!(
-                "zoom done: z{prev} tiles={n} wall_ms={ms} ms_per_tile={:.2}",
-                if n > 0 {
-                    ms as f64 / n as f64
-                } else {
-                    0.0
-                }
-            );
-        }
-    }
+    let (tiles_written, zoom_wall_ms, zoom_tiles, total_stages) = if cli.workers > 1 {
+        run_parallel(&cli, Arc::clone(&shared), &tiles, format, cli.workers, tile_count)?
+    } else {
+        run_sequential(&cli, shared.as_ref(), &tiles, format, tile_count)?
+    };
     let wall_ms = started.elapsed().as_millis() as u64;
     let ms_per_tile = if tile_count > 0 {
         wall_ms as f64 / tile_count as f64
@@ -320,6 +553,12 @@ fn main() -> Result<()> {
     } else {
         "tiles".into()
     };
+    let stages = if cli.profile {
+        Some(StageProfile::from(total_stages))
+    } else {
+        None
+    };
+
     let summary = TimingSummary {
         engine: "srk-render",
         scope,
@@ -337,12 +576,21 @@ fn main() -> Result<()> {
             None
         },
         layers: cli.layers.clone(),
+        workers: cli.workers,
+        stages: stages.clone(),
         by_zoom,
     };
 
     eprintln!(
-        "timing: engine=srk-render preset={preset:?} tiles={tile_count} wall_ms={wall_ms} ms_per_tile={ms_per_tile:.2}"
+        "timing: engine=srk-render preset={preset:?} tiles={tile_count} workers={} wall_ms={wall_ms} ms_per_tile={ms_per_tile:.2}",
+        cli.workers
     );
+    if let Some(ref s) = stages {
+        eprintln!(
+            "stages: sql_ms={} paint_ms={} shapeburst_ms={} shadow_ms={} encode_ms={}",
+            s.sql_ms, s.paint_ms, s.shapeburst_ms, s.shadow_ms, s.encode_ms
+        );
+    }
 
     let write_timing = cli.timing_json || bbox.is_some();
     if write_timing {
