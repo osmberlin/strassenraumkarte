@@ -70,9 +70,27 @@ export function streetLayers(): LayerSpecification[] {
         'line-blur': blurRamp as never,
       },
     })
+
+    // Surface textures from the packed sprite (w5). Rotation/scale approximations deferred.
+    for (const [surface, pattern, opacity] of [
+      ['asphalt', 'surface/asphalt', 0.06],
+      ['concrete', 'surface/concrete', 0.35],
+      ['concrete:plates', 'surface/concrete', 0.35],
+      ['paving_stones', 'surface/paving_stones', 0.1],
+      ['sett', 'surface/sett', 0.12],
+    ] as const) {
+      layers.push({
+        id: styleLayerId('highway_area', `pattern-${surface.replace(':', '-')}`, bucket.id),
+        type: 'fill',
+        ...withOsmBucket('highway_area', 15, bucket.id, ['==', ['get', 'surface'], surface]),
+        paint: {
+          'fill-pattern': pattern,
+          'fill-opacity': opacity,
+        },
+      })
+    }
   }
 
-  void allFilters
   return layers
 }
 

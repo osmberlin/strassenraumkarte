@@ -1,0 +1,177 @@
+{
+  "wetland": {
+    "x": 0,
+    "y": 0,
+    "width": 1990,
+    "height": 1524,
+    "pixelRatio": 2
+  },
+  "forest": {
+    "x": 0,
+    "y": 1524,
+    "width": 1024,
+    "height": 1024,
+    "pixelRatio": 2
+  },
+  "flowerbed": {
+    "x": 1024,
+    "y": 1524,
+    "width": 1024,
+    "height": 1024,
+    "pixelRatio": 2
+  },
+  "grass": {
+    "x": 0,
+    "y": 2548,
+    "width": 1200,
+    "height": 900,
+    "pixelRatio": 2
+  },
+  "surface/concrete": {
+    "x": 0,
+    "y": 3448,
+    "width": 900,
+    "height": 900,
+    "pixelRatio": 2
+  },
+  "surface/asphalt": {
+    "x": 900,
+    "y": 3448,
+    "width": 900,
+    "height": 900,
+    "pixelRatio": 2
+  },
+  "surface/paving_stones": {
+    "x": 0,
+    "y": 4348,
+    "width": 692,
+    "height": 822,
+    "pixelRatio": 2
+  },
+  "water": {
+    "x": 692,
+    "y": 4348,
+    "width": 800,
+    "height": 800,
+    "pixelRatio": 2
+  },
+  "surface/sett": {
+    "x": 1492,
+    "y": 4348,
+    "width": 512,
+    "height": 512,
+    "pixelRatio": 2
+  },
+  "sand": {
+    "x": 0,
+    "y": 5170,
+    "width": 1320,
+    "height": 436,
+    "pixelRatio": 2
+  },
+  "gravel": {
+    "x": 1320,
+    "y": 5170,
+    "width": 300,
+    "height": 300,
+    "pixelRatio": 2
+  },
+  "woodchips": {
+    "x": 1620,
+    "y": 5170,
+    "width": 300,
+    "height": 300,
+    "pixelRatio": 2
+  },
+  "pitches/soccer": {
+    "x": 1920,
+    "y": 5170,
+    "width": 128,
+    "height": 128,
+    "pixelRatio": 2
+  },
+  "pitches/tennis": {
+    "x": 0,
+    "y": 5606,
+    "width": 128,
+    "height": 128,
+    "pixelRatio": 2
+  },
+  "pitches/handball": {
+    "x": 128,
+    "y": 5606,
+    "width": 128,
+    "height": 128,
+    "pixelRatio": 2
+  },
+  "pitches/rugby_union": {
+    "x": 256,
+    "y": 5606,
+    "width": 128,
+    "height": 128,
+    "pixelRatio": 2
+  },
+  "pitches/badminton": {
+    "x": 384,
+    "y": 5606,
+    "width": 128,
+    "height": 128,
+    "pixelRatio": 2
+  },
+  "pitches/chess": {
+    "x": 512,
+    "y": 5606,
+    "width": 128,
+    "height": 128,
+    "pixelRatio": 2
+  },
+  "pitches/multi": {
+    "x": 640,
+    "y": 5606,
+    "width": 128,
+    "height": 128,
+    "pixelRatio": 2
+  },
+  "pitches/soccer_small": {
+    "x": 768,
+    "y": 5606,
+    "width": 128,
+    "height": 128,
+    "pixelRatio": 2
+  },
+  "pitches/volleyball": {
+    "x": 896,
+    "y": 5606,
+    "width": 128,
+    "height": 128,
+    "pixelRatio": 2
+  },
+  "pitches/rugby_league": {
+    "x": 1024,
+    "y": 5606,
+    "width": 128,
+    "height": 128,
+    "pixelRatio": 2
+  },
+  "pitches/basketball_1": {
+    "x": 1152,
+    "y": 5606,
+    "width": 128,
+    "height": 128,
+    "pixelRatio": 2
+  },
+  "pitches/basketball_2": {
+    "x": 1280,
+    "y": 5606,
+    "width": 128,
+    "height": 128,
+    "pixelRatio": 2
+  },
+  "pitches/field_hockey": {
+    "x": 1408,
+    "y": 5606,
+    "width": 128,
+    "height": 128,
+    "pixelRatio": 2
+  }
+}

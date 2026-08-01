@@ -5,10 +5,9 @@ import type { LayerSpecification, StyleSpecification } from '@maplibre/maplibre-
 
 import { MAP_MAX_ZOOM, MAP_MIN_ZOOM } from '../../layers'
 import { qgisLayerSpecs } from './qgis'
-import { GLYPHS_URL, SOURCE_ID, vectorSourceSpec, type SourceUrlOptions } from './source'
+import { GLYPHS_URL, SOURCE_ID, SPRITE_PATH, vectorSourceSpec, type SourceUrlOptions } from './source'
 
 export type BuildStyleOptions = SourceUrlOptions & {
-  includeSprite?: boolean
   sprite?: string
   glyphs?: string
   name?: string
@@ -21,8 +20,7 @@ const BACKGROUND = '#ededed'
 export function buildStyle(options: BuildStyleOptions): StyleSpecification {
   const {
     url,
-    includeSprite = false,
-    sprite,
+    sprite = SPRITE_PATH,
     glyphs = GLYPHS_URL,
     name = 'Straßenraumkarte vector',
     backgroundColor = BACKGROUND,
@@ -37,7 +35,7 @@ export function buildStyle(options: BuildStyleOptions): StyleSpecification {
     ...qgisLayerSpecs(),
   ]
 
-  const style: StyleSpecification = {
+  return {
     version: 8,
     name,
     metadata: {
@@ -45,25 +43,21 @@ export function buildStyle(options: BuildStyleOptions): StyleSpecification {
       'strassenraumkarte:map-maxzoom': MAP_MAX_ZOOM,
     },
     glyphs,
+    sprite,
     sources: {
       [SOURCE_ID]: vectorSourceSpec({ url }),
     },
     layers,
   }
-
-  if (includeSprite) {
-    style.sprite = sprite ?? '/sprites/strassenraumkarte'
-  }
-
-  return style
 }
 
 export function emptyBaseStyle(
-  options: Pick<BuildStyleOptions, 'name' | 'glyphs' | 'backgroundColor'> = {},
+  options: Pick<BuildStyleOptions, 'name' | 'glyphs' | 'backgroundColor' | 'sprite'> = {},
 ): StyleSpecification {
   const {
     name = 'Straßenraumkarte vector',
     glyphs = GLYPHS_URL,
+    sprite = SPRITE_PATH,
     backgroundColor = BACKGROUND,
   } = options
 
@@ -71,6 +65,7 @@ export function emptyBaseStyle(
     version: 8,
     name,
     glyphs,
+    sprite,
     sources: {},
     layers: [
       {

@@ -28,7 +28,7 @@ todos:
     status: completed
   - id: w5-images
     content: "Graphics (/implementer): `scripts/build-sprite.ts` packs `style/textures/*.png` (+ rasterized pitch SVGs) into `sprite.png`/`sprite.json` with @2x for `fill-pattern`; runtime resolver using `map.setMissingStyleImageResolver` rasterizes `style/symbols/**/*.svg` on demand for expression-driven `icon-image` ids, guarded by `hasImage`, filtering `'null'`/`''`, and re-registering after `setStyle`."
-    status: pending
+    status: completed
   - id: w6-compare-ui
     content: "Compare UI (/implementer): `vector/locations.ts` with named comparison spots (dense trees, intersection, dense housing, parking street, park/water edge) chosen via a density query over the Neukölln starter bbox; `src/compare/` renders two MapLibre panes (raster proxy vs vector) with synced camera, swipe, and opacity-blend modes, z15-20 clamp, and `?location=&mode=` URL state."
     status: pending

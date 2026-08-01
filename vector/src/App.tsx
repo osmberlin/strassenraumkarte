@@ -18,6 +18,7 @@ import {
 } from '../layers'
 import { Legend } from './components/Legend'
 import { exposeMainMapForDebugging } from './lib/expose-main-map'
+import { installMissingStyleImageResolver } from './lib/missing-style-images'
 import { pmtilesSourceUrl } from './maplibre-setup'
 import { emptyBaseStyle } from './style/build-style'
 import { DEFAULT_VIEW } from './style/basic'
@@ -43,8 +44,10 @@ function MapCanvas({
 }) {
   const handleLoad = useCallback(
     (event: MapLibreEvent) => {
-      exposeMainMapForDebugging(event.target)
-      onZoom(event.target.getZoom())
+      const map = event.target
+      exposeMainMapForDebugging(map)
+      installMissingStyleImageResolver(map)
+      onZoom(map.getZoom())
       onStatus('Map loaded')
       onError(null)
     },

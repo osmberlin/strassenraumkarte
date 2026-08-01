@@ -57,6 +57,13 @@ audit/sql-compare/reference/**
 audit/sql-compare/candidates/**
 !audit/sql-compare/candidates/.gitkeep
 
+# Tile visual compare artefacts
+audit/tile-compare/reference/**
+!audit/tile-compare/reference/.gitkeep
+audit/tile-compare/candidates/**
+!audit/tile-compare/candidates/.gitkeep
+audit/tile-compare/.venv/
+
 # Local notes / legacy (not for remote)
 TODO.txt
 todo_from_post_processing.py
@@ -67,6 +74,12 @@ vector/out/**
 !vector/out/.gitkeep
 vector/public/tiles/**
 !vector/public/tiles/.gitkeep
+vector/public/sprites/**
+!vector/public/sprites/.gitkeep
+!vector/public/sprites/strassenraumkarte.json
+!vector/public/sprites/strassenraumkarte.png
+!vector/public/sprites/strassenraumkarte@2x.json
+!vector/public/sprites/strassenraumkarte@2x.png
 vector/dist/
 vector/node_modules/
 vector/.tsbuildinfo-*
