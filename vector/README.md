@@ -43,11 +43,14 @@ Measured Berlin extract (joined archive ~16 MiB with styled columns): ground ~
 
 | Level | Value | Why |
 | --- | --- | --- |
-| PMTiles archive / vector `source` | **15–18** | tippecanoe group ranges (`SOURCE_MINZOOM` / `SOURCE_MAXZOOM`) |
+| PMTiles archive / vector `source` | **15–18** | Every source-layer tippecanoe `-z` is 18 so z18 tiles are complete |
 | Map camera | **15–20** | overzoom z19–20 from parent z18 tiles |
-| Style layer `minzoom` | per layer `-Z` | detail from z17 |
+| Style layer `minzoom` | per layer `-Z` | detail/trees often from z17; ground/streets from z15 |
 
-Do **not** set `source.maxzoom` to 20 — MapLibre would request missing tiles.
+Do **not** set `source.maxzoom` below the tippecanoe high zoom of any layer group — MapLibre
+requests that zoom’s tiles and will show only layers present there (e.g. z18 with only
+`detail` if streets/buildings stop at z17). Do **not** set `source.maxzoom` to 20 — MapLibre
+would request missing archive tiles.
 
 ## Metres → pixels
 

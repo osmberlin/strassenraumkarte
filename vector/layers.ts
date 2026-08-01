@@ -34,7 +34,7 @@ export const LAYERS: LayerDef[] = [
     // `name` + area for G12 landuse labels (size hide when area/scale is small).
     columns: ['osm_id', 'class', 'surface', 'direction', 'name', 'ST_Area(geom) AS area'],
     minzoom: 15,
-    maxzoom: 16,
+    maxzoom: 18,
     paint: 'fill',
     group: 'ground',
   },
@@ -50,7 +50,7 @@ export const LAYERS: LayerDef[] = [
       'hoops',
     ],
     minzoom: 15,
-    maxzoom: 16,
+    maxzoom: 18,
     paint: 'fill',
     group: 'ground',
   },
@@ -68,7 +68,7 @@ export const LAYERS: LayerDef[] = [
       'direction',
     ],
     minzoom: 15,
-    maxzoom: 16,
+    maxzoom: 18,
     paint: 'circle',
     group: 'ground',
   },
@@ -78,7 +78,7 @@ export const LAYERS: LayerDef[] = [
     filter: "playground = 'sandpit'",
     columns: ['osm_id', 'playground'],
     minzoom: 15,
-    maxzoom: 16,
+    maxzoom: 18,
     paint: 'fill',
     group: 'ground',
   },
@@ -92,7 +92,7 @@ export const LAYERS: LayerDef[] = [
       'GREATEST(1.5, LEAST(20.0, 10.0 * LOG(ST_Area(geom)) / LOG(10.0) - 25.0)) AS shore_m',
     ],
     minzoom: 15,
-    maxzoom: 16,
+    maxzoom: 18,
     paint: 'fill',
     group: 'ground',
   },
@@ -102,7 +102,7 @@ export const LAYERS: LayerDef[] = [
     filter: "\"natural\" = 'wetland'",
     columns: ['osm_id', '"natural"'],
     minzoom: 15,
-    maxzoom: 16,
+    maxzoom: 18,
     paint: 'fill',
     group: 'ground',
   },
@@ -111,7 +111,7 @@ export const LAYERS: LayerDef[] = [
     table: 'waterway_clipped',
     columns: ['osm_id', 'width', 'waterway', 'tunnel', 'covered'],
     minzoom: 15,
-    maxzoom: 16,
+    maxzoom: 18,
     paint: 'line',
     group: 'ground',
   },
@@ -122,7 +122,7 @@ export const LAYERS: LayerDef[] = [
     // Length drives QGIS width / MarkerLine spacing (threshold 20 m).
     columns: ['osm_id', 'class', 'subclass', 'ST_Length(geom) AS length'],
     minzoom: 15,
-    maxzoom: 16,
+    maxzoom: 18,
     paint: 'line',
     group: 'ground',
   },
@@ -137,7 +137,7 @@ export const LAYERS: LayerDef[] = [
       '((osm_id % 360) + 360) % 360 AS rotation',
     ],
     minzoom: 15,
-    maxzoom: 16,
+    maxzoom: 18,
     paint: 'circle',
     group: 'ground',
   },
@@ -157,7 +157,7 @@ export const LAYERS: LayerDef[] = [
       'direction',
     ],
     minzoom: 15,
-    maxzoom: 17,
+    maxzoom: 18,
     paint: 'fill',
     group: 'streets',
   },
@@ -178,7 +178,7 @@ export const LAYERS: LayerDef[] = [
       'name',
     ],
     minzoom: 15,
-    maxzoom: 17,
+    maxzoom: 18,
     paint: 'line',
     group: 'streets',
   },
@@ -187,7 +187,7 @@ export const LAYERS: LayerDef[] = [
     table: 'highway_service',
     columns: ['class', 'width', 'layer'],
     minzoom: 15,
-    maxzoom: 17,
+    maxzoom: 18,
     paint: 'line',
     group: 'streets',
   },
@@ -197,7 +197,7 @@ export const LAYERS: LayerDef[] = [
     table: 'bridge_shade',
     columns: ['osm_id', 'layer'],
     minzoom: 15,
-    maxzoom: 17,
+    maxzoom: 18,
     paint: 'fill',
     group: 'streets',
   },
@@ -206,7 +206,7 @@ export const LAYERS: LayerDef[] = [
     table: 'bridge',
     columns: ['osm_id', 'layer', 'man_made', 'name'],
     minzoom: 15,
-    maxzoom: 17,
+    maxzoom: 18,
     paint: 'fill',
     group: 'streets',
   },
@@ -215,7 +215,7 @@ export const LAYERS: LayerDef[] = [
     table: 'railway_way',
     columns: ['osm_id', 'railway', 'gauge', 'usage', 'service', 'tunnel', 'layer'],
     minzoom: 15,
-    maxzoom: 17,
+    maxzoom: 18,
     paint: 'line',
     group: 'streets',
   },
@@ -224,7 +224,7 @@ export const LAYERS: LayerDef[] = [
     table: 'railway_node',
     columns: ['osm_id', 'railway', 'layer'],
     minzoom: 15,
-    maxzoom: 17,
+    maxzoom: 18,
     paint: 'circle',
     group: 'streets',
   },
@@ -235,7 +235,7 @@ export const LAYERS: LayerDef[] = [
     table: 'building',
     columns: ['osm_id', 'height'],
     minzoom: 15,
-    maxzoom: 17,
+    maxzoom: 18,
     paint: 'fill',
     group: 'buildings',
   },
@@ -244,7 +244,7 @@ export const LAYERS: LayerDef[] = [
     table: 'building_parts_dissolved_height',
     columns: ['height'],
     minzoom: 15,
-    maxzoom: 17,
+    maxzoom: 18,
     paint: 'fill',
     group: 'buildings',
   },
@@ -253,7 +253,7 @@ export const LAYERS: LayerDef[] = [
     table: 'building_shade',
     columns: [],
     minzoom: 15,
-    maxzoom: 17,
+    maxzoom: 18,
     paint: 'fill',
     group: 'buildings',
   },
@@ -262,7 +262,7 @@ export const LAYERS: LayerDef[] = [
     table: 'building_lines',
     columns: ['class'],
     minzoom: 15,
-    maxzoom: 17,
+    maxzoom: 18,
     paint: 'line',
     group: 'buildings',
   },
@@ -272,7 +272,7 @@ export const LAYERS: LayerDef[] = [
     table: 'housenumber',
     columns: ['osm_id', '"addr:housenumber"'],
     minzoom: 15,
-    maxzoom: 17,
+    maxzoom: 18,
     paint: 'circle',
     group: 'labels',
   },
@@ -485,7 +485,7 @@ export const LAYERS: LayerDef[] = [
     table: 'label_highway',
     columns: ['name', 'class', 'zoom'],
     minzoom: 15,
-    maxzoom: 17,
+    maxzoom: 18,
     paint: 'line',
     group: 'labels',
   },
@@ -495,7 +495,7 @@ export const LAYERS: LayerDef[] = [
     // `waterway` drives QGIS colour / buffer swap (stream vs river).
     columns: ['name', 'waterway'],
     minzoom: 15,
-    maxzoom: 17,
+    maxzoom: 18,
     paint: 'line',
     group: 'labels',
   },
@@ -506,7 +506,7 @@ export const LAYERS: LayerDef[] = [
     filter: "name IS NOT NULL AND name <> ''",
     columns: ['osm_id', 'name', '"natural"', 'water', 'ST_Area(geom) AS area'],
     minzoom: 15,
-    maxzoom: 17,
+    maxzoom: 18,
     paint: 'fill',
     group: 'labels',
   },
@@ -516,7 +516,7 @@ export const LAYERS: LayerDef[] = [
     filter: "name IS NOT NULL AND name <> ''",
     columns: ['osm_id', 'place', 'name'],
     minzoom: 15,
-    maxzoom: 17,
+    maxzoom: 18,
     paint: 'circle',
     group: 'labels',
   },
@@ -526,13 +526,20 @@ export const LAYERS: LayerDef[] = [
     filter: "name IS NOT NULL AND name <> ''",
     columns: ['osm_id', 'place', 'name', 'ST_Area(geom) AS area'],
     minzoom: 15,
-    maxzoom: 17,
+    maxzoom: 18,
     paint: 'fill',
     group: 'labels',
   },
 ]
 
 export const SOURCE_ID = 'strassenraumkarte'
+
+/**
+ * Tippecanoe archive high zoom. Every layer’s `maxzoom` must equal this, otherwise
+ * MapLibre requests z18 tiles (source.maxzoom) that only contain the high-zoom
+ * groups (e.g. detail) and streets/buildings/ground disappear.
+ */
+export const ARCHIVE_MAXZOOM = 18
 
 /** Lowest tippecanoe minzoom across layers — also the PMTiles archive minZoom. */
 export const SOURCE_MINZOOM = Math.min(...LAYERS.map((l) => l.minzoom))
@@ -542,7 +549,7 @@ export const SOURCE_MINZOOM = Math.min(...LAYERS.map((l) => l.minzoom))
  * Keep the MapLibre vector `source.maxzoom` at this value so z19–20 overscale
  * parent tiles instead of requesting missing archive levels.
  */
-export const SOURCE_MAXZOOM = Math.max(...LAYERS.map((l) => l.maxzoom))
+export const SOURCE_MAXZOOM = Math.max(ARCHIVE_MAXZOOM, ...LAYERS.map((l) => l.maxzoom))
 
 /** Map camera: no tiles below archive min; overzoom above archive max to z20. */
 export const MAP_MIN_ZOOM = SOURCE_MINZOOM
