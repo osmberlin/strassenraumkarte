@@ -10,37 +10,74 @@ import {
 } from 'react-map-gl/maplibre'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
+import { LAYERS, MAP_MAX_ZOOM, MAP_MIN_ZOOM, SOURCE_MAXZOOM, SOURCE_MINZOOM } from '../layers'
 import {
-  MAP_MAX_ZOOM,
-  MAP_MIN_ZOOM,
-  SOURCE_MAXZOOM,
-  SOURCE_MINZOOM,
-} from '../layers'
-import { locationById, modeById, panesFromParam, panesToParam, type CompareMode, type ComparePanes } from '../locations'
+  locationById,
+  modeById,
+  panesFromParam,
+  panesToParam,
+  type CompareMode,
+  type ComparePanes,
+} from '../locations'
 import { ComparePage } from './compare/ComparePage'
 import { Legend } from './components/Legend'
 import { exposeMainMapForDebugging } from './lib/expose-main-map'
 import { installMissingStyleImageResolver } from './lib/missing-style-images'
 import { pmtilesSourceUrl } from './maplibre-setup'
 import { emptyBaseStyle } from './style/build-style'
-import { DEFAULT_VIEW } from './style/basic'
+import { basicLayerSpecs, DEFAULT_VIEW } from './style/basic'
 import { SOURCE_ID, absoluteSpriteUrl } from './style/source'
-import { legendEntries, layerMatchesLegend } from './style/legend'
+import {
+  legendEntries,
+  layerMatchesLegend,
+  PREP_COLORS,
+  type LegendEntry,
+} from './style/legend'
 import { qgisLayerSpecs } from './style/qgis'
 
 const MAP_ID = 'mainMap'
-const allLayers = qgisLayerSpecs() as LayerSpecification[]
-const legend = legendEntries()
+const qgisLayers = qgisLayerSpecs() as LayerSpecification[]
+const debugLayers = basicLayerSpecs() as LayerSpecification[]
+const qgisLegend = legendEntries()
 const BASE_STYLE = emptyBaseStyle({
   name: 'Straßenraumkarte vector',
   sprite: absoluteSpriteUrl(window.location.origin),
 })
+
+/** Cartographic QGIS port vs blue/purple/red tile-contents debug style. */
+export type StyleMode = 'qgis' | 'debug'
+
+function styleModeFromParam(raw: string | null): StyleMode {
+  return raw === 'debug' || raw === 'basic' || raw === 'prep' ? 'debug' : 'qgis'
+}
+
+/** One legend row per tippecanoe source-layer (debug / prep paints). */
+function debugLegendEntries(): LegendEntry[] {
+  return LAYERS.map((def) => ({
+    id: def.id,
+    label: def.id,
+    group: def.group,
+    kind: def.paint,
+    color:
+      def.paint === 'fill'
+        ? PREP_COLORS.fill
+        : def.paint === 'line'
+          ? PREP_COLORS.line
+          : PREP_COLORS.circle,
+    minzoom: def.minzoom,
+    maxzoom: def.maxzoom,
+    layerIds: [`${def.id}-${def.paint}`],
+  }))
+}
+
+const debugLegend = debugLegendEntries()
 
 function readRoute(): {
   compare: boolean
   location: string
   mode: CompareMode
   panes: ComparePanes
+  style: StyleMode
 } {
   const q = new URLSearchParams(window.location.search)
   return {
@@ -48,6 +85,7 @@ function readRoute(): {
     location: locationById(q.get('location')).id,
     mode: modeById(q.get('mode')),
     panes: panesFromParam(q.get('panes')),
+    style: styleModeFromParam(q.get('style')),
   }
 }
 
@@ -56,6 +94,7 @@ function writeRoute(next: {
   location: string
   mode: CompareMode
   panes: ComparePanes
+  style: StyleMode
 }) {
   const url = new URL(window.location.href)
   if (next.compare) {
@@ -70,6 +109,8 @@ function writeRoute(next: {
     url.searchParams.delete('mode')
     url.searchParams.delete('panes')
   }
+  if (next.style === 'debug') url.searchParams.set('style', 'debug')
+  else url.searchParams.delete('style')
   window.history.replaceState(null, '', url.toString())
 }
 
@@ -78,11 +119,17 @@ function MapCanvas({
   onError,
   onZoom,
   hidden,
+  styleMode,
+  legend,
+  layers,
 }: {
   onStatus: (s: string) => void
   onError: (s: string | null) => void
   onZoom: (z: number) => void
   hidden: ReadonlySet<string>
+  styleMode: StyleMode
+  legend: LegendEntry[]
+  layers: LayerSpecification[]
 }) {
   const [layersReady, setLayersReady] = useState(false)
 
@@ -93,21 +140,22 @@ function MapCanvas({
       installMissingStyleImageResolver(map)
       setLayersReady(true)
       onZoom(map.getZoom())
-      onStatus('Map loaded')
+      onStatus(styleMode === 'debug' ? 'Map loaded (debug tile style)' : 'Map loaded')
       onError(null)
     },
-    [onError, onStatus, onZoom],
+    [onError, onStatus, onZoom, styleMode],
   )
 
   const handleIdle = useCallback(
     (event: MapLibreEvent) => {
       const map = event.target
       onZoom(map.getZoom())
+      const tag = styleMode === 'debug' ? 'debug · ' : ''
       onStatus(
-        `idle · z${map.getZoom().toFixed(1)} · ${map.getCenter().lng.toFixed(5)}, ${map.getCenter().lat.toFixed(5)}`,
+        `idle · ${tag}z${map.getZoom().toFixed(1)} · ${map.getCenter().lng.toFixed(5)}, ${map.getCenter().lat.toFixed(5)}`,
       )
     },
-    [onStatus, onZoom],
+    [onStatus, onZoom, styleMode],
   )
 
   const handleMove = useCallback(
@@ -127,14 +175,20 @@ function MapCanvas({
   )
 
   const visibleLayers = useMemo(() => {
-    return allLayers.filter((layer) => {
+    return layers.filter((layer) => {
       const hiddenBy = [...hidden].some((legendId) => {
         const entry = legend.find((e) => e.id === legendId)
-        return entry ? layerMatchesLegend(layer.id, entry) : false
+        if (!entry) return false
+        if (styleMode === 'debug') {
+          return layer.id === `${entry.id}-fill` ||
+            layer.id === `${entry.id}-line` ||
+            layer.id === `${entry.id}-circle`
+        }
+        return layerMatchesLegend(layer.id, entry)
       })
       return !hiddenBy
     })
-  }, [hidden])
+  }, [hidden, layers, legend, styleMode])
 
   return (
     <Map
@@ -168,7 +222,7 @@ function MapCanvas({
       {layersReady &&
         visibleLayers.map((layer) => (
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          <Layer key={layer.id} {...(layer as any)} />
+          <Layer key={`${styleMode}:${layer.id}`} {...(layer as any)} />
         ))}
     </Map>
   )
@@ -181,9 +235,18 @@ export function App() {
   const [zoom, setZoom] = useState<number>(DEFAULT_VIEW.zoom)
   const [hidden, setHidden] = useState<ReadonlySet<string>>(() => new Set())
 
+  const styleMode = route.style
+  const activeLegend = styleMode === 'debug' ? debugLegend : qgisLegend
+  const activeLayers = styleMode === 'debug' ? debugLayers : qgisLayers
+
   useEffect(() => {
     writeRoute(route)
   }, [route])
+
+  // Reset layer visibility when switching style modes (ids differ).
+  useEffect(() => {
+    setHidden(new Set())
+  }, [styleMode])
 
   const toggle = useCallback((legendId: string) => {
     setHidden((prev) => {
@@ -195,7 +258,10 @@ export function App() {
   }, [])
 
   const showAll = useCallback(() => setHidden(new Set()), [])
-  const hideAll = useCallback(() => setHidden(new Set(legend.map((e) => e.id))), [])
+  const hideAll = useCallback(
+    () => setHidden(new Set(activeLegend.map((e) => e.id))),
+    [activeLegend],
+  )
 
   if (route.compare) {
     return (
@@ -218,6 +284,19 @@ export function App() {
       <div className="app">
         <header className="bar">
           <strong>Straßenraumkarte · vector preview</strong>
+          <label className="style-toggle">
+            <input
+              type="checkbox"
+              checked={styleMode === 'debug'}
+              onChange={(e) =>
+                setRoute((r) => ({
+                  ...r,
+                  style: e.target.checked ? 'debug' : 'qgis',
+                }))
+              }
+            />
+            Debug tile style
+          </label>
           <button
             type="button"
             className="legend-btn"
@@ -226,14 +305,16 @@ export function App() {
             Compare QGIS · Rust · Vector
           </button>
           <span className="muted">
-            QGIS-faithful core paints ·{' '}
-            <code>?compare=1&amp;location=&amp;mode=</code>
+            {styleMode === 'debug'
+              ? 'Blue fills · purple lines · red points — one layer per source-layer'
+              : 'QGIS-faithful core paints'}{' '}
+            · <code>?style=debug</code>
           </span>
           <span className={error ? 'err' : 'ok'}>{error ?? status}</span>
         </header>
         <div className="workspace">
           <Legend
-            entries={legend}
+            entries={activeLegend}
             zoom={zoom}
             hidden={hidden}
             onToggle={toggle}
@@ -246,6 +327,9 @@ export function App() {
               onError={setError}
               onZoom={setZoom}
               hidden={hidden}
+              styleMode={styleMode}
+              legend={activeLegend}
+              layers={activeLayers}
             />
           </div>
         </div>

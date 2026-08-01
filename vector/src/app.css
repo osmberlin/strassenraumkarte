@@ -57,6 +57,22 @@ body,
   max-width: 40rem;
 }
 
+.style-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  color: #e5e5e5;
+  font-size: 0.85rem;
+}
+
+.style-toggle input {
+  margin: 0;
+  accent-color: #2f6fed;
+}
+
 .workspace {
   display: flex;
   flex: 1;

@@ -22,6 +22,7 @@ bun run dev                     # http://127.0.0.1:5177
 ```
 
 Preview: http://127.0.0.1:5177/#16/52.4768/13.4222  
+Debug tile contents (blue fills / purple lines / red points): http://127.0.0.1:5177/?style=debug — or tick **Debug tile style** in the header.  
 Compare (QGIS · Rust · Vector): http://127.0.0.1:5177/?compare=1&location=intersection&mode=side-by-side&panes=qgis,rust,vector  
 
 Side-by-side lays panes in one horizontal row. Toggle QGIS / Rust / Vector in the header (synced to `?panes=`). Swipe/blend overlay one raster vs vector.
