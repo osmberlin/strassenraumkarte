@@ -46,25 +46,44 @@ Default in [`.env.example`](.env.example) points at the sibling extract:
 
 ## Data preparation (in Docker)
 
+`--bbox` is already supported by [`run.sh`](../run.sh) (`xmin,ymin,xmax,ymax` WGS84). For the Berlin test stack, set **`BBOX`** in `docker/.env` (default starter extent below) and use the wrapper:
+
+```bash
+./docker/run-berlin.sh
+# or override once:
+BBOX=13.3924,52.4543,13.4859,52.5009 ./docker/run-berlin.sh
+# extra flags are forwarded to run.sh, e.g.:
+./docker/run-berlin.sh --skip-processing
+```
+
+Defaults: `--setup-db --refresh --skip-render --data data/osm/berlin-latest.osm.pbf --bbox "$BBOX"`.
+
+Starter `BBOX` in [`.env.example`](.env.example): `13.4132,52.4715,13.4312,52.4821`.
+
+Equivalent manual Compose invocation:
+
 ```bash
 docker compose -f docker/docker-compose.yml --env-file docker/.env run --rm tools \
   ./run.sh --setup-db --refresh --skip-render \
   --data data/osm/berlin-latest.osm.pbf \
-  --bbox 13.3924,52.4543,13.4859,52.5009
+  --bbox 13.4132,52.4715,13.4312,52.4821
 ```
 
-- Omit `--bbox` to import all of Berlin.
+- Omit `--bbox` / clear `BBOX` only if you intentionally import all of Berlin (edit the wrapper or call `run.sh` yourself).
 - `OSM2PGSQL_NUMBER_PROCESSES` from `.env` is passed through to osm2pgsql.
 - Postgres is tuned for bulk import / PostGIS CPU (`docker/postgres/postgresql.conf`, `shm_size: 2gb`).
 
 ## Render tiles (on the host)
 
+Use the same bbox as the import:
+
 ```bash
 source render/qgis_env.sh
-# ensure DB is up and ~/.pgpass / PGPASSWORD is set
-./render/render_tiles.sh \
-  --bbox 13.3924,52.4543,13.4859,52.5009 \
-  --zmax 19
+# ensure DB is up and ~/.pgpass / PGPASSWORD is set; match DB_HOST_PORT from docker/.env
+export PGPASSWORD=postgres
+# shellcheck: load BBOX from docker/.env if present
+set -a && source docker/.env && set +a
+./render/render_tiles.sh --bbox "${BBOX:-13.4132,52.4715,13.4312,52.4821}" --zmax 19
 ```
 
 Or full pipeline on the host once tools are installed locally and the Docker DB is reachable:
@@ -72,7 +91,8 @@ Or full pipeline on the host once tools are installed locally and the Docker DB 
 ```bash
 source render/qgis_env.sh
 export PGPASSWORD=postgres
-./run.sh --data data/osm/berlin-latest.osm.pbf --bbox 13.3924,52.4543,13.4859,52.5009
+set -a && source docker/.env && set +a
+./run.sh --data data/osm/berlin-latest.osm.pbf --bbox "${BBOX:-13.4132,52.4715,13.4312,52.4821}"
 ```
 
 Override the QGIS bundle if needed: `export QGIS_APP=/Applications/Your-QGIS.app`.
