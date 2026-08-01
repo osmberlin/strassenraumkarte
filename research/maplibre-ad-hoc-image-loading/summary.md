@@ -39,9 +39,12 @@ All claims below follow the [Map](https://maplibre.org/maplibre-gl-js/docs/API/c
 | [`map.loadImage(url)`](https://maplibre.org/maplibre-gl-js/docs/API/classes/Map/#loadimage) | Fetch PNG / WebP / JPG (CORS required). Returns `{ data }` for `addImage`. **Not SVG.** |
 | [`map.addImage(id, image, options?)`](https://maplibre.org/maplibre-gl-js/docs/API/classes/Map/#addimage) | Register runtime image usable like a sprite icon (`HTMLImageElement`, `ImageData`, `ImageBitmap`, or `{width,height,data}`). Options include `pixelRatio`, stretch/content for `icon-text-fit`. |
 | [`map.hasImage(id)`](https://maplibre.org/maplibre-gl-js/docs/API/classes/Map/#hasimage) | True if id exists in sprite **or** was added at runtime. |
-| [`map.removeImage(id)`](https://maplibre.org/maplibre-gl-js/docs/API/classes/Map/#removeimage) / [`updateImage`](https://maplibre.org/maplibre-gl-js/docs/API/classes/Map/#updateimage) | Drop or replace a registered image. |
+| [`map.getImage`](https://maplibre.org/maplibre-gl-js/docs/API/classes/Map/#getimage) / [`listImages`](https://maplibre.org/maplibre-gl-js/docs/API/classes/Map/#listimages) | Inspect a registered image or list all ids (sprite + runtime). |
+| [`map.removeImage(id)`](https://maplibre.org/maplibre-gl-js/docs/API/classes/Map/#removeimage) / [`updateImage`](https://maplibre.org/maplibre-gl-js/docs/API/classes/Map/#updateimage) | Drop or replace a registered image. Prefer `updateImage` over a second `addImage` for the same id. |
 | [`map.setMissingStyleImageResolver(fn)`](https://maplibre.org/maplibre-gl-js/docs/API/classes/Map/#setmissingstyleimageresolver) | **MapLibre v6+** preferred way to supply missing icons/patterns (sync or async). Map awaits the promise before treating the id as missing. |
 | [`styleimagemissing`](https://maplibre.org/maplibre-gl-js/docs/API/type-aliases/MapEventType/) | Fired when an icon/pattern is missing. On **v5**, listeners commonly call `addImage` (with race caveats for async). On **v6**, listeners **cannot** resolve the *current* request via `addImage` — use the resolver; the event remains for observation of still-unresolved ids. |
+
+Style Spec: [Sprite](https://maplibre.org/maplibre-style-spec/sprite/) (`.json` + `.png`, `@2x`, multi-sprite `spriteId:imageId` references) and [`icon-image`](https://maplibre.org/maplibre-style-spec/layers/#layout-symbol-icon-image). Runtime `addImage` ids are unprefixed names in the shared image manager — keep naming consistent with any multi-sprite prefixes you use in the style.
 
 Official examples:
 
@@ -55,7 +58,7 @@ Official examples:
 | **MapLibre GL JS 5.x** (TILDA `5.24.0`, VZK `5.23.0` today) | `map.on('styleimagemissing', …)` + `addImage`. Async handlers can race: MapLibre may re-fire or skip the frame until the image exists — always `hasImage` before `addImage`. |
 | **MapLibre GL JS 6.x** | Prefer `setMissingStyleImageResolver`. Migrate per [v5→v6 guide](https://github.com/maplibre/maplibre-gl-js/blob/main/docs/guides/v5-to-v6-migration-guide.md). `styleimagemissing` becomes “still missing after resolver”. |
 
-PR context: [`setMissingStyleImageResolver`](https://github.com/maplibre/maplibre-gl-js/pull/7850) exists specifically because async `styleimagemissing` + late `addImage` often finished **after** MapLibre had already decided the image was missing for that pass.
+PR context: [`setMissingStyleImageResolver`](https://github.com/maplibre/maplibre-gl-js/pull/7850) exists specifically because async `styleimagemissing` + late `addImage` often finished **after** MapLibre had already decided the image was missing for that pass. Related history: [ImageManager / styleimagemissing race (#2164)](https://github.com/maplibre/maplibre-gl-js/issues/2164).
 
 ---
 
@@ -194,14 +197,15 @@ TILDA skill: `map-event-handlers.md` — `styleimagemissing` has **no** react-ma
 ## 8. Pitfalls checklist
 
 1. **SVG:** `loadImage` rejects SVG — rasterize via `Image` + pass `pixelRatio` into `addImage` or the icons look soft/wrong size.
-2. **Async race (v5):** missing event can fire repeatedly until registration completes; always `hasImage`.
+2. **Async race (v5):** missing event can fire repeatedly until registration completes; always `hasImage` (see also [#2164](https://github.com/maplibre/maplibre-gl-js/issues/2164)).
 3. **v6 migration:** stop relying on `styleimagemissing` to *supply* images; switch to `setMissingStyleImageResolver`.
 4. **Listener leaks:** subscribe/unsubscribe in effects; never in render.
 5. **Sentinel ids:** filter `'null'` / empty from expression fallbacks.
 6. **Style replace:** runtime images are tied to the current style; re-add after `setStyle` / basemap swap.
-7. **Sprite capacity / invalid image:** `addImage` can error if the image is invalid or the atlas is full — handle failures so a bad id does not break the map.
-8. **CORS:** external URLs for `loadImage` must allow CORS.
-9. **Closed sets → sprites:** if the set is finite and known (notes markers, hatch `stripe_texture`), fix the sprite pipeline instead of runtime generation.
+7. **Duplicate `addImage`:** registering an id that already exists errors — guard with `hasImage`, or use `updateImage` when replacing.
+8. **Sprite capacity / size:** `addImage` can fail if the image is invalid or the atlas is full; keep generated canvases bounded (VZK caps sign tiles ~100×100 plus padding).
+9. **CORS:** external URLs for `loadImage` must allow CORS.
+10. **Closed sets → sprites:** if the set is finite and known (notes markers, hatch `stripe_texture`), fix the sprite pipeline instead of runtime generation.
 
 ---
 
@@ -212,6 +216,7 @@ TILDA skill: `map-event-handlers.md` — `styleimagemissing` has **no** react-ma
 3. **Unbounded / generated icons** (traffic-sign stacks, color-encoded ids, user art):
    - On **MapLibre 5**: `styleimagemissing` in `useEffect` + `hasImage` + `addImage` (accept possible one-frame miss until load completes).
    - On **MapLibre 6+** (or when upgrading): `setMissingStyleImageResolver` as the primary path; keep `styleimagemissing` only for logging unresolved ids.
-4. **During development of sprite-backed styles** → TILDA-style `console.warn` only.
+4. **Hybrid (VZK in practice):** proactive placeholder (`NO_SIGN_ICON`) **plus** reactive generation for aggregation ids.
+5. **During development of sprite-backed styles** → TILDA-style `console.warn` only.
 
 For Straßenraumkarte-style cartography, ad hoc loading is most relevant for **QA markers, legend symbols, or data-driven pictograms** layered on a vector street-space style — not for basemap sprites themselves.

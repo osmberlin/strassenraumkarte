@@ -39,10 +39,20 @@ States that in v6, `styleimagemissing` listeners can no longer resolve the curre
 
 Motivation: async `styleimagemissing` handlers that `fetch` then `addImage` often finish too late for the current missing-image request. Introduces a dedicated resolver MapLibre can await; `styleimagemissing` fires if the resolver does not provide the image.
 
+### [Sprite — MapLibre Style Spec](https://maplibre.org/maplibre-style-spec/sprite/)
+**MapLibre Style Spec**
+
+How style sprites load (`.json` / `.png`, `@2x`, multi-sprite arrays and `spriteId:imageId` references).
+
 ### [Layers — MapLibre Style Spec](https://maplibre.org/maplibre-style-spec/layers/)
 **MapLibre Style Spec**
 
 Defines `icon-image` and pattern paint properties that resolve against style images (sprite + runtime).
+
+### [Issue #2164 — ImageManager / styleimagemissing](https://github.com/maplibre/maplibre-gl-js/issues/2164)
+**maplibre/maplibre-gl-js**
+
+Historical race where sync `addImage` in a missing-image handler could still miss the first request — background for why missing-image plumbing is subtle even before the v6 resolver.
 
 ## FMC plans & implementation (seed material)
 
