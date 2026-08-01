@@ -126,6 +126,21 @@ pub fn metres_per_px(bounds: TileBounds) -> f64 {
     (bounds.maxx - bounds.minx) / f64::from(TILE_SIZE_PX)
 }
 
+/// Convert EPSG:3857 map metres → pixels (RasterFill MapUnit widths, effect radii).
 pub fn metres_to_px(metres: f64, bounds: TileBounds) -> f32 {
     (metres / metres_per_px(bounds)) as f32
+}
+
+/// QGIS `@mercator_scale` = 1/cos(φ) from tile mid-latitude (Web Mercator).
+pub fn mercator_scale(bounds: TileBounds) -> f64 {
+    let mid_y = (bounds.miny + bounds.maxy) * 0.5;
+    // Inverse Web Mercator: φ = atan(sinh(y / R)), R = ORIGIN_SHIFT / π
+    let lat_rad = (mid_y / (ORIGIN_SHIFT / std::f64::consts::PI)).sinh().atan();
+    1.0 / lat_rad.cos()
+}
+
+/// Ground metres (OSM attributes) → pixels, matching QGIS `MapUnit * @mercator_scale`.
+#[allow(dead_code)]
+pub fn ground_metres_to_px(ground_m: f64, bounds: TileBounds) -> f32 {
+    metres_to_px(ground_m * mercator_scale(bounds), bounds)
 }

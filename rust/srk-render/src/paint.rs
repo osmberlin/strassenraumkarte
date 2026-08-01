@@ -8,6 +8,7 @@ use tiny_skia::{
 };
 use wkb::WKBReadExt;
 
+use crate::profile::{StageSlot, StageTimers};
 use crate::textures::Texture;
 use crate::tile::{metres_per_px, metres_to_px, TileBounds, TILE_SIZE_PX};
 
@@ -26,16 +27,29 @@ pub struct DropShadow {
 }
 
 impl DropShadow {
-    /// Building defaults: ~2.5 m SE, ~2.2 m blur, dark @ 0.28 (QGIS-ish soft).
+    /// QGIS `building_parts_dissolved_height` dropShadow: blur 2 m, offset 1 m @ 40°, opacity 0.4.
     pub fn building() -> Self {
         let mut color = Color::from_rgba8(0x23, 0x23, 0x23, 255);
         color.set_alpha(1.0);
         Self {
-            offset_m: 2.5,
-            angle_deg: 135.0,
-            blur_m: 2.2,
+            offset_m: 1.0,
+            angle_deg: 40.0,
+            blur_m: 2.0,
             color,
-            opacity: 0.28,
+            opacity: 0.4,
+        }
+    }
+
+    /// QGIS `building_shade` dropShadow: blur 1.6 m, offset 0.4 m @ 40°, opacity 0.138.
+    pub fn building_shade() -> Self {
+        let mut color = Color::from_rgba8(0x23, 0x23, 0x23, 255);
+        color.set_alpha(1.0);
+        Self {
+            offset_m: 0.4,
+            angle_deg: 40.0,
+            blur_m: 1.6,
+            color,
+            opacity: 0.138,
         }
     }
 
@@ -195,10 +209,11 @@ pub fn fill_polygons_pattern(
         phase_y,
     );
 
+    // Bicubic: QGIS Qt smooth sampling; Nearest made sett/asphalt look dithered.
     let shader = Pattern::new(
         texture.pixmap.as_ref(),
         SpreadMode::Repeat,
-        FilterQuality::Nearest,
+        FilterQuality::Bicubic,
         opacity,
         transform,
     );
@@ -223,6 +238,8 @@ pub fn fill_polygons_pattern(
 }
 
 /// QGIS ShapeburstFill v1: darken toward polygon boundary via mask − blur edge factor.
+/// Kept for a later isolate; full-approx buildings use flat fill + dropShadow only.
+#[allow(dead_code)]
 #[derive(Clone, Copy, Debug)]
 pub struct ShapeburstFill {
     /// Inward falloff extent in map metres (~5 mm @ 1:1000 paper).
@@ -233,6 +250,7 @@ pub struct ShapeburstFill {
     pub strength: f32,
 }
 
+#[allow(dead_code)]
 impl ShapeburstFill {
     pub fn building() -> Self {
         let mut edge = Color::from_rgba8(0xa0, 0x70, 0x70, 255);
@@ -246,6 +264,7 @@ impl ShapeburstFill {
 }
 
 /// Solid fill plus optional inner-edge darkening (shapeburst stand-in).
+#[allow(dead_code)]
 pub fn fill_polygons_shapeburst(
     pixmap: &mut Pixmap,
     bounds: TileBounds,
@@ -258,6 +277,7 @@ pub fn fill_polygons_shapeburst(
     }
 }
 
+#[allow(dead_code)]
 fn fill_polygon_shapeburst(
     pixmap: &mut Pixmap,
     bounds: TileBounds,
@@ -357,7 +377,6 @@ pub fn fill_polygons(pixmap: &mut Pixmap, bounds: TileBounds, geom: Geometry<f64
 }
 
 /// Paint many polygons with one shared drop shadow (single blur pass).
-#[allow(dead_code)]
 pub fn fill_polygons_batch_with_shadow(
     pixmap: &mut Pixmap,
     bounds: TileBounds,
@@ -368,10 +387,23 @@ pub fn fill_polygons_batch_with_shadow(
     if geoms.is_empty() {
         return;
     }
+    fill_polygons_shadow_only(pixmap, bounds, geoms, shadow);
+    for geom in geoms {
+        fill_polygons(pixmap, bounds, geom.clone(), fill);
+    }
+}
+
+/// Drop-shadow only (QGIS `drawSource` disabled — e.g. `building_shade`).
+pub fn fill_polygons_shadow_only(
+    pixmap: &mut Pixmap,
+    bounds: TileBounds,
+    geoms: &[Geometry<f64>],
+    shadow: DropShadow,
+) {
+    if geoms.is_empty() {
+        return;
+    }
     let Some(mut mask) = Pixmap::new(TILE_SIZE_PX, TILE_SIZE_PX) else {
-        for geom in geoms {
-            fill_polygons(pixmap, bounds, geom.clone(), fill);
-        }
         return;
     };
     let mut mask_paint = Paint::default();
@@ -406,13 +438,10 @@ pub fn fill_polygons_batch_with_shadow(
         Transform::identity(),
         None,
     );
-
-    for geom in geoms {
-        fill_polygons(pixmap, bounds, geom.clone(), fill);
-    }
 }
 
 /// Batch exterior shadow + per-polygon shapeburst fill (buildings).
+#[allow(dead_code)]
 pub fn fill_polygons_batch_with_shadow_shapeburst(
     pixmap: &mut Pixmap,
     bounds: TileBounds,
@@ -597,38 +626,49 @@ pub fn fill_circles_m(
     }
 }
 
-/// RasterMarker tree crown: soft under-disk + scaled/rotated PNG stamp.
+/// RasterMarker tree crown: blurred under-shadow + Bicubic-scaled PNG stamp.
+///
+/// `diameter_map_m` is already in EPSG:3857 MapUnits (ground_m × `@mercator_scale`).
 pub fn draw_tree_crown_marker(
     pixmap: &mut Pixmap,
     bounds: TileBounds,
     cx: f32,
     cy: f32,
     marker: &Pixmap,
-    diameter_m: f64,
+    diameter_map_m: f64,
     rotation_deg: f32,
     shadow: DropShadow,
     opacity: f32,
 ) {
-    let size_px = metres_to_px(diameter_m, bounds).max(1.0);
+    let size_px = metres_to_px(diameter_map_m, bounds).max(1.0);
     let native_max = marker.width().max(marker.height()) as f32;
     let scale = size_px / native_max;
     let mw = marker.width() as f32;
     let mh = marker.height() as f32;
+    let radius_px = size_px * 0.5;
 
-    // Cheap under-shadow (QGIS dropShadow stand-in): dark blurred disk under crown.
-    let radius_m = diameter_m / 2.0;
-    let mut under = Color::from_rgba8(0x23, 0x23, 0x23, 255);
-    under.set_alpha((shadow.opacity * 0.45).clamp(0.0, 1.0));
-    let (sdx, sdy) = shadow.offset_px(bounds);
-    let shadow_cx = cx + sdx;
-    let shadow_cy = cy + sdy;
-    let mut pb = PathBuilder::new();
-    pb.push_circle(shadow_cx, shadow_cy, metres_to_px(radius_m * 1.08, bounds) as f32);
-    if let Some(path) = pb.finish() {
-        let mut paint = Paint::default();
-        paint.set_color(under);
-        paint.anti_alias = true;
-        pixmap.fill_path(&path, &paint, FillRule::Winding, Transform::identity(), None);
+    // Soft dropShadow: disk → tint → box blur → offset (closer to QGIS than a hard under-disk).
+    if let Some(mut mask) = Pixmap::new(TILE_SIZE_PX, TILE_SIZE_PX) {
+        let (sdx, sdy) = shadow.offset_px(bounds);
+        let mut pb = PathBuilder::new();
+        pb.push_circle(cx + sdx, cy + sdy, radius_px * 1.05);
+        if let Some(path) = pb.finish() {
+            let mut paint = Paint::default();
+            paint.set_color(Color::from_rgba8(255, 255, 255, 255));
+            paint.anti_alias = true;
+            mask.fill_path(&path, &paint, FillRule::Winding, Transform::identity(), None);
+            tint_pixmap_rgb(&mut mask, shadow.color, shadow.opacity);
+            let blur_px = metres_to_px(shadow.blur_m, bounds).round().max(1.0) as u32;
+            box_blur_approx(&mut mask, blur_px);
+            pixmap.draw_pixmap(
+                0,
+                0,
+                mask.as_ref(),
+                &PixmapPaint::default(),
+                Transform::identity(),
+                None,
+            );
+        }
     }
 
     let marker_transform = Transform::from_translate(cx, cy)
@@ -638,6 +678,7 @@ pub fn draw_tree_crown_marker(
 
     let mut crown_paint = PixmapPaint::default();
     crown_paint.opacity = opacity.clamp(0.0, 1.0);
+    crown_paint.quality = FilterQuality::Bicubic;
     pixmap.draw_pixmap(
         0,
         0,

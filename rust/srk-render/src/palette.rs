@@ -74,15 +74,39 @@ pub fn stroke_waterway() -> Color {
 }
 
 pub fn fill_building() -> Color {
+    // QGIS building_parts_dissolved_height SimpleFill `#ffe9e9` (no shapeburst).
     hex("#ffe9e9")
 }
 
+/// CSS / QGIS named colours for `road_marking_polygon.colour` (surface_colour / crossing).
+/// Green special-cased like QGIS (`#00c503`); others follow CSS names.
+pub fn surface_colour(name: Option<&str>) -> Option<Color> {
+    let n = name?.trim().to_ascii_lowercase();
+    if n.is_empty() || n == "no" || n == "none" {
+        return None;
+    }
+    let h = match n.as_str() {
+        "green" => "#00c503",
+        "red" => "#ff0000",
+        "yellow" => "#ffd52b",
+        "blue" => "#1f78b4",
+        "orange" => "#ff7f00",
+        "white" => "#ffffff",
+        "black" => "#000000",
+        _ if n.starts_with('#') && n.len() == 7 => return parse_hex_color(&n).ok(),
+        _ => return None,
+    };
+    Some(hex(h))
+}
+
+#[allow(dead_code)] // QGIS shade fill unused while drawSource is off (shadow-only).
 pub fn fill_building_shade() -> Color {
     hex("#232323")
 }
 
 pub fn fill_tree_crown() -> Color {
-    hex("#6b8f4e")
+    // Soft light canopy green (QGIS RasterMarker averages to this when downscaled).
+    hex("#a4c47a")
 }
 
 pub fn fill_tree_trunk() -> Color {
@@ -135,13 +159,15 @@ pub const AREA_HIGHWAY_PAINTED: &str = "(\
 )";
 
 /// `highway_area` RasterFill overlay (`vector/src/style/layers/streets.ts`).
+/// Opacities slightly under QGIS XML — Bicubic sampling of high-contrast sett/asphalt
+/// PNGs otherwise reads as coarse dither vs Qt's softer downscale.
 pub fn highway_surface_texture(surface: &str) -> Option<(&'static str, f32)> {
     match surface {
-        "asphalt" => Some(("surface/asphalt", 0.06)),
-        "concrete" => Some(("surface/concrete", 0.35)),
-        "concrete:plates" => Some(("surface/concrete", 0.35)),
-        "paving_stones" => Some(("surface/paving_stones", 0.10)),
-        "sett" => Some(("surface/sett", 0.12)),
+        "asphalt" => Some(("surface/asphalt", 0.025)),
+        "concrete" => Some(("surface/concrete", 0.28)),
+        "concrete:plates" => Some(("surface/concrete", 0.28)),
+        "paving_stones" => Some(("surface/paving_stones", 0.08)),
+        "sett" => Some(("surface/sett", 0.035)),
         _ => None,
     }
 }
@@ -150,16 +176,16 @@ pub fn highway_surface_texture(surface: &str) -> Option<(&'static str, f32)> {
 pub fn landuse_surface_texture(surface: &str) -> Option<(&'static str, f32)> {
     match surface {
         "artificial_turf" | "asphalt" | "rubber" | "rubbercrumb" | "tartan" => {
-            Some(("surface/asphalt", 0.06))
+            Some(("surface/asphalt", 0.025))
         }
         "clay" | "compacted" | "dirt" | "earth" | "fine_gravel" | "gravel" | "ground" | "sand" => {
-            Some(("sand", 0.08))
+            Some(("sand", 0.06))
         }
-        "concrete" | "concrete:plates" => Some(("surface/concrete", 0.15)),
-        "grass" => Some(("grass", 0.06)),
-        "paving_stones" => Some(("surface/paving_stones", 0.07)),
-        "sett" => Some(("surface/sett", 0.12)),
-        "woodchips" => Some(("woodchips", 0.10)),
+        "concrete" | "concrete:plates" => Some(("surface/concrete", 0.12)),
+        "grass" => Some(("grass", 0.04)),
+        "paving_stones" => Some(("surface/paving_stones", 0.05)),
+        "sett" => Some(("surface/sett", 0.035)),
+        "woodchips" => Some(("woodchips", 0.08)),
         _ => None,
     }
 }
@@ -167,20 +193,20 @@ pub fn landuse_surface_texture(surface: &str) -> Option<(&'static str, f32)> {
 /// Class-based landuse RasterFill (grass/gravel on parks/forest — no `surface` tag).
 pub fn landuse_class_texture(class: &str) -> Option<(&'static str, f32)> {
     match class {
-        "park" | "allotments" | "cemetery" => Some(("grass", 0.06)),
+        "park" | "allotments" | "cemetery" => Some(("grass", 0.04)),
         "grass" | "recreation_ground" | "village_green" | "flowerbed" | "tree_pit"
-        | "greenery" | "dog_park" | "biergarten" | "bbq" => Some(("grass", 0.06)),
-        "forest" | "wood" | "trees" | "scrub" | "shrub" | "shrubbery" => Some(("grass", 0.09)),
+        | "greenery" | "dog_park" | "biergarten" | "bbq" => Some(("grass", 0.04)),
+        "forest" | "wood" | "trees" | "scrub" | "shrub" | "shrubbery" => Some(("grass", 0.06)),
         "meadow" | "heath" | "orchard" | "grassland" | "vineyard" | "plant_nursery"
-        | "greenhouse_horticulture" => Some(("grass", 0.06)),
+        | "greenhouse_horticulture" => Some(("grass", 0.04)),
         "playground" | "fitness_station" | "miniature_golf" | "traffic_park" => {
-            Some(("grass", 0.06))
+            Some(("grass", 0.04))
         }
         "gravel" | "scree" | "shingle" | "bare_rock" | "rock" | "blockfield" => {
-            Some(("gravel", 0.08))
+            Some(("gravel", 0.06))
         }
-        "sand" | "beach" | "dune" | "shoal" => Some(("sand", 0.08)),
-        "woodchips" => Some(("woodchips", 0.10)),
+        "sand" | "beach" | "dune" | "shoal" => Some(("sand", 0.06)),
+        "woodchips" => Some(("woodchips", 0.08)),
         _ => None,
     }
 }

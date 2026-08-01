@@ -105,7 +105,8 @@ impl TextureCatalog {
             .find(|(k, _)| *k == id)
             .map(|(_, w)| *w);
 
-        if let Some(pm) = load_from_file(&self.repo_root, id) {
+        if let Some(mut pm) = load_from_file(&self.repo_root, id) {
+            soften_texture(&mut pm, id);
             return Ok(Texture {
                 id: leak_str(id),
                 pixmap: pm,
@@ -114,7 +115,8 @@ impl TextureCatalog {
             });
         }
         if let Some((sheet, layout)) = sprite {
-            if let Some(pm) = crop_sprite(sheet, layout, id) {
+            if let Some(mut pm) = crop_sprite(sheet, layout, id) {
+                soften_texture(&mut pm, id);
                 return Ok(Texture {
                     id: leak_str(id),
                     pixmap: pm,
@@ -175,6 +177,67 @@ fn texture_file_path(root: &Path, id: &str) -> PathBuf {
 fn load_from_file(root: &Path, id: &str) -> Option<Pixmap> {
     let path = texture_file_path(root, id);
     Pixmap::load_png(&path).ok()
+}
+
+/// Light blur on high-contrast textures so MapUnit downscale matches Qt/JPEG softness.
+fn soften_texture(pm: &mut Pixmap, id: &str) {
+    let radius = match id {
+        "surface/sett" | "surface/asphalt" => 2u32,
+        "surface/paving_stones" | "gravel" | "grass" => 1u32,
+        _ => return,
+    };
+    let w = pm.width() as usize;
+    let h = pm.height() as usize;
+    let mut buf = pm.data().to_vec();
+    let mut tmp = vec![0u8; buf.len()];
+    for _ in 0..2 {
+        box_blur_h_tex(&buf, &mut tmp, w, h, radius);
+        box_blur_v_tex(&tmp, &mut buf, w, h, radius);
+    }
+    pm.data_mut().copy_from_slice(&buf);
+}
+
+fn box_blur_h_tex(src: &[u8], dst: &mut [u8], w: usize, h: usize, radius: u32) {
+    let r = radius as i32;
+    let diam = 2 * r + 1;
+    for y in 0..h {
+        let row = y * w;
+        for c in 0..4 {
+            let mut sum: i32 = 0;
+            for kx in -r..=r {
+                let x = kx.clamp(0, w as i32 - 1) as usize;
+                sum += i32::from(src[(row + x) * 4 + c]);
+            }
+            for x in 0..w {
+                dst[(row + x) * 4 + c] = ((sum + diam / 2) / diam) as u8;
+                let leave = (x as i32 - r).clamp(0, w as i32 - 1) as usize;
+                let enter = (x as i32 + r + 1).clamp(0, w as i32 - 1) as usize;
+                sum += i32::from(src[(row + enter) * 4 + c]);
+                sum -= i32::from(src[(row + leave) * 4 + c]);
+            }
+        }
+    }
+}
+
+fn box_blur_v_tex(src: &[u8], dst: &mut [u8], w: usize, h: usize, radius: u32) {
+    let r = radius as i32;
+    let diam = 2 * r + 1;
+    for x in 0..w {
+        for c in 0..4 {
+            let mut sum: i32 = 0;
+            for ky in -r..=r {
+                let y = ky.clamp(0, h as i32 - 1) as usize;
+                sum += i32::from(src[(y * w + x) * 4 + c]);
+            }
+            for y in 0..h {
+                dst[(y * w + x) * 4 + c] = ((sum + diam / 2) / diam) as u8;
+                let leave = (y as i32 - r).clamp(0, h as i32 - 1) as usize;
+                let enter = (y as i32 + r + 1).clamp(0, h as i32 - 1) as usize;
+                sum += i32::from(src[(enter * w + x) * 4 + c]);
+                sum -= i32::from(src[(leave * w + x) * 4 + c]);
+            }
+        }
+    }
 }
 
 type SpriteLayout = HashMap<String, SpriteRect>;
