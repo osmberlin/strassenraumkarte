@@ -102,5 +102,6 @@ vector/public/sprites/**
 vector/dist/
 vector/node_modules/
 vector/.tsbuildinfo-*
+vector/test-results/
 vector/compare-output/**
 !vector/compare-output/.gitkeep
