@@ -45,6 +45,8 @@ Runs do not touch git — `audit/runs/` is gitignored.
 | `processing` | Every SQL script in `data/data_preparation.sh` (`sql:<file>`) |
 | `render` | Full `xyz_tiles.py` wall time; plus `render_metatiles.jsonl` + `render_summary.json` when rendering under audit |
 
+For **SQL-only** before/after equivalence (table fingerprints), see [`audit/sql-compare/README.md`](sql-compare/README.md).
+
 Enable by setting **`PERF_AUDIT_DIR`** (done automatically by `run-with-audit.sh`). Scripts no-op when unset.
 
 ## Manual / host pipeline
