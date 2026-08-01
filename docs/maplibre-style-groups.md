@@ -555,10 +555,18 @@ to the map scale (`$area / @map_scale < 25`) — precompute area and approximate
 dependent filter. The Straßenraumkarte pipeline already produces dedicated label geometry
 (`label_highway`, `label_waterway`), so anchoring is easier here than in a generic style.
 
-- [ ] glyph endpoint
-- [ ] street + waterway curved labels
-- [ ] landuse + water area labels
-- [ ] place labels (5 rank rules)
+**Known deviations:** font DejaVu Sans Condensed → Open Sans Regular + Arial Unicode MS
+(demotiles glyph endpoint — confirmed serving those stacks). Landuse / water / place polygon
+labels use point placement at the polygon centroid (`fit-in-polygon` not available). Landuse
+small-area hide uses exported `area` + zoom expression (approximation of `$area / @map_scale`).
+Place ranks for town/city (QGIS z12–14) are styled but sit below the PMTiles archive minzoom
+(z15), so they do not paint until the archive is lowered. Starter extract may have few/no
+`place_polygon` / named `water_body` / `label_waterway` features.
+
+- [x] glyph endpoint (demotiles Open Sans / Arial Unicode MS; documented in `source.ts`)
+- [x] street + waterway curved labels (`zoom` high/low windows + waterway colour swap)
+- [x] landuse + water area labels (`name`/`area` on landuse; `label_water_body` export)
+- [x] place labels (5 rank rules on `place_node` + `place_polygon`)
 
 ---
 

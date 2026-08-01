@@ -263,13 +263,23 @@ export function legendEntries(): LegendEntry[] {
     },
     {
       id: 'labels',
-      label: 'labels',
+      label: 'street / waterway labels',
       group: 'labels',
       kind: 'line',
       color: '#dddddd',
       minzoom: 15,
-      maxzoom: 17,
-      layerIds: ['label-'],
+      maxzoom: 19,
+      layerIds: ['label-highway', 'label-waterway', 'label-landuse', 'label-water-body'],
+    },
+    {
+      id: 'places',
+      label: 'place names',
+      group: 'labels',
+      kind: 'circle',
+      color: '#d7d8c5',
+      minzoom: 15,
+      maxzoom: 19,
+      layerIds: ['place_node-', 'place_polygon-'],
     },
   ]
 }

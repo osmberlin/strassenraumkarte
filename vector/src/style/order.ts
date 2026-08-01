@@ -113,8 +113,11 @@ export const CORE_PAINT_ORDER = [
   'building_lines',
   'tree',
   'housenumber',
+  'label_water_body',
   'label_waterway',
   'label_highway',
+  'place_node',
+  'place_polygon',
 ] as const
 
 export type CorePaintSourceLayer = (typeof CORE_PAINT_ORDER)[number]

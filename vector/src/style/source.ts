@@ -2,7 +2,7 @@
  * Vector source + glyph/sprite URLs for the MapLibre style.
  *
  * Sprite is optional until `scripts/build-sprite.ts` lands (w5).
- * Glyphs use MapLibre demotiles until a self-hosted font stack is chosen.
+ * Glyphs: MapLibre demotiles (Open Sans / Arial Unicode MS) — confirmed for G12.
  */
 import type { VectorSourceSpecification } from '@maplibre/maplibre-gl-style-spec'
 
@@ -18,8 +18,10 @@ export { SOURCE_ID, SOURCE_MAXZOOM, SOURCE_MINZOOM }
 export const PMTILES_PATH = '/tiles/strassenraumkarte.pmtiles'
 
 /**
- * Free glyph endpoint for label scaffolding. Replace with a self-hosted
- * OpenMapTiles-compatible font when labels leave the prep style.
+ * Glyph endpoint for G12 labels. MapLibre demotiles serves the Open Sans /
+ * Arial Unicode MS stack used in the style (HTTP 200 for the PBF ranges we
+ * request). Swap to a self-hosted OpenMapTiles-compatible font when offline
+ * or production pinning is required — QGIS uses DejaVu Sans Condensed.
  */
 export const GLYPHS_URL = 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf'
 

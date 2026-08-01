@@ -31,7 +31,8 @@ export const LAYERS: LayerDef[] = [
   {
     id: 'landuse',
     table: 'landuse',
-    columns: ['osm_id', 'class', 'surface', 'direction'],
+    // `name` + area for G12 landuse labels (size hide when area/scale is small).
+    columns: ['osm_id', 'class', 'surface', 'direction', 'name', 'ST_Area(geom) AS area'],
     minzoom: 15,
     maxzoom: 16,
     paint: 'fill',
@@ -318,10 +319,42 @@ export const LAYERS: LayerDef[] = [
   {
     id: 'label_waterway',
     table: 'label_waterway',
-    columns: ['name'],
+    // `waterway` drives QGIS colour / buffer swap (stream vs river).
+    columns: ['name', 'waterway'],
     minzoom: 15,
     maxzoom: 17,
     paint: 'line',
+    group: 'labels',
+  },
+  {
+    // Named water polygons — separate from wetland / dissolved fill layers.
+    id: 'label_water_body',
+    table: 'water_body',
+    filter: "name IS NOT NULL AND name <> ''",
+    columns: ['osm_id', 'name', '"natural"', 'water', 'ST_Area(geom) AS area'],
+    minzoom: 15,
+    maxzoom: 17,
+    paint: 'fill',
+    group: 'labels',
+  },
+  {
+    id: 'place_node',
+    table: 'place_node',
+    filter: "name IS NOT NULL AND name <> ''",
+    columns: ['osm_id', 'place', 'name'],
+    minzoom: 15,
+    maxzoom: 17,
+    paint: 'circle',
+    group: 'labels',
+  },
+  {
+    id: 'place_polygon',
+    table: 'place_polygon',
+    filter: "name IS NOT NULL AND name <> ''",
+    columns: ['osm_id', 'place', 'name', 'ST_Area(geom) AS area'],
+    minzoom: 15,
+    maxzoom: 17,
+    paint: 'fill',
     group: 'labels',
   },
 ]
