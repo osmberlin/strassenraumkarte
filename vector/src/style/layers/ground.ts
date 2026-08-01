@@ -13,7 +13,7 @@ import {
   WATER_SHORE,
   WATERWAY_LINE,
 } from '../colors'
-import { dropShadow, innerShadow, outerGlow } from '../effects'
+import { dropShadow, innerGlow, innerShadow, outerGlow } from '../effects'
 import {
   base,
   landuseFillMatch,
@@ -80,6 +80,7 @@ function shoreBand(
   opacity: number,
 ): LayerSpecification {
   const widthM = shoreMetres(fraction)
+  const w = metresToPixels(widthM)
   return {
     id,
     type: 'line',
@@ -88,8 +89,8 @@ function shoreBand(
     paint: {
       'line-color': WATER_SHORE,
       'line-opacity': opacity,
-      'line-width': metresToPixels(widthM),
-      'line-blur': metresToPixels(widthM),
+      'line-width': w,
+      'line-blur': w,
       'line-offset': metresToPixels(['*', widthM, -0.5] as ExpressionSpecification),
     },
   }
@@ -143,6 +144,19 @@ export function groundLayers(): LayerSpecification[] {
       opacityInner: 0.35,
       opacityOuter: 0.2,
     }),
+  )
+
+  layers.push(
+    ...innerGlow(
+      'landuse-glacier',
+      { ...landuseBase, filter: f(['==', ['get', 'class'], 'glacier']) },
+      { blurM: 0.75, color: '#ebe9f2', opacityInner: 0.35, opacityOuter: 0.2 },
+    ),
+    ...innerGlow(
+      'landuse-reef',
+      { ...landuseBase, filter: f(['==', ['get', 'class'], 'reef']) },
+      { blurM: 0.75, color: '#d5d2f2', opacityInner: 0.35, opacityOuter: 0.2 },
+    ),
   )
 
   // landuse surface — RasterFill overlay when surface IS NOT NULL (19 categories).
@@ -232,7 +246,7 @@ export function groundLayers(): LayerSpecification[] {
     ...innerShadow('water', waterBase, {
       blurM: 4,
       color: WATER_INNER,
-      opacity: 0.55,
+      opacity: 0.85,
     }),
   )
 

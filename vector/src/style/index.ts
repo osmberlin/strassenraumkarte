@@ -26,6 +26,9 @@ export {
   dropShadow,
   innerShadow,
   outerGlow,
+  innerGlow,
+  highwayInnerBlur,
   metresInterpolate,
+  metreOffsetTranslate,
   HIGHWAY_INNER_BLUR_MM,
 } from './effects'

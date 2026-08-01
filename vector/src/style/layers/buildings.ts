@@ -10,7 +10,7 @@ import {
 } from '../colors'
 import { dropShadow } from '../effects'
 import { base } from '../expr'
-import { metresToPixels } from '../metres'
+import { mmToPixels, metresToPixels } from '../metres'
 
 /** QGIS enableorderby height ascending — shorter parts under taller. */
 const PARTS_SORT_KEY = [
@@ -76,7 +76,16 @@ export function buildingLayers(): LayerSpecification[] {
     paint: {
       'fill-color': BUILDING_SHADE_FILL,
       'fill-opacity': 1,
-      'fill-outline-color': BUILDING_SHADE_FILL,
+    },
+  })
+
+  layers.push({
+    id: 'building-shade-outline',
+    type: 'line',
+    ...shadeBase,
+    paint: {
+      'line-color': '#232323',
+      'line-width': mmToPixels(0.26),
     },
   })
 
@@ -102,7 +111,19 @@ export function buildingLayers(): LayerSpecification[] {
     paint: {
       'fill-color': BUILDING_PARTS_FILL,
       'fill-opacity': 0.7,
-      'fill-outline-color': '#e8c8c8',
+    },
+  })
+
+  layers.push({
+    id: 'building-parts-outline',
+    type: 'line',
+    ...partsBase,
+    layout: {
+      'line-sort-key': PARTS_SORT_KEY,
+    },
+    paint: {
+      'line-color': '#e8c8c8',
+      'line-width': metresToPixels(0.015),
     },
   })
 

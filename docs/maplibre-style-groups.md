@@ -329,7 +329,8 @@ exported for future use); segregated sidepath dual-offset omitted (no `segregate
 PostGIS); steps / access_aisle HashLines approximated with along-line `line-dasharray` (not
 perpendicular ticks); tactile MarkerLine `cross2` markers omitted (offset kerb line only);
 crossing flat caps left as round (`line-cap` is not data-driven); service `name` labels
-deferred (no `name` on `highway_service`; glyphs optional).
+deferred (no `name` on `highway_service`; glyphs optional); highway blur uses QGIS layer
+opacity 0.67 (not colour α 1).
 
 - [x] G0.2 stacking decision documented
 - [x] `highway_area` 8 class fills

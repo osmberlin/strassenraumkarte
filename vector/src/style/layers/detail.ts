@@ -5,6 +5,7 @@ import type {
 } from '@maplibre/maplibre-gl-style-spec'
 
 import { MARKING_DEFAULT, TREE_CROWN, TREE_SHADOW, TREE_TRUNK } from '../colors'
+import { metreOffsetTranslate } from '../effects'
 import { OSM_LAYER_BUCKETS, styleLayerId, type OsmLayerBucketId } from '../order'
 import { base, withOsmBucket } from '../expr'
 import { metresToPixels, metresToPixelsFromProp } from '../metres'
@@ -188,7 +189,7 @@ function pushWayDashVariants(
  *
  * G5 paints follow QGIS RuleRenderer filters from `style/strassenraumkarte.qgz`.
  */
-export function detailLayers(): LayerSpecification[] {
+export function markingFurnitureLayers(): LayerSpecification[] {
   const layers: LayerSpecification[] = []
 
   for (const bucket of OSM_LAYER_BUCKETS) {
@@ -549,11 +550,34 @@ export function detailLayers(): LayerSpecification[] {
     layers.push(...furnitureLayersForBucket(b))
   }
 
-  // G8 symbol patterns (QGIS: above highway stack, below trees)
-  layers.push(...patternLayers())
+  return layers
+}
 
-  // Trees — circle crowns (graphics optional later). Shadow then crown then trunk.
+/** Trees — circle crowns (graphics optional later). Shadow then crown then trunk. */
+export function treeLayers(): LayerSpecification[] {
+  const layers: LayerSpecification[] = []
   const treeBase = base('tree', 17)
+  const shadowTranslate = metreOffsetTranslate(0.4, 45)
+
+  const crownRadius: ExpressionSpecification = [
+    'interpolate',
+    ['exponential', 2],
+    ['zoom'],
+    17,
+    ['*', ['/', ['coalesce', ['get', 'diameter_crown'], 7], 2], metresFactor(17)],
+    20,
+    ['*', ['/', ['coalesce', ['get', 'diameter_crown'], 7], 2], metresFactor(20)],
+  ]
+
+  const trunkRadius: ExpressionSpecification = [
+    'interpolate',
+    ['exponential', 2],
+    ['zoom'],
+    17,
+    ['*', ['/', ['coalesce', ['get', 'circumference'], 1.57], 6.283185], metresFactor(17)],
+    20,
+    ['*', ['/', ['coalesce', ['get', 'circumference'], 1.57], 6.283185], metresFactor(20)],
+  ]
 
   layers.push({
     id: 'tree-crown-shadow',
@@ -562,17 +586,28 @@ export function detailLayers(): LayerSpecification[] {
     paint: {
       'circle-color': TREE_SHADOW,
       'circle-opacity': 0.35,
-      'circle-blur': 0.6,
-      'circle-radius': metresToPixelsFromProp('diameter_crown', 7),
-      'circle-translate': [
-        'interpolate',
-        ['exponential', 2],
-        ['zoom'],
-        17,
-        ['literal', [2, 2]],
-        20,
-        ['literal', [4, 4]],
+      // shrub blur 1.5 m vs tree 3 m → softer / harder circle-blur stand-in
+      'circle-blur': [
+        'case',
+        ['==', ['get', 'natural'], 'shrub'],
+        0.4,
+        0.6,
       ],
+      'circle-radius': crownRadius,
+      'circle-translate': shadowTranslate,
+    } as never,
+  })
+
+  layers.push({
+    id: 'tree-trunk-shadow',
+    type: 'circle',
+    ...treeBase,
+    paint: {
+      'circle-color': TREE_SHADOW,
+      'circle-opacity': 0.07,
+      'circle-blur': 0.4,
+      'circle-radius': trunkRadius,
+      'circle-translate': shadowTranslate,
     } as never,
   })
 
@@ -585,15 +620,7 @@ export function detailLayers(): LayerSpecification[] {
       'circle-color': TREE_CROWN,
       'circle-opacity': 0.85,
       'circle-blur': 0.35,
-      'circle-radius': [
-        'interpolate',
-        ['exponential', 2],
-        ['zoom'],
-        17,
-        ['*', ['/', ['coalesce', ['get', 'diameter_crown'], 7], 2], metresFactor(17)],
-        20,
-        ['*', ['/', ['coalesce', ['get', 'diameter_crown'], 7], 2], metresFactor(20)],
-      ],
+      'circle-radius': crownRadius,
     } as never,
   })
 
@@ -604,15 +631,7 @@ export function detailLayers(): LayerSpecification[] {
     paint: {
       'circle-color': TREE_TRUNK,
       'circle-opacity': 0.75,
-      'circle-radius': [
-        'interpolate',
-        ['exponential', 2],
-        ['zoom'],
-        17,
-        ['*', ['/', ['coalesce', ['get', 'circumference'], 1.57], 6.283185], metresFactor(17)],
-        20,
-        ['*', ['/', ['coalesce', ['get', 'circumference'], 1.57], 6.283185], metresFactor(20)],
-      ],
+      'circle-radius': trunkRadius,
     } as never,
   })
 
@@ -643,6 +662,11 @@ export function detailLayers(): LayerSpecification[] {
   })
 
   return layers
+}
+
+/** Markings + furniture + patterns + trees (legacy composition for callers). */
+export function detailLayers(): LayerSpecification[] {
+  return [...markingFurnitureLayers(), ...patternLayers(), ...treeLayers()]
 }
 
 function metresFactor(zoom: number, lat = 52.48): number {

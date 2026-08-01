@@ -16,20 +16,11 @@ import {
   SERVICE_LINE,
   TACTILE,
 } from '../colors'
-import { HIGHWAY_INNER_BLUR_MM } from '../effects'
+import { highwayInnerBlur } from '../effects'
 import { highwayAreaFillMatch, withOsmBucket } from '../expr'
-import { mmToPixels, metresToPixels, metresToPixelsFromProp } from '../metres'
+import { metresToPixels, metresToPixelsFromProp } from '../metres'
 import { OSM_LAYER_BUCKETS, styleLayerId, type OsmLayerBucketId } from '../order'
 import { bridgeRailwayLayersForBucket } from './landscape'
-
-/** Collapsed z14–z20 highway edge blur (MM paper units → px). */
-function highwayBlurPx(): unknown[] {
-  const expr: unknown[] = ['interpolate', ['linear'], ['zoom']]
-  for (const { zoom, mm } of HIGHWAY_INNER_BLUR_MM) {
-    expr.push(zoom, mmToPixels(mm))
-  }
-  return expr
-}
 
 /** Fill width inset by 0.2 m for casing (sidewalk / sidepath / footway). */
 function pathFillWidthInset(fallbackM: number): ExpressionSpecification {
@@ -125,7 +116,6 @@ function pathCasingPair(
 /** Streets: per OSM bucket — path → service → tactile → highway_area + blur + textures. */
 export function streetLayers(): LayerSpecification[] {
   const layers: LayerSpecification[] = []
-  const blurRamp = highwayBlurPx()
 
   for (const bucket of OSM_LAYER_BUCKETS) {
     const b = bucket.id
@@ -401,18 +391,11 @@ export function streetLayers(): LayerSpecification[] {
       },
     })
 
-    layers.push({
-      id: styleLayerId('highway_area', 'blur', b),
-      type: 'line',
-      ...areaBase,
-      layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: {
-        'line-color': HIGHWAY_BLUR,
-        'line-opacity': 0.85,
-        'line-width': blurRamp as never,
-        'line-blur': blurRamp as never,
-      },
-    })
+    layers.push(
+      ...highwayInnerBlur(styleLayerId('highway_area', 'blur', b), areaBase, {
+        color: HIGHWAY_BLUR,
+      }),
+    )
 
     // Surface textures from the packed sprite. Rotation / ground-metre scale dropped (G0.4).
     for (const [surface, pattern, opacity] of [

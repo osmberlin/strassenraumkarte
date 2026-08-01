@@ -15,7 +15,7 @@ import type {
   LineLayerSpecification,
 } from '@maplibre/maplibre-gl-style-spec'
 
-import { DEFAULT_LAT, metresToPixelsAtZoom } from './metres'
+import { DEFAULT_LAT, metresToPixelsAtZoom, mmToPixels } from './metres'
 
 export type EffectColor = string | ExpressionSpecification
 
@@ -52,6 +52,13 @@ export type OuterGlowOptions = {
   lat?: number
 }
 
+export type InnerGlowOptions = OuterGlowOptions
+
+export type HighwayInnerBlurOptions = {
+  color?: EffectColor
+  opacity?: number | ExpressionSpecification
+}
+
 type LayerBase = Pick<
   FillLayerSpecification,
   'source' | 'source-layer' | 'minzoom' | 'maxzoom' | 'filter' | 'metadata'
@@ -74,11 +81,14 @@ export function metresInterpolate(
   ] as ExpressionSpecification
 }
 
-/** Zoom-interpolated [x,y] translate; stop values wrapped in `literal`. */
-function metreOffsetTranslate(
+/**
+ * Zoom-interpolated [x,y] translate; stop values wrapped in `literal`.
+ * QGIS angle: 0 = east, 90 = north; map Y grows south → uy = −sin.
+ */
+export function metreOffsetTranslate(
   offsetM: number,
   angleDeg: number,
-  lat: number,
+  lat: number = DEFAULT_LAT,
 ): ExpressionSpecification {
   const rad = (angleDeg * Math.PI) / 180
   const ux = Math.cos(rad)
@@ -96,6 +106,15 @@ function metreOffsetTranslate(
     20,
     at(20),
   ] as unknown as ExpressionSpecification
+}
+
+/** MM paper-unit ramp (z14–z20) → CSS px; optional linear scale on stops. */
+function highwayBlurRamp(scale = 1): ExpressionSpecification {
+  const expr: unknown[] = ['interpolate', ['linear'], ['zoom']]
+  for (const { zoom, mm } of HIGHWAY_INNER_BLUR_MM) {
+    expr.push(zoom, mmToPixels(mm) * scale)
+  }
+  return expr as ExpressionSpecification
 }
 
 /**
@@ -218,6 +237,55 @@ export function outerGlow(
 }
 
 /**
+ * Two stacked inward soft glows (wider outer then narrower inner).
+ * Same matched width/blur as outerGlow, with negative line-offset.
+ */
+export function innerGlow(
+  idPrefix: string,
+  base: LayerBase,
+  options: InnerGlowOptions,
+): LayerSpecification[] {
+  const lat = options.lat ?? DEFAULT_LAT
+  const factor = options.outerWidthFactor ?? 2
+  const width = metresInterpolate(options.blurM, 1, lat)
+  const blur = width
+  const outerWidth = metresInterpolate(options.blurM, factor, lat)
+  const outerBlur = outerWidth
+  const offset = metresInterpolate(options.blurM, -0.5, lat)
+  const outerOffset = metresInterpolate(options.blurM, -0.5 * factor, lat)
+
+  const outer: LineLayerSpecification = {
+    id: `${idPrefix}-glow-outer`,
+    type: 'line',
+    ...base,
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: {
+      'line-color': options.color,
+      'line-opacity': options.opacityOuter ?? 0.25,
+      'line-width': outerWidth,
+      'line-blur': outerBlur,
+      'line-offset': outerOffset,
+    },
+  }
+
+  const inner: LineLayerSpecification = {
+    id: `${idPrefix}-glow-inner`,
+    type: 'line',
+    ...base,
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: {
+      'line-color': options.color,
+      'line-opacity': options.opacityInner ?? 0.45,
+      'line-width': width,
+      'line-blur': blur,
+      'line-offset': offset,
+    },
+  }
+
+  return [outer, inner]
+}
+
+/**
  * QGIS z14–z20 highway innerShadow blur radii (MM paper units).
  * Collapses seven one-zoom QGIS layers into one interpolate (docs G4).
  */
@@ -230,3 +298,33 @@ export const HIGHWAY_INNER_BLUR_MM: ReadonlyArray<{ zoom: number; mm: number }> 
   { zoom: 19, mm: 1.13 },
   { zoom: 20, mm: 1.6 },
 ]
+
+/**
+ * Inward soft carriageway edge: matched line-width/line-blur from HIGHWAY_INNER_BLUR_MM
+ * plus negative line-offset (half width). Default colour/opacity match QGIS.
+ */
+export function highwayInnerBlur(
+  idPrefix: string,
+  base: LayerBase,
+  options: HighwayInnerBlurOptions = {},
+): LayerSpecification[] {
+  const width = highwayBlurRamp(1)
+  const blur = width
+  const offset = highwayBlurRamp(-0.5)
+
+  const line: LineLayerSpecification = {
+    id: idPrefix,
+    type: 'line',
+    ...base,
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: {
+      'line-color': options.color ?? '#232323',
+      'line-opacity': options.opacity ?? 0.67,
+      'line-width': width,
+      'line-blur': blur,
+      'line-offset': offset,
+    },
+  }
+
+  return [line]
+}
