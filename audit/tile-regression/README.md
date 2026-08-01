@@ -6,6 +6,8 @@ Compare QGIS (reference) and Rust (candidate) XYZ tiles at the pixel level so a 
 
 **Full-style suite** (QGIS full project vs Rust `full-approx`): [`manifest-full.json`](manifest-full.json) · [`scripts/render-suite-full.sh`](scripts/render-suite-full.sh) · report [`FULL_STYLE_REPORT.md`](FULL_STYLE_REPORT.md). Latest run: `runs/full-approx-20260801-175611/` (mean pixelmatch ~**11.0%** after building drop-shadow + soft trees + landuse greys; prior ~12.7%).
 
+**WebP output (production-shaped Rust tiles):** default `--format webp --quality 90`. Full-area size vs prior PNG: [`WEBP_MIGRATION.md`](WEBP_MIGRATION.md) (**826.3 → 78.4 MiB**, −90.5%). Harness compares still use PNG.
+
 **Multi-tile smoke suite** remains for the `highway_area` isolate: committed `manifest.json` (12 tiles, z15–z18) → QGIS + Rust → `compare-run` gallery. Interim isolate results: [`REPORT.md`](REPORT.md) (mean **0.079%**). Rules dump: [`HIGHWAY_AREA_RULES.md`](HIGHWAY_AREA_RULES.md).
 
 Still later: stratified `sample-tiles`, DSSIM/SSIMULACRA2 budgets, seam-check, standard suite expansion.

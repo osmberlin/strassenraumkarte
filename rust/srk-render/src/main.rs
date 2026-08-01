@@ -1,11 +1,12 @@
-//! PostGIS → XYZ PNG renderer for Straßenraumkarte evaluation.
+//! PostGIS → XYZ raster renderer for Straßenraumkarte evaluation.
 //!
 //! Presets:
 //! - `highway_area` — isolate SimpleFill class rules (parity smoke)
 //! - `full-approx` — landuse/water/roads/buildings(+drop-shadow)/trees stack (RasterFill v1; no labels/SVG)
 //!
-//! Tile math matches `render/xyz_tiles.py` (ORIGIN_SHIFT, 256 px, EPSG:3857,
-//! background `#ededed`).
+//! Default output is **WebP** (lossy q90). Use `--format png` for regression
+//! harness pixelmatch. Tile math matches `render/xyz_tiles.py` (ORIGIN_SHIFT,
+//! 256 px, EPSG:3857, background `#ededed`).
 
 mod layers;
 mod paint;
@@ -55,13 +56,17 @@ struct Cli {
     #[arg(long = "layers", default_value = "full-approx", value_delimiter = ',')]
     layers: Vec<String>,
 
-    /// Output directory (writes `{z}/{x}/{y}.png`).
+    /// Output directory (writes `{z}/{x}/{y}.{webp|png}`).
     #[arg(long, default_value = "/tmp/srk-one-tile-cand")]
     out: PathBuf,
 
-    /// Image format (only `png` for now).
-    #[arg(long, default_value = "png")]
+    /// Image format: `webp` (default, lossy) or `png` (lossless; harness/compare).
+    #[arg(long, default_value = "webp")]
     format: String,
+
+    /// WebP quality 0–100 (ignored for PNG). Default 90 matches QGIS JPEG intent.
+    #[arg(long, default_value_t = 90.0)]
+    quality: f32,
 
     /// Suppress per-tile progress on stderr.
     #[arg(long)]
@@ -105,6 +110,7 @@ struct TimingSummary {
     wall_ms: u64,
     ms_per_tile: f64,
     format: String,
+    quality: Option<f32>,
     layers: Vec<String>,
     /// Per-zoom breakdown (keys as decimal zoom strings for stable JSON).
     by_zoom: BTreeMap<String, ZoomTiming>,
@@ -168,10 +174,19 @@ fn collect_tiles(cli: &Cli) -> Result<(Vec<(u32, u32, u32)>, Option<String>)> {
     }
 }
 
+fn normalize_format(raw: &str) -> Result<&'static str> {
+    match raw.to_ascii_lowercase().as_str() {
+        "webp" => Ok("webp"),
+        "png" => Ok("png"),
+        other => bail!("unsupported --format {other} (use webp or png)"),
+    }
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    if cli.format.to_ascii_lowercase() != "png" {
-        bail!("only --format png is supported");
+    let format = normalize_format(&cli.format)?;
+    if !(0.0..=100.0).contains(&cli.quality) {
+        bail!("--quality must be between 0 and 100");
     }
 
     let preset = LayerPreset::parse(&cli.layers)?;
@@ -219,7 +234,7 @@ fn main() -> Result<()> {
             current_z = Some(z);
             zoom_started = Instant::now();
         }
-        let out_path = cli.out.join(format!("{z}/{x}/{y}.png"));
+        let out_path = cli.out.join(format!("{z}/{x}/{y}.{format}"));
         match preset {
             LayerPreset::HighwayArea => {
                 render_highway_area(
@@ -230,6 +245,7 @@ fn main() -> Result<()> {
                     &out_path,
                     cli.quiet,
                     &texture_catalog,
+                    cli.quality,
                 )?;
             }
             LayerPreset::FullApprox => {
@@ -244,6 +260,7 @@ fn main() -> Result<()> {
                     cache,
                     &texture_catalog,
                     &tree_markers,
+                    cli.quality,
                 )?;
             }
         }
@@ -313,7 +330,12 @@ fn main() -> Result<()> {
         tiles_written,
         wall_ms,
         ms_per_tile,
-        format: cli.format.clone(),
+        format: format.to_string(),
+        quality: if format == "webp" {
+            Some(cli.quality)
+        } else {
+            None
+        },
         layers: cli.layers.clone(),
         by_zoom,
     };

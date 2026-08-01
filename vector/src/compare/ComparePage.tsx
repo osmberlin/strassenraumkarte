@@ -301,7 +301,7 @@ export function ComparePage({
               <Source
                 id={RUST_RASTER_SOURCE}
                 type="raster"
-                tiles={['/raster-rust/{z}/{x}/{y}.png']}
+                tiles={['/raster-rust/{z}/{x}/{y}.webp']}
                 tileSize={256}
                 minzoom={MAP_MIN_ZOOM}
                 maxzoom={MAP_MAX_ZOOM}
@@ -397,7 +397,7 @@ export function ComparePage({
               <Source
                 id={RUST_RASTER_SOURCE}
                 type="raster"
-                tiles={['/raster-rust/{z}/{x}/{y}.png']}
+                tiles={['/raster-rust/{z}/{x}/{y}.webp']}
                 tileSize={256}
                 minzoom={MAP_MIN_ZOOM}
                 maxzoom={MAP_MAX_ZOOM}

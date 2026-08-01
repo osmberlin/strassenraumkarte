@@ -57,11 +57,32 @@ fn empty_pixmap() -> Result<Pixmap> {
     Ok(pixmap)
 }
 
-fn save_png(pixmap: &Pixmap, out_path: &std::path::Path) -> Result<()> {
+/// Write a tile image. Extension selects codec: `.png` (lossless) or `.webp`
+/// (lossy at `webp_quality`, matching production JPEG-q90 intent).
+pub fn save_tile(pixmap: &Pixmap, out_path: &std::path::Path, webp_quality: f32) -> Result<()> {
     if let Some(parent) = out_path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    pixmap.save_png(out_path)?;
+    let ext = out_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    match ext.as_str() {
+        "png" => {
+            pixmap.save_png(out_path)?;
+        }
+        "webp" => {
+            let w = pixmap.width();
+            let h = pixmap.height();
+            let encoder = webp::Encoder::from_rgba(pixmap.data(), w, h);
+            let q = webp_quality.clamp(0.0, 100.0);
+            let memory = encoder.encode(q);
+            std::fs::write(out_path, memory.as_ref())
+                .with_context(|| format!("write webp {}", out_path.display()))?;
+        }
+        other => anyhow::bail!("unsupported tile extension .{other} (use png or webp)"),
+    }
     Ok(())
 }
 
@@ -105,11 +126,12 @@ pub fn render_highway_area(
     out_path: &std::path::Path,
     quiet: bool,
     textures: &TextureCatalog,
+    webp_quality: f32,
 ) -> Result<()> {
     let bounds = tile_bounds_3857(x, y, z);
     let mut pixmap = empty_pixmap()?;
     let painted = paint_highway_area(client, &mut pixmap, bounds, textures)?;
-    save_png(&pixmap, out_path)?;
+    save_tile(&pixmap, out_path, webp_quality)?;
     if !quiet {
         eprintln!(
             "rendered {z}/{x}/{y} → {} (highway_area parts≈{painted})",
@@ -183,6 +205,7 @@ pub fn render_full_approx(
     cache: &mut TableCache,
     textures: &TextureCatalog,
     tree_markers: &TreeMarkerCatalog,
+    webp_quality: f32,
 ) -> Result<()> {
     let bounds = tile_bounds_3857(x, y, z);
     let mut pixmap = empty_pixmap()?;
@@ -223,7 +246,7 @@ pub fn render_full_approx(
         paint_tree(client, &mut pixmap, bounds, cache, tree_markers)?;
     }
 
-    save_png(&pixmap, out_path)?;
+    save_tile(&pixmap, out_path, webp_quality)?;
     if !quiet {
         eprintln!("rendered {z}/{x}/{y} → {} (full-approx)", out_path.display());
     }

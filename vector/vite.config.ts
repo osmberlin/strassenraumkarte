@@ -11,7 +11,7 @@ const rasterTilesRoot = path.resolve(rootDir, '../render/tiles')
 const tileRegressionRuns = path.resolve(rootDir, '../audit/tile-regression/runs')
 
 const RASTER_TILE_RE = /^\/raster\/(\d+)\/(\d+)\/(\d+)\.(jpg|jpeg|png)$/i
-const RUST_TILE_RE = /^\/raster-rust\/(\d+)\/(\d+)\/(\d+)\.(png|jpg|jpeg)$/i
+const RUST_TILE_RE = /^\/raster-rust\/(\d+)\/(\d+)\/(\d+)\.(webp|png|jpg|jpeg)$/i
 
 // Prefer RUST_TILES_ROOT env, else newest full-approx-*/rust or bench-*/rust
 // by mtime, else runs/latest-rust symlink from render-suite-full.sh.
@@ -118,9 +118,15 @@ function rasterTilesPlugin(): Plugin {
   }
 }
 
+function rustTileContentType(suffix: string): string {
+  if (suffix === 'webp') return 'image/webp'
+  if (suffix === 'png') return 'image/png'
+  return 'image/jpeg'
+}
+
 /**
  * Serve Rust XYZ tiles from a full-approx/bench run (or `RUST_TILES_ROOT`) at
- * `/raster-rust/{z}/{x}/{y}.png`. PNG-first with jpg fallback.
+ * `/raster-rust/{z}/{x}/{y}.webp` (default). Falls back across webp/png/jpg.
  */
 function rustRasterTilesPlugin(): Plugin {
   return {
@@ -140,11 +146,16 @@ function rustRasterTilesPlugin(): Plugin {
         const y = m[3]!
         const extRaw = m[4]!
         const ext = extRaw.toLowerCase() === 'jpeg' ? 'jpg' : extRaw.toLowerCase()
-        const alt = ext === 'png' ? 'jpg' : 'png'
-        for (const suffix of [ext, alt]) {
+        const fallbacks =
+          ext === 'webp'
+            ? ['webp', 'png', 'jpg']
+            : ext === 'png'
+              ? ['png', 'webp', 'jpg']
+              : ['jpg', 'webp', 'png']
+        for (const suffix of fallbacks) {
           const file = path.resolve(rustTilesRoot, z, x, `${y}.${suffix}`)
           if (!file.startsWith(rustTilesRoot) || !existsSync(file)) continue
-          res.setHeader('Content-Type', suffix === 'png' ? 'image/png' : 'image/jpeg')
+          res.setHeader('Content-Type', rustTileContentType(suffix))
           res.setHeader('Cache-Control', 'no-store')
           createReadStream(file).pipe(res)
           return

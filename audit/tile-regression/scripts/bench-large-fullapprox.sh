@@ -70,7 +70,8 @@ set +e
     --zmax "$ZMAX" \
     --layers full-approx \
     --out "$RUST_OUT" \
-    --format png \
+    --format webp \
+    --quality 90 \
     --quiet \
     --timing-json \
   >"$RUN_DIR/rust-stdout.log" 2>"$RUN_DIR/rust-stderr.log"
@@ -83,10 +84,10 @@ fi
 
 RUST_INTERNAL_MS="$(python3 -c "import json; print(json.load(open('$RUST_OUT/timing.json'))['wall_ms'])")"
 RUST_EXTERNAL_S="$(awk '/^real /{print $2; exit}' "$RUN_DIR/rust-time.txt")"
-RUST_PNG_COUNT="$(find "$RUST_OUT" -name '*.png' | wc -l | tr -d ' ')"
+RUST_TILE_COUNT="$(find "$RUST_OUT" \( -name '*.webp' -o -name '*.png' \) | wc -l | tr -d ' ')"
 
 ln -sfn "$RUST_OUT" "$HARNESS/runs/latest-rust"
-echo "[bench-large] rust tiles=$RUST_PNG_COUNT internal_ms=$RUST_INTERNAL_MS external_s=$RUST_EXTERNAL_S → latest-rust"
+echo "[bench-large] rust tiles=$RUST_TILE_COUNT internal_ms=$RUST_INTERNAL_MS external_s=$RUST_EXTERNAL_S → latest-rust"
 
 if [[ "$ALSO_QGIS" -eq 1 ]]; then
   echo "[bench-large] QGIS full style → render/tiles (metatile 8, jpg)…"
@@ -106,10 +107,10 @@ if [[ "$ALSO_QGIS" -eq 1 ]]; then
 fi
 
 python3 - "$RUN_DIR/summary.json" "$BBOX" "$ZMIN" "$ZMAX" "$RUST_OUT/timing.json" \
-  "$RUST_INTERNAL_MS" "$RUST_EXTERNAL_S" "$RUST_PNG_COUNT" "$HOST_INFO" "$CPU_COUNT" <<'PY'
+  "$RUST_INTERNAL_MS" "$RUST_EXTERNAL_S" "$RUST_TILE_COUNT" "$HOST_INFO" "$CPU_COUNT" <<'PY'
 import json, sys
 from pathlib import Path
-out, bbox, zmin, zmax, timing_path, rust_ms, rust_ext_s, pngs, host, cpus = sys.argv[1:11]
+out, bbox, zmin, zmax, timing_path, rust_ms, rust_ext_s, tiles, host, cpus = sys.argv[1:11]
 timing = json.loads(Path(timing_path).read_text()) if Path(timing_path).is_file() else {}
 doc = {
     "bbox": bbox,
@@ -119,7 +120,9 @@ doc = {
     "cpus": cpus,
     "rust": {
         "preset": "full-approx",
-        "tiles_written": int(pngs),
+        "format": timing.get("format", "webp"),
+        "quality": timing.get("quality"),
+        "tiles_written": int(tiles),
         "wall_ms_internal": int(rust_ms),
         "wall_s_external": float(rust_ext_s),
         "ms_per_tile": timing.get("ms_per_tile"),
