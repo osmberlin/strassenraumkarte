@@ -1,6 +1,7 @@
 //! Approximate fill/stroke colours for the `full-approx` paint stack.
 //!
-//! Flat SimpleFill / SimpleLine only — no RasterFill textures, SVG, labels, or QGIS effects.
+//! Flat SimpleFill / SimpleLine base colours; RasterFill overlays via `textures` + `paint`.
+//! SVG, labels, and full QGIS effect stacks remain deferred.
 //! Landuse colours mirror `vector/src/style/colors.ts` (QGIS categorized). Buildings alone
 //! use `#ffe9e9`; urban fabric classes stay neutral greys.
 
@@ -103,7 +104,7 @@ pub fn stroke_path(highway: Option<&str>) -> Color {
     hex(h)
 }
 
-/// QGIS rule-based class fills for `highway_area` (SimpleFill only; no RasterFill).
+/// QGIS rule-based class fills for `highway_area` (SimpleFill base under RasterFill overlay).
 ///
 /// Values mirror `audit/tile-regression/HIGHWAY_AREA_RULES.md`. Classes outside
 /// this set are not painted (no ELSE rule in QGIS).
@@ -132,3 +133,54 @@ pub const AREA_HIGHWAY_PAINTED: &str = "(\
   'bus_guideway','bus_bay','turning_circle','turning_loop',\
   'motorway','trunk','motorway_link','trunk_link'\
 )";
+
+/// `highway_area` RasterFill overlay (`vector/src/style/layers/streets.ts`).
+pub fn highway_surface_texture(surface: &str) -> Option<(&'static str, f32)> {
+    match surface {
+        "asphalt" => Some(("surface/asphalt", 0.06)),
+        "concrete" => Some(("surface/concrete", 0.35)),
+        "concrete:plates" => Some(("surface/concrete", 0.35)),
+        "paving_stones" => Some(("surface/paving_stones", 0.10)),
+        "sett" => Some(("surface/sett", 0.12)),
+        _ => None,
+    }
+}
+
+/// `landuse surface` RasterFill (`vector/src/style/colors.ts` SURFACE_PATTERNS).
+pub fn landuse_surface_texture(surface: &str) -> Option<(&'static str, f32)> {
+    match surface {
+        "artificial_turf" | "asphalt" | "rubber" | "rubbercrumb" | "tartan" => {
+            Some(("surface/asphalt", 0.06))
+        }
+        "clay" | "compacted" | "dirt" | "earth" | "fine_gravel" | "gravel" | "ground" | "sand" => {
+            Some(("sand", 0.08))
+        }
+        "concrete" | "concrete:plates" => Some(("surface/concrete", 0.15)),
+        "grass" => Some(("grass", 0.06)),
+        "paving_stones" => Some(("surface/paving_stones", 0.07)),
+        "sett" => Some(("surface/sett", 0.12)),
+        "woodchips" => Some(("woodchips", 0.10)),
+        _ => None,
+    }
+}
+
+/// Class-based landuse RasterFill (grass/gravel on parks/forest — no `surface` tag).
+pub fn landuse_class_texture(class: &str) -> Option<(&'static str, f32)> {
+    match class {
+        "park" | "allotments" | "cemetery" => Some(("grass", 0.06)),
+        "grass" | "recreation_ground" | "village_green" | "flowerbed" | "tree_pit"
+        | "greenery" | "dog_park" | "biergarten" | "bbq" => Some(("grass", 0.06)),
+        "forest" | "wood" | "trees" | "scrub" | "shrub" | "shrubbery" => Some(("grass", 0.09)),
+        "meadow" | "heath" | "orchard" | "grassland" | "vineyard" | "plant_nursery"
+        | "greenhouse_horticulture" => Some(("grass", 0.06)),
+        "playground" | "fitness_station" | "miniature_golf" | "traffic_park" => {
+            Some(("grass", 0.06))
+        }
+        "gravel" | "scree" | "shingle" | "bare_rock" | "rock" | "blockfield" => {
+            Some(("gravel", 0.08))
+        }
+        "sand" | "beach" | "dune" | "shoal" => Some(("sand", 0.08)),
+        "woodchips" => Some(("woodchips", 0.10)),
+        _ => None,
+    }
+}

@@ -23,7 +23,10 @@ function resolveRustTilesRoot(): string {
   }
   const candidates = readdirSync(tileRegressionRuns)
     .filter(
-      (name) => name.startsWith('full-approx-') || name.startsWith('bench-'),
+      (name) =>
+        name.startsWith('bench-large-fullapprox-') ||
+        name.startsWith('full-approx-') ||
+        name.startsWith('bench-'),
     )
     .map((name) => {
       const rustDir = path.join(tileRegressionRuns, name, 'rust')

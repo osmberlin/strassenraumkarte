@@ -149,7 +149,7 @@ Gallery + metrics land in `runs/<timestamp>/`. DSSIM is included when `dssim` is
 
 Defaults: `--format png --metatile 1 --gutter 1 --workers 1`. Extra args are forwarded to `render/xyz_tiles.py`.
 
-## Bbox timing bench
+**Bbox timing** (full-style only): large bbox z15–z20 → [`LARGE_BBOX_TIMING.md`](LARGE_BBOX_TIMING.md). Starter-bbox notes remain in [`TIMING.md`](TIMING.md) (ignore highway_area isolate rows when judging full-approx).
 
 Wall-clock comparison on the starter bbox (278 tiles, z15–18):
 

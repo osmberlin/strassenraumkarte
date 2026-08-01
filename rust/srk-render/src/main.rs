@@ -2,7 +2,7 @@
 //!
 //! Presets:
 //! - `highway_area` — isolate SimpleFill class rules (parity smoke)
-//! - `full-approx` — landuse/water/roads/buildings(+drop-shadow)/trees stack (no labels/SVG/RasterFill)
+//! - `full-approx` — landuse/water/roads/buildings(+drop-shadow)/trees stack (RasterFill v1; no labels/SVG)
 //!
 //! Tile math matches `render/xyz_tiles.py` (ORIGIN_SHIFT, 256 px, EPSG:3857,
 //! background `#ededed`).
@@ -10,8 +10,11 @@
 mod layers;
 mod paint;
 mod palette;
+mod textures;
 mod tile;
+mod tree_markers;
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 use std::time::Instant;
@@ -22,6 +25,8 @@ use postgres::{Client, Config, NoTls};
 use serde::Serialize;
 
 use layers::{render_full_approx, render_highway_area, LayerPreset, TableCache};
+use textures::TextureCatalog;
+use tree_markers::TreeMarkerCatalog;
 use tile::{enumerate_bbox_tiles, parse_bbox, parse_tile_spec};
 
 #[derive(Parser, Debug)]
@@ -82,6 +87,13 @@ struct Cli {
 }
 
 #[derive(Serialize)]
+struct ZoomTiming {
+    tiles: usize,
+    wall_ms: u64,
+    ms_per_tile: f64,
+}
+
+#[derive(Serialize)]
 struct TimingSummary {
     engine: &'static str,
     scope: String,
@@ -94,6 +106,8 @@ struct TimingSummary {
     ms_per_tile: f64,
     format: String,
     layers: Vec<String>,
+    /// Per-zoom breakdown (keys as decimal zoom strings for stable JSON).
+    by_zoom: BTreeMap<String, ZoomTiming>,
 }
 
 fn connect(cli: &Cli) -> Result<Client> {
@@ -172,21 +186,93 @@ fn main() -> Result<()> {
     } else {
         None
     };
+    let texture_catalog = TextureCatalog::load()?;
+    let tree_markers = TreeMarkerCatalog::load().unwrap_or_else(|e| {
+        eprintln!("warn: {e:#}; using procedural tree crowns");
+        TreeMarkerCatalog::fallback()
+    });
 
     let started = Instant::now();
     let mut tiles_written = 0usize;
+    let mut zoom_wall_ms: BTreeMap<u32, u64> = BTreeMap::new();
+    let mut zoom_tiles: BTreeMap<u32, usize> = BTreeMap::new();
+    let mut zoom_started = Instant::now();
+    let mut current_z: Option<u32> = None;
     for (z, x, y) in tiles {
+        if current_z != Some(z) {
+            if let Some(prev) = current_z {
+                let elapsed = zoom_started.elapsed().as_millis() as u64;
+                *zoom_wall_ms.entry(prev).or_insert(0) += elapsed;
+                if !cli.quiet {
+                    let n = *zoom_tiles.get(&prev).unwrap_or(&0);
+                    let ms = *zoom_wall_ms.get(&prev).unwrap_or(&0);
+                    eprintln!(
+                        "zoom done: z{prev} tiles={n} wall_ms={ms} ms_per_tile={:.2}",
+                        if n > 0 {
+                            ms as f64 / n as f64
+                        } else {
+                            0.0
+                        }
+                    );
+                }
+            }
+            current_z = Some(z);
+            zoom_started = Instant::now();
+        }
         let out_path = cli.out.join(format!("{z}/{x}/{y}.png"));
         match preset {
             LayerPreset::HighwayArea => {
-                render_highway_area(&mut client, z, x, y, &out_path, cli.quiet)?;
+                render_highway_area(
+                    &mut client,
+                    z,
+                    x,
+                    y,
+                    &out_path,
+                    cli.quiet,
+                    &texture_catalog,
+                )?;
             }
             LayerPreset::FullApprox => {
                 let cache = table_cache.as_mut().expect("table cache");
-                render_full_approx(&mut client, z, x, y, &out_path, cli.quiet, cache)?;
+                render_full_approx(
+                    &mut client,
+                    z,
+                    x,
+                    y,
+                    &out_path,
+                    cli.quiet,
+                    cache,
+                    &texture_catalog,
+                    &tree_markers,
+                )?;
             }
         }
         tiles_written += 1;
+        *zoom_tiles.entry(z).or_insert(0) += 1;
+        // Progress every 500 tiles even when quiet (large bbox benches).
+        if tiles_written % 500 == 0 {
+            let elapsed = started.elapsed().as_millis() as u64;
+            eprintln!(
+                "progress: {tiles_written}/{tile_count} wall_ms={elapsed} (~{:.1} ms/tile)",
+                elapsed as f64 / tiles_written as f64
+            );
+        }
+    }
+    if let Some(prev) = current_z {
+        let elapsed = zoom_started.elapsed().as_millis() as u64;
+        *zoom_wall_ms.entry(prev).or_insert(0) += elapsed;
+        if !cli.quiet {
+            let n = *zoom_tiles.get(&prev).unwrap_or(&0);
+            let ms = *zoom_wall_ms.get(&prev).unwrap_or(&0);
+            eprintln!(
+                "zoom done: z{prev} tiles={n} wall_ms={ms} ms_per_tile={:.2}",
+                if n > 0 {
+                    ms as f64 / n as f64
+                } else {
+                    0.0
+                }
+            );
+        }
     }
     let wall_ms = started.elapsed().as_millis() as u64;
     let ms_per_tile = if tile_count > 0 {
@@ -194,6 +280,23 @@ fn main() -> Result<()> {
     } else {
         0.0
     };
+
+    let mut by_zoom = BTreeMap::new();
+    for (z, n) in &zoom_tiles {
+        let ms = *zoom_wall_ms.get(z).unwrap_or(&0);
+        by_zoom.insert(
+            z.to_string(),
+            ZoomTiming {
+                tiles: *n,
+                wall_ms: ms,
+                ms_per_tile: if *n > 0 {
+                    ms as f64 / *n as f64
+                } else {
+                    0.0
+                },
+            },
+        );
+    }
 
     let scope = if bbox.is_some() {
         format!("bbox z{}-{}", cli.zmin, cli.zmax)
@@ -212,6 +315,7 @@ fn main() -> Result<()> {
         ms_per_tile,
         format: cli.format.clone(),
         layers: cli.layers.clone(),
+        by_zoom,
     };
 
     eprintln!(

@@ -5,16 +5,20 @@ use postgres::Client;
 use tiny_skia::Pixmap;
 
 use crate::paint::{
-    clip_line_wkb_sql, clip_point_wkb_sql, clip_polygon_wkb_sql, decode_wkb, envelope_sql,
-    fill_circles_m, fill_polygons, fill_polygons_batch_with_shadow, fill_tree_crown_soft,
-    stroke_lines, DropShadow,
+    clip_line_wkb_sql, clip_point_wkb_sql, clip_polygon_wkb_sql, decode_wkb, draw_tree_crown_marker,
+    envelope_sql, fill_circles_m, fill_polygons, fill_polygons_batch_with_shadow_shapeburst,
+    fill_polygons_shapeburst, fill_polygons_textured, fill_tree_crown_soft, geometry_points,
+    map_to_px, stroke_lines, DropShadow, ShapeburstFill,
 };
 use crate::palette::{
     fill_building, fill_building_shade, fill_for_area_highway, fill_for_landuse, fill_pitch,
-    fill_tree_crown, fill_tree_trunk, fill_water, stroke_path, stroke_service, stroke_waterway,
+    fill_tree_crown, fill_tree_trunk, fill_water, highway_surface_texture,
+    landuse_class_texture, landuse_surface_texture, stroke_path, stroke_service, stroke_waterway,
     AREA_HIGHWAY_PAINTED,
 };
+use crate::textures::TextureCatalog;
 use crate::tile::{parse_hex_color, tile_bounds_3857, TileBounds, DEFAULT_BACKGROUND, TILE_SIZE_PX};
+use crate::tree_markers::TreeMarkerCatalog;
 
 fn opt_f32(row: &postgres::Row, col: &str) -> Option<f32> {
     row.try_get::<_, Option<f32>>(col).ok().flatten()
@@ -100,10 +104,11 @@ pub fn render_highway_area(
     y: u32,
     out_path: &std::path::Path,
     quiet: bool,
+    textures: &TextureCatalog,
 ) -> Result<()> {
     let bounds = tile_bounds_3857(x, y, z);
     let mut pixmap = empty_pixmap()?;
-    let painted = paint_highway_area(client, &mut pixmap, bounds)?;
+    let painted = paint_highway_area(client, &mut pixmap, bounds, textures)?;
     save_png(&pixmap, out_path)?;
     if !quiet {
         eprintln!(
@@ -118,6 +123,7 @@ fn paint_highway_area(
     client: &mut Client,
     pixmap: &mut Pixmap,
     bounds: TileBounds,
+    textures: &TextureCatalog,
 ) -> Result<usize> {
     let env = envelope_sql();
     let wkb_sql = clip_polygon_wkb_sql("geom");
@@ -125,6 +131,7 @@ fn paint_highway_area(
         r#"
         SELECT
           "area:highway" AS area_highway,
+          surface,
           {wkb_sql} AS wkb
         FROM highway_area
         WHERE geom && {env}
@@ -143,12 +150,17 @@ fn paint_highway_area(
         let Some(fill_color) = fill_for_area_highway(area.as_deref()) else {
             continue;
         };
+        let surface: Option<String> = row.try_get("surface").ok().flatten();
+        let texture = surface
+            .as_deref()
+            .and_then(highway_surface_texture)
+            .and_then(|(id, opacity)| textures.get(id).map(|t| (t, opacity)));
         let Some(wkb) = wkb_from_row(row, "wkb") else {
             continue;
         };
         match decode_wkb(&wkb) {
             Ok(geom) => {
-                fill_polygons(pixmap, bounds, geom, fill_color);
+                fill_polygons_textured(pixmap, bounds, geom, fill_color, texture);
                 painted += 1;
             }
             Err(e) => eprintln!("warn: skip highway_area WKB: {e:?}"),
@@ -159,9 +171,8 @@ fn paint_highway_area(
 
 /// Full approximate stack: landuse → water → roads → buildings → trees.
 ///
-/// Deferred vs QGIS: labels (PAL), SVG markers, RasterFill textures, full
-/// effect stacks (innerShadow/glow), symbol levels, blend modes.
-/// Cheap building drop-shadow + soft tree crowns are included.
+/// Deferred vs QGIS: labels (PAL), SVG markers, full effect stacks (innerShadow/glow),
+/// symbol levels, blend modes. RasterFill v1: map-anchored surface/class textures.
 pub fn render_full_approx(
     client: &mut Client,
     z: u32,
@@ -170,11 +181,13 @@ pub fn render_full_approx(
     out_path: &std::path::Path,
     quiet: bool,
     cache: &mut TableCache,
+    textures: &TextureCatalog,
+    tree_markers: &TreeMarkerCatalog,
 ) -> Result<()> {
     let bounds = tile_bounds_3857(x, y, z);
     let mut pixmap = empty_pixmap()?;
 
-    paint_landuse(client, &mut pixmap, bounds)?;
+    paint_landuse(client, &mut pixmap, bounds, textures)?;
     if cache.pitch {
         paint_pitch(client, &mut pixmap, bounds)?;
     }
@@ -191,7 +204,7 @@ pub fn render_full_approx(
     if cache.highway_service {
         paint_highway_service(client, &mut pixmap, bounds)?;
     }
-    paint_highway_area(client, &mut pixmap, bounds)?;
+    paint_highway_area(client, &mut pixmap, bounds, textures)?;
     if cache.building_shade {
         paint_building_shade(client, &mut pixmap, bounds)?;
     }
@@ -207,7 +220,7 @@ pub fn render_full_approx(
         paint_building(client, &mut pixmap, bounds)?;
     }
     if cache.tree {
-        paint_tree(client, &mut pixmap, bounds)?;
+        paint_tree(client, &mut pixmap, bounds, cache, tree_markers)?;
     }
 
     save_png(&pixmap, out_path)?;
@@ -228,6 +241,8 @@ pub struct TableCache {
     pub building: bool,
     pub building_parts: bool,
     pub tree: bool,
+    pub tree_has_leaf_type: bool,
+    pub tree_has_rotation: bool,
     pub building_parts_has_height: bool,
 }
 
@@ -243,6 +258,8 @@ impl TableCache {
             building: table_exists(client, "building")?,
             building_parts: table_exists(client, "building_parts_dissolved_height")?,
             tree: table_exists(client, "tree")?,
+            tree_has_leaf_type: column_exists(client, "tree", "leaf_type")?,
+            tree_has_rotation: column_exists(client, "tree", "rotation")?,
             building_parts_has_height: column_exists(
                 client,
                 "building_parts_dissolved_height",
@@ -252,12 +269,17 @@ impl TableCache {
     }
 }
 
-fn paint_landuse(client: &mut Client, pixmap: &mut Pixmap, bounds: TileBounds) -> Result<()> {
+fn paint_landuse(
+    client: &mut Client,
+    pixmap: &mut Pixmap,
+    bounds: TileBounds,
+    textures: &TextureCatalog,
+) -> Result<()> {
     let env = envelope_sql();
     let wkb_sql = clip_polygon_wkb_sql("geom");
     let sql = format!(
         r#"
-        SELECT class, {wkb_sql} AS wkb
+        SELECT class, surface, {wkb_sql} AS wkb
         FROM landuse
         WHERE geom && {env}
           AND NOT ST_IsEmpty(ST_ClipByBox2D(geom, {env}))
@@ -270,11 +292,18 @@ fn paint_landuse(client: &mut Client, pixmap: &mut Pixmap, bounds: TileBounds) -
     )?;
     for row in &rows {
         let class: Option<String> = row.get("class");
+        let surface: Option<String> = row.try_get("surface").ok().flatten();
         let Some(wkb) = wkb_from_row(row, "wkb") else {
             continue;
         };
+        let base = fill_for_landuse(class.as_deref());
+        let texture = surface
+            .as_deref()
+            .and_then(landuse_surface_texture)
+            .or_else(|| class.as_deref().and_then(landuse_class_texture))
+            .and_then(|(id, opacity)| textures.get(id).map(|t| (t, opacity)));
         match decode_wkb(&wkb) {
-            Ok(geom) => fill_polygons(pixmap, bounds, geom, fill_for_landuse(class.as_deref())),
+            Ok(geom) => fill_polygons_textured(pixmap, bounds, geom, base, texture),
             Err(e) => eprintln!("warn: skip landuse WKB: {e:?}"),
         }
     }
@@ -505,13 +534,14 @@ fn paint_building_parts(
     )?;
     let mut color = fill_building();
     color.set_alpha(0.85);
+    let burst = ShapeburstFill::building();
     for row in &rows {
         let Some(wkb) = wkb_from_row(row, "wkb") else {
             continue;
         };
         if let Ok(geom) = decode_wkb(&wkb) {
             // Shadow is applied on `building` footprints only (avoids double blur).
-            fill_polygons(pixmap, bounds, geom, color);
+            fill_polygons_shapeburst(pixmap, bounds, geom, color, burst);
         }
     }
     Ok(())
@@ -545,19 +575,44 @@ fn paint_building(client: &mut Client, pixmap: &mut Pixmap, bounds: TileBounds) 
             Err(e) => eprintln!("warn: skip building WKB: {e:?}"),
         }
     }
-    fill_polygons_batch_with_shadow(pixmap, bounds, &geoms, color, DropShadow::building());
+    fill_polygons_batch_with_shadow_shapeburst(
+        pixmap,
+        bounds,
+        &geoms,
+        color,
+        DropShadow::building(),
+        ShapeburstFill::building(),
+    );
     Ok(())
 }
 
-fn paint_tree(client: &mut Client, pixmap: &mut Pixmap, bounds: TileBounds) -> Result<()> {
+fn paint_tree(
+    client: &mut Client,
+    pixmap: &mut Pixmap,
+    bounds: TileBounds,
+    cache: &TableCache,
+    tree_markers: &TreeMarkerCatalog,
+) -> Result<()> {
     let env = envelope_sql();
     let wkb_sql = clip_point_wkb_sql("geom");
+    let leaf_col = if cache.tree_has_leaf_type {
+        "leaf_type,"
+    } else {
+        ""
+    };
+    let rot_col = if cache.tree_has_rotation {
+        "rotation,"
+    } else {
+        ""
+    };
     let sql = format!(
         r#"
         SELECT
           diameter_crown,
           circumference,
           "natural" AS natural_tag,
+          {leaf_col}
+          {rot_col}
           {wkb_sql} AS wkb
         FROM tree
         WHERE geom && {env}
@@ -573,6 +628,19 @@ fn paint_tree(client: &mut Client, pixmap: &mut Pixmap, bounds: TileBounds) -> R
         let natural: Option<String> = row.try_get("natural_tag").ok().flatten();
         let diameter = opt_f32(row, "diameter_crown");
         let circumference = opt_f32(row, "circumference");
+        let leaf_type: Option<String> = if cache.tree_has_leaf_type {
+            row.try_get("leaf_type").ok().flatten()
+        } else {
+            None
+        };
+        let rotation: Option<f32> = if cache.tree_has_rotation {
+            row.try_get::<_, Option<i32>>("rotation")
+                .ok()
+                .flatten()
+                .map(|r| r as f32)
+        } else {
+            None
+        };
         let Some(wkb) = wkb_from_row(row, "wkb") else {
             continue;
         };
@@ -580,13 +648,41 @@ fn paint_tree(client: &mut Client, pixmap: &mut Pixmap, bounds: TileBounds) -> R
             continue;
         };
         if natural.as_deref() != Some("tree_stump") {
+            let is_shrub = natural.as_deref() == Some("shrub");
             let crown_d = diameter
                 .filter(|d| *d > 0.0)
                 .map(f64::from)
-                .unwrap_or(7.0);
-            let mut crown = fill_tree_crown();
-            crown.set_alpha(0.62);
-            fill_tree_crown_soft(pixmap, bounds, geom.clone(), crown, crown_d / 2.0);
+                .unwrap_or(if is_shrub { 4.5 } else { 7.0 });
+            let shadow = if is_shrub {
+                DropShadow::shrub()
+            } else {
+                DropShadow::tree()
+            };
+            let rotation_deg = rotation.unwrap_or(0.0);
+            if tree_markers.from_file {
+                let marker = tree_markers.for_leaf_type(leaf_type.as_deref());
+                for pt in geometry_points(geom.clone()) {
+                    let (cx, cy) = map_to_px(bounds, geo_types::Coord {
+                        x: pt.x(),
+                        y: pt.y(),
+                    });
+                    draw_tree_crown_marker(
+                        pixmap,
+                        bounds,
+                        cx,
+                        cy,
+                        marker,
+                        crown_d,
+                        rotation_deg,
+                        shadow,
+                        0.92,
+                    );
+                }
+            } else {
+                let mut crown = fill_tree_crown();
+                crown.set_alpha(0.62);
+                fill_tree_crown_soft(pixmap, bounds, geom.clone(), crown, crown_d / 2.0);
+            }
         }
         if let Some(c) = circumference.filter(|c| *c > 0.0).map(f64::from) {
             let trunk_r = c / (2.0 * std::f64::consts::PI);

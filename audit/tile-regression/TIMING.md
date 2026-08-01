@@ -1,5 +1,8 @@
 # Starter-bbox render timing (Rust vs QGIS)
 
+> **Prefer the large-bbox full-style report:** [`LARGE_BBOX_TIMING.md`](LARGE_BBOX_TIMING.md)  
+> (103 915 tiles, z15–z20, `full-approx` vs QGIS full style — no highway_area isolate).
+
 Measured **2026-08-01** on the docker starter bbox. Re-run with:
 
 ```bash
