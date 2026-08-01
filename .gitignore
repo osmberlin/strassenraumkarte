@@ -26,7 +26,8 @@ style/.*_work/
 
 # Local backups / editor
 backup/
-.cursor/
+# Ignore Cursor local state, but keep committed plans under .cursor/plans/
+.cursor/*
 !.cursor/plans/
 !.cursor/plans/**
 
