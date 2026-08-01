@@ -1,13 +1,74 @@
-import type { FilterSpecification, LayerSpecification } from '@maplibre/maplibre-gl-style-spec'
+import type {
+  ExpressionSpecification,
+  FilterSpecification,
+  LayerSpecification,
+} from '@maplibre/maplibre-gl-style-spec'
 
-import { FOREST_CLASSES, WATER_FILL, WATER_INNER, WATERWAY_LINE } from '../colors'
+import {
+  FOREST_CLASSES,
+  SANDPIT_FILL,
+  SURFACE_PATTERNS,
+  WATER_FILL,
+  WATER_INNER,
+  WATERWAY_LINE,
+} from '../colors'
 import { dropShadow, innerShadow, outerGlow } from '../effects'
-import { base, landuseFillMatch } from '../expr'
-import { metresToPixelsFromProp } from '../metres'
+import {
+  base,
+  landuseFillMatch,
+  pitchFillCase,
+  pitchMarkingIcon,
+} from '../expr'
+import { metresToPixels, metresToPixelsFromProp } from '../metres'
 
-/** Ground: landuse (+ forest effects), water body, waterway. */
+/** Sprite pixel size for packed `pitches/*` icons (`build-sprite.ts`). */
+const PITCH_ICON_PIXELS = 64
+
+function f(expr: ExpressionSpecification): FilterSpecification {
+  return expr as FilterSpecification
+}
+
+/** Push shared surface `fill-pattern` layers for landuse / pitch. */
+function pushSurfacePatterns(
+  layers: LayerSpecification[],
+  idPrefix: string,
+  sourceLayer: string,
+  minzoom: number,
+): void {
+  for (const group of SURFACE_PATTERNS) {
+    const role = `pattern-${group.pattern.replaceAll('/', '-')}`
+    layers.push({
+      id: `${idPrefix}-${role}`,
+      type: 'fill',
+      ...base(
+        sourceLayer,
+        minzoom,
+        f(['in', ['get', 'surface'], ['literal', [...group.surfaces]]]),
+      ),
+      paint: {
+        'fill-pattern': group.pattern,
+        'fill-opacity': group.opacity,
+      },
+    })
+  }
+}
+
+/** icon-size so a PITCH_ICON_PIXELS raster covers `metres` on the ground. */
+function pitchIconSizeFromMetres(metres: ExpressionSpecification): ExpressionSpecification {
+  return metresToPixels(['/', metres, PITCH_ICON_PIXELS] as ExpressionSpecification)
+}
+
+/**
+ * Ground: landuse (+ forest effects, surface textures), pitch (+ markings),
+ * sandpit, water body, waterway.
+ *
+ * Paint order matches QGIS landuse/landcover (bottom → top): landuse → surface →
+ * pitch → pitch surface → pitch_markings → sandpit → water.
+ */
 export function groundLayers(): LayerSpecification[] {
   const landuseBase = base('landuse', 15)
+  const pitchBase = base('pitch', 15)
+  const sandpitBase = base('sandpit', 15)
   const waterBase = base('water_body_dissolved', 15)
   const forestFilter = [
     'in',
@@ -43,6 +104,72 @@ export function groundLayers(): LayerSpecification[] {
       color: '#c8dbb6',
       opacityInner: 0.35,
       opacityOuter: 0.2,
+    }),
+  )
+
+  // landuse surface — RasterFill overlay when surface IS NOT NULL (19 categories).
+  pushSurfacePatterns(layers, 'landuse-surface', 'landuse', 15)
+
+  // pitch fill CASE
+  layers.push({
+    id: 'pitch-fill',
+    type: 'fill',
+    ...pitchBase,
+    paint: {
+      'fill-color': pitchFillCase(),
+      'fill-opacity': 1,
+    },
+  })
+
+  // pitch surface — same 19-entry texture table
+  pushSurfacePatterns(layers, 'pitch-surface', 'pitch', 15)
+
+  // pitch_markings — sprite symbol; uniform scale on dist_long (no independent aspect-fit).
+  layers.push({
+    id: 'pitch-markings',
+    type: 'symbol',
+    ...base('pitch_markings', 15),
+    layout: {
+      'icon-image': pitchMarkingIcon(),
+      'icon-rotate': ['+', ['coalesce', ['get', 'direction'], 0], 90],
+      'icon-rotation-alignment': 'map',
+      'icon-pitch-alignment': 'map',
+      'icon-allow-overlap': true,
+      'icon-ignore-placement': true,
+      'icon-size': pitchIconSizeFromMetres([
+        '*',
+        0.95,
+        ['coalesce', ['get', 'dist_long'], 20],
+      ] as ExpressionSpecification),
+    },
+  })
+
+  // sandpit — SimpleFill + sand texture + renderer-level innerShadow
+  layers.push({
+    id: 'sandpit-fill',
+    type: 'fill',
+    ...sandpitBase,
+    paint: {
+      'fill-color': SANDPIT_FILL,
+      'fill-opacity': 1,
+    },
+  })
+
+  layers.push({
+    id: 'sandpit-pattern',
+    type: 'fill',
+    ...sandpitBase,
+    paint: {
+      'fill-pattern': 'sand',
+      'fill-opacity': 0.08,
+    },
+  })
+
+  layers.push(
+    ...innerShadow('sandpit', sandpitBase, {
+      blurM: 1,
+      color: '#000000',
+      opacity: 0.2,
     }),
   )
 

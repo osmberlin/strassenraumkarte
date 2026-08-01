@@ -92,6 +92,9 @@ export function osmLayerFilter(bucketId: OsmLayerBucketId): FilterSpecification 
  */
 export const CORE_PAINT_ORDER = [
   'landuse',
+  'pitch',
+  'pitch_markings',
+  'sandpit',
   'water_body_dissolved',
   'waterway_clipped',
   // Within each OSM bucket these are expanded in this relative order:

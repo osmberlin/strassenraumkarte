@@ -180,13 +180,17 @@ dropShadow (blur 1 m, offset 0.4 m @ 40°, `#232323`, opacity 0.33) and outerGlo
 - `outdoor_seating` uses a LinePatternFill at 1.2 m / 135° with a `#0000ff` base fill — almost
   certainly a debugging leftover; confirm before porting.
 
-**Known deviations:** texture ground-scale and rotation are approximated.
+**Known deviations:** texture ground-scale and rotation dropped (`fill-pattern` uses
+sprite pixel size; `direction` / `sett:length` exported for future use). `pitch_markings`
+use packed `pitches/*` sprites sized uniformly from `dist_long` (×0.95) — MapLibre cannot
+independently fit width/height to the pitch aspect ratio the way QGIS does. Wetland stays
+in G2 (not a landuse `class` overlay).
 
 - [x] colour/texture table for all 65 `landuse` classes
-- [ ] `landuse surface` + `pitch surface` (shared 19-entry texture table)
+- [x] `landuse surface` + `pitch surface` (shared 19-entry texture table)
 - [x] forest/scrub/shrub glow + shadow via G0.3 helpers
-- [ ] `pitch` fill `CASE` and `pitch_markings` decision
-- [ ] `sandpit`
+- [x] `pitch` fill `CASE` and `pitch_markings` decision
+- [x] `sandpit`
 
 ---
 

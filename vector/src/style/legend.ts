@@ -12,6 +12,8 @@ import {
   PATH_SIDEWALK,
   SERVICE_LINE,
   TACTILE,
+  PITCH_FILL_DEFAULT,
+  SANDPIT_FILL,
   TREE_CROWN,
   WATER_FILL,
   WATERWAY_LINE,
@@ -69,6 +71,26 @@ function landuseLegendEntries(): LegendEntry[] {
 export function legendEntries(): LegendEntry[] {
   return [
     ...landuseLegendEntries(),
+    {
+      id: 'pitch',
+      label: 'pitch',
+      group: 'ground',
+      kind: 'fill',
+      color: PITCH_FILL_DEFAULT,
+      minzoom: 15,
+      maxzoom: 16,
+      layerIds: ['pitch-fill', 'pitch-surface', 'pitch-markings'],
+    },
+    {
+      id: 'sandpit',
+      label: 'sandpit',
+      group: 'ground',
+      kind: 'fill',
+      color: SANDPIT_FILL,
+      minzoom: 15,
+      maxzoom: 16,
+      layerIds: ['sandpit-'],
+    },
     {
       id: 'water',
       label: 'water',

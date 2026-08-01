@@ -52,6 +52,114 @@ export function landuseFillMatch(): ExpressionSpecification {
   return parts as ExpressionSpecification
 }
 
+/**
+ * QGIS `pitch` fill CASE on `surface:colour` / `surface` / `sport`.
+ * Colour tags use substring match (`~ 'red'`); surface/sport use exact lists.
+ */
+export function pitchFillCase(): ExpressionSpecification {
+  const colour = ['downcase', ['to-string', ['coalesce', ['get', 'surface:colour'], '']]]
+  const surface = ['to-string', ['coalesce', ['get', 'surface'], '']]
+  return [
+    'case',
+    ['>=', ['index-of', 'red', colour], 0],
+    '#dbc1b9',
+    ['>=', ['index-of', 'green', colour], 0],
+    '#b5daa9',
+    ['>=', ['index-of', 'blue', colour], 0],
+    '#c3c1d7',
+    ['>=', ['index-of', 'gray', colour], 0],
+    '#c6c9c1',
+    ['>=', ['index-of', 'grey', colour], 0],
+    '#c6c9c1',
+    ['>=', ['index-of', 'yellow', colour], 0],
+    '#e3e6c0',
+    [
+      'in',
+      surface,
+      [
+        'literal',
+        [
+          'asphalt',
+          'compacted',
+          'concrete',
+          'fine_gravel',
+          'gravel',
+          'paved',
+          'paving_stones',
+          'pebblestone',
+        ],
+      ],
+    ],
+    '#c6c9c1',
+    ['>=', ['index-of', 'grass', surface], 0],
+    '#b5daa9',
+    ['>=', ['index-of', 'sand', surface], 0],
+    '#e3e6c0',
+    ['==', ['get', 'sport'], 'table_tennis'],
+    '#c6c9c1',
+    '#d1d7c6',
+  ] as unknown as ExpressionSpecification
+}
+
+/**
+ * Sprite id for `pitch_markings` (packed `pitches/*` from `bun run sprite`).
+ * Mirrors the QGIS SvgMarker path CASE; empty string → no icon.
+ */
+export function pitchMarkingIcon(): ExpressionSpecification {
+  const sport = ['to-string', ['coalesce', ['get', 'sport'], '']]
+  const hoops = ['to-string', ['coalesce', ['get', 'hoops'], '']]
+  return [
+    'case',
+    ['>=', ['index-of', 'multi', sport], 0],
+    'pitches/multi',
+    [
+      'all',
+      ['>=', ['index-of', 'soccer', sport], 0],
+      ['>', ['to-number', ['get', 'dist_long']], 50],
+    ],
+    'pitches/soccer',
+    ['>=', ['index-of', 'soccer', sport], 0],
+    'pitches/soccer_small',
+    [
+      'all',
+      [
+        'any',
+        ['>=', ['index-of', 'basketball', sport], 0],
+        ['>=', ['index-of', 'streetball', sport], 0],
+      ],
+      ['==', hoops, '2'],
+    ],
+    'pitches/basketball_2',
+    [
+      'any',
+      ['>=', ['index-of', 'basketball', sport], 0],
+      ['>=', ['index-of', 'streetball', sport], 0],
+    ],
+    'pitches/basketball_1',
+    [
+      'all',
+      ['>=', ['index-of', 'tennis', sport], 0],
+      ['!', ['>=', ['index-of', 'table_tennis', sport], 0]],
+    ],
+    'pitches/tennis',
+    ['>=', ['index-of', 'volleyball', sport], 0],
+    'pitches/volleyball',
+    ['>=', ['index-of', 'badminton', sport], 0],
+    'pitches/badminton',
+    ['>=', ['index-of', 'handball', sport], 0],
+    'pitches/handball',
+    ['>=', ['index-of', 'field_hockey', sport], 0],
+    'pitches/field_hockey',
+    ['>=', ['index-of', 'rugby_league', sport], 0],
+    'pitches/rugby_league',
+    ['>=', ['index-of', 'rugby_union', sport], 0],
+    'pitches/rugby_union',
+    ['>=', ['index-of', 'chess', sport], 0],
+    'pitches/chess',
+    '',
+  ] as unknown as ExpressionSpecification
+}
+
 /** highway_area fill from area:highway (sidewalk variant deferred — no footway column). */
 export function highwayAreaFillMatch(): ExpressionSpecification {
   return [

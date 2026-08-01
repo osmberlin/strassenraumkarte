@@ -69,6 +69,54 @@ export const LANDUSE_FILL: Record<string, string> = {
 
 export const FOREST_CLASSES = ["forest","scrub","shrub","shrubbery","trees","wood"] as const
 
+/**
+ * Shared 19-entry `surface` → sprite `fill-pattern` table for QGIS
+ * `landuse surface` and `pitch surface` (identical categories).
+ * Ground-metre width / rotation dropped (G0.4 — fixed sprite pixel scale).
+ */
+export type SurfacePattern = {
+  /** OSM `surface` values that share this pattern + opacity. */
+  surfaces: readonly string[]
+  /** Sprite id (from `bun run sprite`). */
+  pattern: string
+  opacity: number
+}
+
+export const SURFACE_PATTERNS: readonly SurfacePattern[] = [
+  {
+    surfaces: ['artificial_turf', 'asphalt', 'rubber', 'rubbercrumb', 'tartan'],
+    pattern: 'surface/asphalt',
+    opacity: 0.06,
+  },
+  {
+    surfaces: [
+      'clay',
+      'compacted',
+      'dirt',
+      'earth',
+      'fine_gravel',
+      'gravel',
+      'ground',
+      'sand',
+    ],
+    pattern: 'sand',
+    opacity: 0.08,
+  },
+  {
+    surfaces: ['concrete', 'concrete:plates'],
+    pattern: 'surface/concrete',
+    opacity: 0.15,
+  },
+  { surfaces: ['grass'], pattern: 'grass', opacity: 0.06 },
+  { surfaces: ['paving_stones'], pattern: 'surface/paving_stones', opacity: 0.07 },
+  { surfaces: ['sett'], pattern: 'surface/sett', opacity: 0.12 },
+  { surfaces: ['woodchips'], pattern: 'woodchips', opacity: 0.1 },
+] as const
+
+/** QGIS `pitch` fill CASE fallback. */
+export const PITCH_FILL_DEFAULT = '#d1d7c6'
+export const SANDPIT_FILL = '#e3e6c0'
+
 export const WATER_FILL = "#cac7ed"
 export const WATER_INNER = "#a396d9"
 export const WATERWAY_LINE = "#b2abe0"
