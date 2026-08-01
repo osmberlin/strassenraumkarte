@@ -26,10 +26,14 @@ style/.*_work/
 
 # Local backups / editor
 backup/
-# Ignore Cursor local state, but keep committed plans under .cursor/plans/
+# Ignore Cursor local state, but keep committed plans + orchestration pins
 .cursor/*
 !.cursor/plans/
 !.cursor/plans/**
+!.cursor/agents/
+!.cursor/agents/**
+!.cursor/rules/
+!.cursor/rules/**
 
 # Local / env
 data/.venv/

@@ -4,7 +4,7 @@ overview: "Add a second, vector-based output channel to the Straßenraumkarte: P
 todos:
   - id: w0-orchestration
     content: "Bootstrap agent orchestration: run `bunx skills add FixMyBerlin/fixmyskills --skill agent-orchestration -a cursor -y` and `init-cursor.sh`, verify `.cursor/agents/implementer.md` and `verifier.md` carry `model: composer-2.5[fast=false]`, and add `!.cursor/agents/` + `!.cursor/rules/` exceptions to `.gitignore`."
-    status: pending
+    status: completed
   - id: w1-export
     content: "Data export (/implementer): create `vector/layers.ts` as the single source of truth (table, styled columns only, filter, zoom range) for the core group (highway_area, highway_service, highway path, road_marking_polygon/way/node, separation, tactile_paving, building, building_parts_dissolved_height, building_shade, building_lines, tree, landuse, water_body_dissolved, waterway_clipped, label_highway, label_waterway) and `vector/scripts/export.ts` that runs ogr2ogr per layer with `ST_Transform(geom, 4326)` into `vector/out/<layer>.geojsonl` (GeoJSONSeq, one feature per line). Reuse `data/db_config.sh` defaults."
     status: completed
