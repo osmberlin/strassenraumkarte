@@ -18,13 +18,18 @@
  * stay single.
  *
  * Within each bucket, paint order matches the QGIS highway subgroup:
- * path → service → tactile → highway_area (+ blur) → road markings → separation
- * → furniture / barriers / playground.
+ * bridge_shade → bridge → railway → path → service → tactile → highway_area
+ * (+ blur) → road markings → separation → furniture / barriers / playground.
  */
 import type { ExpressionSpecification, FilterSpecification } from '@maplibre/maplibre-gl-style-spec'
 
 /** Source-layer ids that follow the QGIS ×7 OSM `layer` stack. */
 export const OSM_STACKED_SOURCE_LAYERS = [
+  // G3 — under highway within each OSM bucket (QGIS tree)
+  'bridge_shade',
+  'bridge',
+  'railway_way',
+  'railway_node',
   'highway_path',
   'highway_service',
   'tactile_paving',
@@ -108,7 +113,13 @@ export const CORE_PAINT_ORDER = [
   'water_body_dissolved',
   'wetland',
   'waterway_clipped',
+  'landscape_way',
+  'landscape_node',
   // Within each OSM bucket these are expanded in this relative order:
+  'bridge_shade',
+  'bridge',
+  'railway_way',
+  'railway_node',
   'highway_path',
   'highway_service',
   'tactile_paving',

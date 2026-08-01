@@ -249,11 +249,15 @@ Bridges and railway are part of the ×7 `layer` stack (G0.2).
 `rand(0,360)` rotation is not reproducible in a style expression — precompute a rotation
 attribute in the exporter (the `tree` table already does this via a `rotation` column).
 
-**Known deviations:** random rock rotation must come from data, not the style.
+**Known deviations:** rock/stone rotation comes from exported `((osm_id % 360) + 360) % 360`
+(not QGIS `rand`). Peak uses a ▲ text stand-in (QGIS hospital SVG placeholder). Landscape
+MarkerLine equilateral triangles → ▲ along-line symbols; length threshold 20 m drives width/
+spacing via `length` export. Railway HashLine ties → wide `line-dasharray` (same compromise
+as G4/G5). `tree_row` on `landscape_way` is not in the QGIS categorized renderer — omitted.
 
-- [ ] bridge + bridge_shade
-- [ ] railway profile + tie
-- [ ] landscape way/node
+- [x] bridge + bridge_shade
+- [x] railway profile + tie
+- [x] landscape way/node
 
 ---
 

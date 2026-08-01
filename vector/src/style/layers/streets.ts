@@ -20,6 +20,7 @@ import { HIGHWAY_INNER_BLUR_MM } from '../effects'
 import { highwayAreaFillMatch, withOsmBucket } from '../expr'
 import { mmToPixels, metresToPixels, metresToPixelsFromProp } from '../metres'
 import { OSM_LAYER_BUCKETS, styleLayerId, type OsmLayerBucketId } from '../order'
+import { bridgeRailwayLayersForBucket } from './landscape'
 
 /** Collapsed z14–z20 highway edge blur (MM paper units → px). */
 function highwayBlurPx(): unknown[] {
@@ -128,6 +129,9 @@ export function streetLayers(): LayerSpecification[] {
 
   for (const bucket of OSM_LAYER_BUCKETS) {
     const b = bucket.id
+
+    // G3 bridge + railway (under highway within each OSM bucket)
+    layers.push(...bridgeRailwayLayersForBucket(b))
 
     // --- path fills ---
     layers.push({

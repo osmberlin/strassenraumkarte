@@ -115,6 +115,32 @@ export const LAYERS: LayerDef[] = [
     paint: 'line',
     group: 'ground',
   },
+  // G3 landscape (above water in QGIS land group)
+  {
+    id: 'landscape_way',
+    table: 'landscape_way',
+    // Length drives QGIS width / MarkerLine spacing (threshold 20 m).
+    columns: ['osm_id', 'class', 'subclass', 'ST_Length(geom) AS length'],
+    minzoom: 15,
+    maxzoom: 16,
+    paint: 'line',
+    group: 'ground',
+  },
+  {
+    id: 'landscape_node',
+    table: 'landscape_node',
+    // Materialise rand(0,360) rock/stone rotation (not reproducible in MapLibre).
+    columns: [
+      'osm_id',
+      'class',
+      'subclass',
+      '((osm_id % 360) + 360) % 360 AS rotation',
+    ],
+    minzoom: 15,
+    maxzoom: 16,
+    paint: 'circle',
+    group: 'ground',
+  },
 
   // streets z15–17
   {
@@ -163,6 +189,43 @@ export const LAYERS: LayerDef[] = [
     minzoom: 15,
     maxzoom: 17,
     paint: 'line',
+    group: 'streets',
+  },
+  // G3 bridges & railway (×7 OSM layer stack, under highway within each bucket)
+  {
+    id: 'bridge_shade',
+    table: 'bridge_shade',
+    columns: ['osm_id', 'layer'],
+    minzoom: 15,
+    maxzoom: 17,
+    paint: 'fill',
+    group: 'streets',
+  },
+  {
+    id: 'bridge',
+    table: 'bridge',
+    columns: ['osm_id', 'layer', 'man_made', 'name'],
+    minzoom: 15,
+    maxzoom: 17,
+    paint: 'fill',
+    group: 'streets',
+  },
+  {
+    id: 'railway_way',
+    table: 'railway_way',
+    columns: ['osm_id', 'railway', 'gauge', 'usage', 'service', 'tunnel', 'layer'],
+    minzoom: 15,
+    maxzoom: 17,
+    paint: 'line',
+    group: 'streets',
+  },
+  {
+    id: 'railway_node',
+    table: 'railway_node',
+    columns: ['osm_id', 'railway', 'layer'],
+    minzoom: 15,
+    maxzoom: 17,
+    paint: 'circle',
     group: 'streets',
   },
 

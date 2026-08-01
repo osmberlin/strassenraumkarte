@@ -21,6 +21,7 @@ import {
   pitchMarkingIcon,
 } from '../expr'
 import { metresToPixels } from '../metres'
+import { landscapeLayers } from './landscape'
 
 /** Sprite pixel size for packed `pitches/*` icons (`build-sprite.ts`). */
 const PITCH_ICON_PIXELS = 64
@@ -302,6 +303,9 @@ export function groundLayers(): LayerSpecification[] {
       'line-width': waterwayWidth,
     },
   })
+
+  // G3 landscape (QGIS land group, above water)
+  layers.push(...landscapeLayers())
 
   return layers
 }
