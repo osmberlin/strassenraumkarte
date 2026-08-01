@@ -55,6 +55,7 @@ isProject: false
 
 ## Progress
 
+- **2026-08-01 (MVP stop)** — Orchestrator satisfied with one-tile `highway_area` isolate visual diff (pixelmatch **0.096%**, AA rim only). Pipeline: QGIS `--tiles` + `--layers` → Rust `srk-render` → `compare-one-tile` gallery. Commits: `3cd0a98` (research + single-tile), `3196aff` (Rust slice + harness). Remaining plan phases (full harness, effects, labels, go/no-go) are follow-ups, not blockers for this MVP.
 - **2026-08-01 (later)** — One-tile harness MVP + `highway_area` Rust slice by `/implementer` on Grok (user override).
   - **Anchor tile:** `17/70422/43008` (starter bbox; 3 `highway_area` features).
   - `p1-harness` **partial / in_progress:** `audit/tile-regression/scripts/compare-one-tile.ts` (Bun + pngjs + pixelmatch → `runs/<ts>/{ref,cand,diff}.png`, `metrics.json`, dark `index.html`), `scripts/render-qgis-tile.sh`, local `package.json`. Not yet: stratified `sample-tiles`, batch `compare-run`, DSSIM/SSIMULACRA2 budgets (DSSIM optional if `dssim` on PATH).
@@ -86,7 +87,7 @@ Rendering step, as measured in the repo:
 | Metatile | core 8×8, gutter 1 tile rendered then discarded | L340–360, L494–505 |
 | Settings | DPI 96, background `#ededed`, JPEG q90 default, Antialiasing on, `DrawLabeling` on, **`UseAdvancedEffects` off**, `LosslessImageRendering` on, `RenderMapTile` on | L566–575, L900–907 |
 | Ground metres | `@mercator_scale` = `1/cos φ` from render extent mid-latitude, set via `setProjectVariable` | L216–221, L281–292, L562 |
-| CLI | `--extent "xmin,xmax,ymin,ymax"`, `--zmin/--zmax/--metatile/--gutter` — **no single-tile mode** | L882–924 |
+| CLI | `--extent` **or** `--tiles z/x/y[,…]`; optional `--layers`; `--zmin/--zmax/--metatile/--gutter` | `build_arg_parser` + Progress 2026-08-01 |
 
 Style, re-counted from `style/strassenraumkarte.qgz` (zip → ~20.8 MB `.qgs` XML):
 
