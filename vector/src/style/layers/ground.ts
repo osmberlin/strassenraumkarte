@@ -127,10 +127,19 @@ export function groundLayers(): LayerSpecification[] {
     }),
   )
 
+  // outdoor_seating / construction have no SimpleFill in QGIS (pattern-only).
   layers.push({
     id: 'landuse-fill',
     type: 'fill',
     ...landuseBase,
+    filter: f([
+      '!',
+      [
+        'in',
+        ['get', 'class'],
+        ['literal', ['outdoor_seating', 'construction']],
+      ],
+    ]),
     paint: {
       'fill-color': landuseFillMatch(),
       'fill-opacity': 1,

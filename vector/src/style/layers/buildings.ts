@@ -3,14 +3,9 @@ import type {
   LayerSpecification,
 } from '@maplibre/maplibre-gl-style-spec'
 
-import {
-  BUILDING_LINES,
-  BUILDING_PARTS_FILL,
-  BUILDING_SHADE_FILL,
-} from '../colors'
-import { dropShadow } from '../effects'
+import { BUILDING_LINES, BUILDING_PARTS_FILL } from '../colors'
 import { base } from '../expr'
-import { mmToPixels, metresToPixels } from '../metres'
+import { metresToPixels } from '../metres'
 
 /** QGIS enableorderby height ascending — shorter parts under taller. */
 const PARTS_SORT_KEY = [
@@ -19,87 +14,22 @@ const PARTS_SORT_KEY = [
   0,
 ] as ExpressionSpecification
 
-/** Apply the same sort-key to drop-shadow fill/line so overlaps stack correctly. */
-function withPartsSortKey(layers: LayerSpecification[]): LayerSpecification[] {
-  return layers.map((layer) => {
-    if (layer.type === 'fill') {
-      return {
-        ...layer,
-        layout: {
-          ...('layout' in layer ? layer.layout : {}),
-          'fill-sort-key': PARTS_SORT_KEY,
-        },
-      }
-    }
-    if (layer.type === 'line') {
-      return {
-        ...layer,
-        layout: {
-          ...('layout' in layer ? layer.layout : {}),
-          'line-sort-key': PARTS_SORT_KEY,
-        },
-      }
-    }
-    return layer
-  })
-}
-
 /**
- * Buildings: shade → parts (sorted by height) → footprint → lines.
+ * Buildings: parts (sorted by height) → footprint → lines.
+ *
+ * QGIS `building_shade` uses drawSource OFF + Gaussian dropShadow of extruded
+ * shade polygons. MapLibre cannot blur fills; painting shade/parts drop shadows
+ * reads as a hard black SE slab — skipped (known deviation vs QGIS/Rust).
  *
  * Roof-shape gradients (#990003 magma / Shapeburst) are intentionally skipped —
- * they read as unfinished QGIS experiment rather than shipped cartography
- * (see docs/maplibre-style-groups.md G10).
+ * unfinished QGIS experiment (see docs/maplibre-style-groups.md G10).
  */
 export function buildingLayers(): LayerSpecification[] {
-  const shadeBase = base('building_shade', 15)
   const partsBase = base('building_parts_dissolved_height', 15)
   const buildingBase = base('building', 15)
   const linesBase = base('building_lines', 15)
 
   const layers: LayerSpecification[] = []
-
-  layers.push(
-    ...dropShadow('building-shade', shadeBase, {
-      blurM: 1.6,
-      offsetM: 0.4,
-      angleDeg: 40,
-      color: '#232323',
-      opacity: 0.138,
-    }),
-  )
-
-  layers.push({
-    id: 'building-shade-fill',
-    type: 'fill',
-    ...shadeBase,
-    paint: {
-      'fill-color': BUILDING_SHADE_FILL,
-      'fill-opacity': 1,
-    },
-  })
-
-  layers.push({
-    id: 'building-shade-outline',
-    type: 'line',
-    ...shadeBase,
-    paint: {
-      'line-color': '#232323',
-      'line-width': mmToPixels(0.26),
-    },
-  })
-
-  layers.push(
-    ...withPartsSortKey(
-      dropShadow('building-parts', partsBase, {
-        blurM: 2,
-        offsetM: 1,
-        angleDeg: 40,
-        color: '#232323',
-        opacity: 0.4,
-      }),
-    ),
-  )
 
   layers.push({
     id: 'building-parts-fill',

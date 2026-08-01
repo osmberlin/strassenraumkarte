@@ -3,7 +3,6 @@
  */
 import {
   BUILDING_PARTS_FILL,
-  BUILDING_SHADE_FILL,
   HIGHWAY_AREA_DEFAULT,
   LANDUSE_FILL,
   MARKING_DEFAULT,
@@ -51,7 +50,6 @@ const GROUP_ORDER = [
 function landuseLegendEntries(): LegendEntry[] {
   const byColor = new Map<string, string[]>()
   for (const [cls, color] of Object.entries(LANDUSE_FILL)) {
-    if (color === '#0000ff') continue // QGIS debug placeholder
     const list = byColor.get(color) ?? []
     list.push(cls)
     byColor.set(color, list)
@@ -212,16 +210,6 @@ export function legendEntries(): LegendEntry[] {
       layerIds: ['tactile_paving-line'],
     },
     {
-      id: 'building-shade',
-      label: 'building shade',
-      group: 'buildings',
-      kind: 'fill',
-      color: BUILDING_SHADE_FILL,
-      minzoom: 15,
-      maxzoom: 17,
-      layerIds: ['building-shade'],
-    },
-    {
       id: 'building',
       label: 'building',
       group: 'buildings',
@@ -323,13 +311,13 @@ export function legendEntries(): LegendEntry[] {
     },
     {
       id: 'symbol-patterns',
-      label: 'construction / dog park patterns',
+      label: 'construction / outdoor seating / dog park',
       group: 'detail',
       kind: 'fill',
       color: '#ff5300',
       minzoom: 15,
       maxzoom: 18,
-      layerIds: ['construction-', 'dog_park-'],
+      layerIds: ['construction-', 'outdoor_seating-', 'dog_park-'],
     },
     {
       id: 'tree',

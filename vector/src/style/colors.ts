@@ -35,7 +35,7 @@ export const LANDUSE_FILL: Record<string, string> = {
   "meadow": "#cedcbf",
   "miniature_golf": "#dce6cb",
   "orchard": "#cedcbf",
-  "outdoor_seating": "#0000ff",
+  // outdoor_seating: no SimpleFill in QGIS — LinePatternFill hatch only (see patterns.ts)
   "park": "#dfefce",
   "parking": "#dbdde1",
   "plant_nursery": "#cedcbf",
@@ -124,6 +124,7 @@ export const WATER_INNER = "#a396d9"
 export const WATER_SHORE = "#a396d9"
 export const WATERWAY_LINE = "#b2abe0"
 export const BUILDING_PARTS_FILL = "#ffe9e9"
+/** Kept for docs/legend parity; building_shade is not painted in MapLibre (no fill blur). */
 export const BUILDING_SHADE_FILL = "#232323"
 export const BUILDING_LINES = "#808080"
 export const TREE_CROWN = "#6b8f4e"

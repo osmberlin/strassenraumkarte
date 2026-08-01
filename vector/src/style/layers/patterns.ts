@@ -1,9 +1,8 @@
 /**
- * G8 — Symbol patterns (construction hatch + dog-park paw grid).
+ * G8 — Symbol patterns (construction / outdoor_seating hatch + dog-park paw).
  *
- * Both use `landuse` polygons filtered by `class`. Patterns are baked into the
- * build-time sprite (`patterns/construction-hatch`, `patterns/dog-park-paw`)
- * at QGIS metres @ z18 (G0.4); paw displacement dropped.
+ * Uses `landuse` polygons filtered by `class`. Patterns are baked into the
+ * build-time sprite at QGIS metres @ z18 (G0.4); paw displacement dropped.
  */
 import type {
   ExpressionSpecification,
@@ -42,6 +41,16 @@ export function patternLayers(): LayerSpecification[] {
       'line-color': '#ff5300',
       'line-opacity': 0.65,
       'line-width': metresToPixels(0.4),
+    },
+  })
+
+  // outdoor_seating — QGIS LinePatternFill only (no SimpleFill): 1.2 m @ 135°, #dce6cb α 0.67
+  layers.push({
+    id: 'outdoor_seating-hatch',
+    type: 'fill',
+    ...base('landuse', 15, f(['==', ['get', 'class'], 'outdoor_seating'])),
+    paint: {
+      'fill-pattern': 'patterns/outdoor-seating-hatch',
     },
   })
 

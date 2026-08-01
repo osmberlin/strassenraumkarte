@@ -181,8 +181,15 @@
     "height": 30,
     "pixelRatio": 1
   },
-  "surface/concrete": {
+  "patterns/outdoor-seating-hatch": {
     "x": 308,
+    "y": 1306,
+    "width": 20,
+    "height": 20,
+    "pixelRatio": 1
+  },
+  "surface/concrete": {
+    "x": 328,
     "y": 1306,
     "width": 16,
     "height": 16,

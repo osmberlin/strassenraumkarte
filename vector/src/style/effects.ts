@@ -29,6 +29,11 @@ export type DropShadowOptions = {
   color: EffectColor
   opacity: number | ExpressionSpecification
   lat?: number
+  /**
+   * When false, only the soft blur outline is emitted (no hard translated fill).
+   * Use for QGIS `drawSource` disabled layers where a solid fill reads too harsh.
+   */
+  includeFill?: boolean
 }
 
 export type InnerShadowOptions = {
@@ -126,21 +131,34 @@ export function dropShadow(
   base: LayerBase,
   options: DropShadowOptions,
 ): LayerSpecification[] {
-  const { blurM, offsetM, angleDeg, color, opacity, lat = DEFAULT_LAT } = options
+  const {
+    blurM,
+    offsetM,
+    angleDeg,
+    color,
+    opacity,
+    lat = DEFAULT_LAT,
+    includeFill = true,
+  } = options
   const translate = metreOffsetTranslate(offsetM, angleDeg, lat)
   const width = metresInterpolate(blurM, 1, lat)
   const blur = width
 
-  const fill: FillLayerSpecification = {
-    id: `${idPrefix}-drop-fill`,
-    type: 'fill',
-    ...base,
-    paint: {
-      'fill-color': color,
-      'fill-opacity': opacity,
-      'fill-translate': translate,
-      'fill-translate-anchor': 'map',
-    },
+  const layers: LayerSpecification[] = []
+
+  if (includeFill) {
+    const fill: FillLayerSpecification = {
+      id: `${idPrefix}-drop-fill`,
+      type: 'fill',
+      ...base,
+      paint: {
+        'fill-color': color,
+        'fill-opacity': opacity,
+        'fill-translate': translate,
+        'fill-translate-anchor': 'map',
+      },
+    }
+    layers.push(fill)
   }
 
   const outline: LineLayerSpecification = {
@@ -157,8 +175,9 @@ export function dropShadow(
       'line-translate-anchor': 'map',
     },
   }
+  layers.push(outline)
 
-  return [fill, outline]
+  return layers
 }
 
 /**

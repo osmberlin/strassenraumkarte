@@ -198,7 +198,7 @@ describe('buildStyle', () => {
     })
     const ids = style.layers.map((l) => l.id)
     const markingIdx = ids.findIndex((id) => id.startsWith('road_marking_'))
-    const buildingIdx = ids.indexOf('building-shade-fill')
+    const buildingIdx = ids.indexOf('building-parts-fill')
     const treeIdx = ids.indexOf('tree-crown')
     expect(markingIdx).toBeGreaterThanOrEqual(0)
     expect(buildingIdx).toBeGreaterThan(markingIdx)

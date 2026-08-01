@@ -179,6 +179,41 @@ async function buildConstructionHatch(pixelRatio: number): Promise<SpriteEntry> 
 }
 
 /**
+ * G1 outdoor_seating LinePatternFill: diagonal `#dce6cb` hatch @ 135°, α 0.67.
+ * QGIS 0.5 m stroke / 1.2 m gap → baked at TEXTURE_REF_ZOOM.
+ */
+async function buildOutdoorSeatingHatch(pixelRatio: number): Promise<SpriteEntry> {
+  const ppm = pxPerMetre(TEXTURE_REF_ZOOM)
+  const gapM = 1.2
+  const strokeM = 0.5
+  // 3 line slots spanning the tile so fill-pattern tiles seamlessly.
+  const size1x = Math.max(MIN_PATTERN_PX, Math.round(gapM * ppm * 3))
+  const size = Math.round(size1x * pixelRatio)
+  const stroke = Math.max(1, Math.round(strokeM * ppm * pixelRatio))
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+  <g transform="rotate(135 ${size / 2} ${size / 2})" stroke="rgba(220,230,203,0.67)" stroke-width="${stroke}" stroke-linecap="square">
+    <line x1="${-size}" y1="${size * 0.15}" x2="${size * 2}" y2="${size * 0.15}"/>
+    <line x1="${-size}" y1="${size * 0.5}" x2="${size * 2}" y2="${size * 0.5}"/>
+    <line x1="${-size}" y1="${size * 0.85}" x2="${size * 2}" y2="${size * 0.85}"/>
+  </g>
+</svg>`
+  const buffer = await sharp(Buffer.from(svg)).ensureAlpha().png().toBuffer()
+  const meta = await sharp(buffer).metadata()
+  if (pixelRatio === 1) {
+    console.log(
+      `[sprite] patterns/outdoor-seating-hatch ${size}×${size} (${strokeM} m stroke / ${gapM} m gap @ z${TEXTURE_REF_ZOOM})`,
+    )
+  }
+  return {
+    id: 'patterns/outdoor-seating-hatch',
+    buffer,
+    width: meta.width ?? size,
+    height: meta.height ?? size,
+  }
+}
+
+/**
  * G8 dog-park PointPatternFill: transparent tile with centred paw.
  * QGIS ~10 m grid → tile ≈ 55 px @ z18; paw ~20 px. Displacement dropped.
  */
@@ -309,6 +344,7 @@ async function main() {
     const pitches = await collectPitchSvgs(ratio)
     const patterns = await Promise.all([
       buildConstructionHatch(ratio),
+      buildOutdoorSeatingHatch(ratio),
       buildDogParkPaw(ratio),
     ])
     // @2×: scale the already ground-scaled 1× buffers.
