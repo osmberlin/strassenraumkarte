@@ -248,6 +248,21 @@ body,
   position: relative;
 }
 
+.compare-panes--triple .compare-label {
+  font-size: 0.65rem;
+}
+
+@media (max-width: 1100px) {
+  .compare-panes--triple {
+    flex-wrap: wrap;
+  }
+
+  .compare-panes--triple .compare-pane {
+    flex: 1 1 45%;
+    min-height: 40vh;
+  }
+}
+
 .compare-pane {
   position: relative;
   flex: 1;

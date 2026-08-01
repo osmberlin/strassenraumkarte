@@ -30,6 +30,7 @@ import { SOURCE_ID, absoluteSpriteUrl } from '../style/source'
 import { qgisLayerSpecs } from '../style/qgis'
 
 const RASTER_SOURCE = 'qgis-raster'
+const RUST_RASTER_SOURCE = 'rust-raster'
 const vectorLayers = qgisLayerSpecs() as LayerSpecification[]
 const baseStyle = emptyBaseStyle({
   name: 'compare',
@@ -68,6 +69,7 @@ export function ComparePage({ locationId, mode, onLocation, onMode, onBack }: Pr
   const [blend, setBlend] = useState(0.5)
   const [swipe, setSwipe] = useState(50)
   const [vectorReady, setVectorReady] = useState(false)
+  const triple = mode === 'side-by-side'
 
   const jump = useCallback(
     (id: string) => {
@@ -90,6 +92,10 @@ export function ComparePage({ locationId, mode, onLocation, onMode, onBack }: Pr
   }, [])
 
   const onRasterLoad = useCallback((e: MapLibreEvent) => {
+    installMissingStyleImageResolver(e.target)
+  }, [])
+
+  const onRustLoad = useCallback((e: MapLibreEvent) => {
     installMissingStyleImageResolver(e.target)
   }, [])
 
@@ -117,7 +123,7 @@ export function ComparePage({ locationId, mode, onLocation, onMode, onBack }: Pr
         <button type="button" className="legend-btn" onClick={onBack}>
           ← Preview
         </button>
-        <strong>Raster vs vector</strong>
+        <strong>{triple ? 'QGIS · Rust · Vector' : 'Raster vs vector'}</strong>
         <label className="compare-field">
           Location
           <select value={location.id} onChange={(e) => jump(e.target.value)}>
@@ -167,12 +173,19 @@ export function ComparePage({ locationId, mode, onLocation, onMode, onBack }: Pr
             />
           </label>
         )}
-        <span className="muted">{location.note}</span>
+        <span className="muted">
+          {location.note}
+          {triple
+            ? ' · Rust = highway_area isolate (starter bbox tiles)'
+            : ''}
+        </span>
       </header>
 
       <div
         className={
-          mode === 'side-by-side' ? 'compare-panes compare-panes--split' : 'compare-panes'
+          mode === 'side-by-side'
+            ? 'compare-panes compare-panes--split compare-panes--triple'
+            : 'compare-panes'
         }
       >
         {(mode === 'side-by-side' || mode === 'blend' || mode === 'swipe') && (
@@ -206,6 +219,33 @@ export function ComparePage({ locationId, mode, onLocation, onMode, onBack }: Pr
                 id="raster-tiles"
                 type="raster"
                 source={RASTER_SOURCE}
+                paint={{ 'raster-opacity': 1 }}
+              />
+            </Map>
+          </div>
+        )}
+
+        {triple && (
+          <div className="compare-pane">
+            <div className="compare-label">Raster (Rust)</div>
+            <Map
+              id="compare-rust"
+              style={{ width: '100%', height: '100%' }}
+              {...shared}
+              onLoad={onRustLoad}
+            >
+              <Source
+                id={RUST_RASTER_SOURCE}
+                type="raster"
+                tiles={['/raster-rust/{z}/{x}/{y}.png']}
+                tileSize={256}
+                minzoom={MAP_MIN_ZOOM}
+                maxzoom={MAP_MAX_ZOOM}
+              />
+              <Layer
+                id="rust-raster-tiles"
+                type="raster"
+                source={RUST_RASTER_SOURCE}
                 paint={{ 'raster-opacity': 1 }}
               />
             </Map>

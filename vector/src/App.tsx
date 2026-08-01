@@ -208,7 +208,7 @@ export function App() {
             className="legend-btn"
             onClick={() => setRoute((r) => ({ ...r, compare: true }))}
           >
-            Compare raster
+            Compare QGIS · Rust · Vector
           </button>
           <span className="muted">
             QGIS-faithful core paints ·{' '}

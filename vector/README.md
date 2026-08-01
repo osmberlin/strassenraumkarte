@@ -8,6 +8,7 @@ PostGIS → GeoJSONSeq → tippecanoe → `.pmtiles`, styled with a MapLibre por
 - `ogr2ogr` (GDAL), `tippecanoe`, `tile-join`, `bun`
 - `PGPASSWORD` (or `~/.pgpass`) for the DB user
 - Optional for compare: QGIS tiles under `render/tiles/` (Vite serves them at `/raster/…`; `./render/preview_server.py` on `:8000` is only needed for the standalone QGIS preview UI)
+- Optional for 3-pane compare: Rust `highway_area` tiles from `./audit/tile-regression/scripts/bench-bbox.sh` (Vite serves newest `audit/tile-regression/runs/bench-*/rust` at `/raster-rust/…`, or set `RUST_TILES_ROOT`)
 
 ## Workflow
 
@@ -21,7 +22,9 @@ bun run dev                     # http://127.0.0.1:5177
 ```
 
 Preview: http://127.0.0.1:5177/#16/52.4768/13.4222  
-Compare: http://127.0.0.1:5177/?compare=1&location=intersection&mode=side-by-side  
+Compare (QGIS · Rust · Vector): http://127.0.0.1:5177/?compare=1&location=intersection&mode=side-by-side  
+
+Side-by-side shows three synced maps. Swipe/blend stay QGIS vs Vector. Rust coverage is the starter-bbox bench (`intersection` is inside; other locations may 404 until you re-bench a larger extent).
 
 ```bash
 bun run screenshots   # needs dev (+ raster server) → compare-output/index.html
