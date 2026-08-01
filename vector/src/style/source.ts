@@ -23,8 +23,14 @@ export const PMTILES_PATH = '/tiles/strassenraumkarte.pmtiles'
  */
 export const GLYPHS_URL = 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf'
 
-/** Sprite base path (no extension). Omit from the style until the packer exists. */
+/** Sprite base path (no extension). MapLibre 6 requires an absolute URL at runtime. */
 export const SPRITE_PATH = '/sprites/strassenraumkarte'
+
+/** Resolve sprite to an absolute URL (MapLibre 6 rejects root-relative sprite). */
+export function absoluteSpriteUrl(origin = 'http://127.0.0.1:5177'): string {
+  if (SPRITE_PATH.startsWith('http://') || SPRITE_PATH.startsWith('https://')) return SPRITE_PATH
+  return `${origin.replace(/\/$/, '')}${SPRITE_PATH}`
+}
 
 export type SourceUrlOptions = {
   /** Absolute `pmtiles://…` URL from `pmtilesSourceUrl()`, or a TileJSON/pmtiles href. */

@@ -24,14 +24,17 @@ import { installMissingStyleImageResolver } from './lib/missing-style-images'
 import { pmtilesSourceUrl } from './maplibre-setup'
 import { emptyBaseStyle } from './style/build-style'
 import { DEFAULT_VIEW } from './style/basic'
-import { SOURCE_ID } from './style/source'
+import { SOURCE_ID, absoluteSpriteUrl } from './style/source'
 import { legendEntries, layerMatchesLegend } from './style/legend'
 import { qgisLayerSpecs } from './style/qgis'
 
 const MAP_ID = 'mainMap'
 const allLayers = qgisLayerSpecs() as LayerSpecification[]
 const legend = legendEntries()
-const BASE_STYLE = emptyBaseStyle({ name: 'Straßenraumkarte vector' })
+const BASE_STYLE = emptyBaseStyle({
+  name: 'Straßenraumkarte vector',
+  sprite: absoluteSpriteUrl(window.location.origin),
+})
 
 function readRoute(): { compare: boolean; location: string; mode: CompareMode } {
   const q = new URLSearchParams(window.location.search)

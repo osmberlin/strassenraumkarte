@@ -15,6 +15,7 @@ export {
   SOURCE_MAXZOOM,
   SOURCE_MINZOOM,
   SPRITE_PATH,
+  absoluteSpriteUrl,
   vectorSourceSpec,
 } from './source'
 export { buildStyle, emptyBaseStyle } from './build-style'

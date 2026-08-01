@@ -310,11 +310,17 @@ dash arrays built with `array_foreach(string_to_array("dasharray", ';'), … * @
 MapLibre `line-dasharray` does **not** accept data-driven expressions, so distinct dash patterns
 must be split into separate style layers filtered by `dasharray` value.
 
-**Known deviations:** dash patterns quantised to a fixed set; texture rotation dropped.
+**Known deviations:** dash patterns quantised to a fixed set; texture rotation and ground-metre
+texture scale dropped (`fill-pattern` uses sprite pixel size; `sett:length` / `direction`
+exported for future use); segregated sidepath dual-offset omitted (no `segregated` column in
+PostGIS); steps / access_aisle HashLines approximated with along-line `line-dasharray` (not
+perpendicular ticks); tactile MarkerLine `cross2` markers omitted (offset kerb line only);
+crossing flat caps left as round (`line-cap` is not data-driven); service `name` labels
+deferred (no `name` on `highway_service`; glyphs optional).
 
 - [x] G0.2 stacking decision documented
 - [x] `highway_area` 8 class fills
-- [ ] `highway_area` 5 surface textures
+- [x] `highway_area` 5 surface textures
 - [x] z14–z20 collapsed into one blur ramp
 - [x] `service`, `path` fill + casing
 - [x] `tactile_paving`

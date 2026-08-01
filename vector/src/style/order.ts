@@ -24,9 +24,10 @@ import type { ExpressionSpecification, FilterSpecification } from '@maplibre/map
 
 /** Source-layer ids that follow the QGIS ×7 OSM `layer` stack. */
 export const OSM_STACKED_SOURCE_LAYERS = [
-  'highway_area',
+  'highway_path',
   'highway_service',
   'tactile_paving',
+  'highway_area',
   'road_marking_polygon',
   'road_marking_way',
   'road_marking_node',
@@ -94,6 +95,7 @@ export const CORE_PAINT_ORDER = [
   'water_body_dissolved',
   'waterway_clipped',
   // Within each OSM bucket these are expanded in this relative order:
+  'highway_path',
   'highway_service',
   'tactile_paving',
   'highway_area',

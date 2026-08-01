@@ -84,3 +84,13 @@ export const HIGHWAY_BLUR = "#232323"
 export const SERVICE_LINE = "#cccccc"
 
 export const HIGHWAY_AREA_DEFAULT = "#a8a8a7"
+
+/** Path (way) fills — QGIS `path (way, fill)`. */
+export const PATH_CYCLEWAY = "#d2d1d2"
+export const PATH_SIDEWALK = "#ebedd6"
+export const PATH_FOOTWAY = "#e1e3bd"
+export const PATH_STEPS = "#979c90"
+export const PATH_ACCESS_AISLE = "#ffffea"
+/** Path casing: sidewalk/sidepath `#d3d3d3`, footway/informal `#979c90`. */
+export const PATH_CASING_LIGHT = "#d3d3d3"
+export const PATH_CASING_DARK = "#979c90"

@@ -26,12 +26,15 @@ import {
 import { installMissingStyleImageResolver } from '../lib/missing-style-images'
 import { pmtilesSourceUrl } from '../maplibre-setup'
 import { emptyBaseStyle } from '../style/build-style'
-import { SOURCE_ID } from '../style/source'
+import { SOURCE_ID, absoluteSpriteUrl } from '../style/source'
 import { qgisLayerSpecs } from '../style/qgis'
 
 const RASTER_SOURCE = 'qgis-raster'
 const vectorLayers = qgisLayerSpecs() as LayerSpecification[]
-const baseStyle = emptyBaseStyle({ name: 'compare' })
+const baseStyle = emptyBaseStyle({
+  name: 'compare',
+  sprite: absoluteSpriteUrl(window.location.origin),
+})
 
 type View = {
   longitude: number

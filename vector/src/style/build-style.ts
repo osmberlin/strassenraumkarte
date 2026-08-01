@@ -5,7 +5,7 @@ import type { LayerSpecification, StyleSpecification } from '@maplibre/maplibre-
 
 import { MAP_MAX_ZOOM, MAP_MIN_ZOOM } from '../../layers'
 import { qgisLayerSpecs } from './qgis'
-import { GLYPHS_URL, SOURCE_ID, SPRITE_PATH, vectorSourceSpec, type SourceUrlOptions } from './source'
+import { GLYPHS_URL, SOURCE_ID, absoluteSpriteUrl, vectorSourceSpec, type SourceUrlOptions } from './source'
 
 export type BuildStyleOptions = SourceUrlOptions & {
   sprite?: string
@@ -20,7 +20,7 @@ const BACKGROUND = '#ededed'
 export function buildStyle(options: BuildStyleOptions): StyleSpecification {
   const {
     url,
-    sprite = SPRITE_PATH,
+    sprite = absoluteSpriteUrl(),
     glyphs = GLYPHS_URL,
     name = 'Straßenraumkarte vector',
     backgroundColor = BACKGROUND,
@@ -57,7 +57,7 @@ export function emptyBaseStyle(
   const {
     name = 'Straßenraumkarte vector',
     glyphs = GLYPHS_URL,
-    sprite = SPRITE_PATH,
+    sprite = absoluteSpriteUrl(),
     backgroundColor = BACKGROUND,
   } = options
 
