@@ -1,4 +1,4 @@
-import type { LayerSpecification, StyleSpecification } from 'maplibre-gl'
+import type { CircleLayerSpecification, FillLayerSpecification, LineLayerSpecification, StyleSpecification } from 'maplibre-gl'
 
 import { LAYERS, SOURCE_ID } from '../../layers'
 
@@ -8,8 +8,36 @@ const FILL_OUTLINE = 'rgba(30, 100, 220, 0.7)'
 const LINE = '#7c3aed'
 const CIRCLE = '#dc2626'
 
-function paintLayers(): LayerSpecification[] {
-  const layers: LayerSpecification[] = []
+export { SOURCE_ID }
+
+/** Base style without sources/layers — data comes from declarative <Source>/<Layer>. */
+export const BASE_STYLE: StyleSpecification = {
+  version: 8,
+  name: 'Straßenraumkarte vector (basic)',
+  sources: {},
+  layers: [
+    {
+      id: 'background',
+      type: 'background',
+      paint: { 'background-color': '#ededed' },
+    },
+  ],
+}
+
+export type BasicLayerSpec =
+  | (Pick<FillLayerSpecification, 'id' | 'type' | 'source' | 'source-layer' | 'minzoom' | 'paint'> & {
+      type: 'fill'
+    })
+  | (Pick<LineLayerSpecification, 'id' | 'type' | 'source' | 'source-layer' | 'minzoom' | 'paint'> & {
+      type: 'line'
+    })
+  | (Pick<CircleLayerSpecification, 'id' | 'type' | 'source' | 'source-layer' | 'minzoom' | 'paint'> & {
+      type: 'circle'
+    })
+
+/** Declarative layer props for react-map-gl <Layer />. */
+export function basicLayerSpecs(): BasicLayerSpec[] {
+  const layers: BasicLayerSpec[] = []
 
   for (const def of LAYERS) {
     if (def.paint === 'fill') {
@@ -53,32 +81,6 @@ function paintLayers(): LayerSpecification[] {
   }
 
   return layers
-}
-
-/**
- * @param tileTemplate HTTP template with {z}/{x}/{y}, e.g. `/mvt/{z}/{x}/{y}.mvt`
- */
-export function buildBasicStyle(tileTemplate: string): StyleSpecification {
-  return {
-    version: 8,
-    name: 'Straßenraumkarte vector (basic)',
-    sources: {
-      [SOURCE_ID]: {
-        type: 'vector',
-        tiles: [tileTemplate],
-        minzoom: 15,
-        maxzoom: 18,
-      },
-    },
-    layers: [
-      {
-        id: 'background',
-        type: 'background',
-        paint: { 'background-color': '#ededed' },
-      },
-      ...paintLayers(),
-    ],
-  }
 }
 
 /** Default map view — Berlin-Neukölln starter area (docker BBOX centre). */

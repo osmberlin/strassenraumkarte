@@ -12,10 +12,10 @@ todos:
     content: "Tile build (/implementer): `vector/scripts/build-tiles.ts` runs tippecanoe per layer group with the group zoom ranges (ground z15-16, streets/buildings z15-17, markings/trees z17-18), merges with `tile-join -o public/tiles/strassenraumkarte.pmtiles`, and `vector/scripts/tile-report.ts` prints per-layer/per-zoom byte stats. Tune flags against the measured report; document the chosen flags and why in `vector/README.md`."
     status: completed
   - id: w3-scaffold
-    content: "App scaffold (/implementer): Bun + Vite + React 19 + TypeScript + MapLibre in `vector/`, with PMTiles archive + HTTP `/mvt/{z}/{x}/{y}.mvt` Vite middleware for reliable tile fetch, package scripts `export`, `tiles`, `dev`, `type-check`, `check`. (Tailwind/oxlint/oxfmt/playwright compare harness still pending.)"
+    content: "App scaffold (/implementer): Bun + Vite + React 19 + TypeScript + MapLibre 6 + react-map-gl in `vector/`, with official `setWorkerUrl(...?worker&url)` + pmtiles `addProtocol`, package scripts `export`, `tiles`, `dev`, `type-check`, `check`, `verify-preview`. (Tailwind/oxlint/oxfmt/compare harness still pending.)"
     status: completed
   - id: w3b-basic-preview
-    content: "Prep preview (done): geometry-type style (blue fills / purple lines / red circles), MapLibre worker pinned via `setWorkerUrl`, Playwright smoke `scripts/verify-preview.ts`."
+    content: "Prep preview (done): react-map-gl declarative Source/Layer, geometry-type style (blue fills / purple lines / red circles), Playwright smoke `scripts/verify-preview.ts`."
     status: completed
   - id: w4a-style-core
     content: "Style foundation (/implementer): `src/style/` builder emitting `style.json`; `metresToPixels()` helper implementing `px = m * 2^z / (78271.51696 * cos lat)` as an `['exponential', 2]` zoom interpolation; source/sprite/glyphs config; layer ordering module reproducing the QGIS draw order and OSM `layer` stacking via `symbol-sort-key`/layer split; `validateStyleMin` Bun test."
@@ -60,8 +60,8 @@ flowchart LR
   GJ["vector/out/*.geojsonl\nGeoJSONSeq, EPSG:4326\none feature per line"]
   TC["tippecanoe per group\n+ tile-join"]
   PM["vector/public/tiles/\nstrassenraumkarte.pmtiles"]
-  MVT["Vite middleware\n/mvt/z/x/y.mvt"]
-  APP["Bun + Vite + React\nMapLibre 6 style"]
+  MVT["pmtiles:// protocol\n+ MapLibre worker"]
+  APP["react-map-gl / MapLibre 6"]
   RAS["render/tiles\nQGIS raster (proxy)"]
   CMP["compare page\nsynced / swipe / diff"]
   PG -->|ogr2ogr| GJ --> TC --> PM --> MVT --> APP --> CMP
@@ -103,10 +103,10 @@ Verified on the Berlin Docker DB (`localhost:5433` / `strassenraumkarte`) with t
 
 **MapLibre 6 + Vite (important)**
 
-1. **Do not rely on `addProtocol('pmtiles')` in Vite/MapLibre 6 for tile bytes.** Tile JSON can load on the main thread, but MVT fetches run in the **web worker**, where the custom protocol is not available — tiles stay `loading` forever. Prep serves HTTP `/mvt/{z}/{x}/{y}.mvt` from the archive via a Vite middleware (`pmtiles` `getZxy`). Keep the `.pmtiles` file as the artefact; HTTP is the browser delivery path for now.
-2. **Pin the worker:** Vite’s dep optimizer breaks the default worker URL (`maplibre-gl-worker.mjs` missing under `.vite/deps`). Call `setWorkerUrl(import 'maplibre-gl/dist/maplibre-gl-worker.mjs?url')` and **`optimizeDeps.exclude: ['maplibre-gl']`**.
-3. **Named imports** from `maplibre-gl` (no default export in the ESM build).
-4. Bind `Protocol.tile` if/when using the protocol for metadata (`this` is required); prefer `{ metadata: true }` so TileJSON includes `vector_layers`.
+1. **Worker URL (bundler-only):** follow the [v5→v6 migration guide](https://maplibre.org/maplibre-gl-js/docs/guides/v5-to-v6-migration-guide/) — `import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'` then `setWorkerUrl(workerUrl)`. Plain `?url` breaks production/dev worker loading (shared chunk missing → tiles stuck in `loading`).
+2. **PMTiles protocol works** with that worker setup: `addProtocol('pmtiles', …)` + `url: 'pmtiles://http://…/strassenraumkarte.pmtiles'`. An earlier prep path used HTTP `/mvt/…` middleware as a workaround when the worker was misconfigured; that is no longer needed.
+3. **Named imports** from `maplibre-gl` (ESM-only in v6; no default export).
+4. **React:** use `react-map-gl/maplibre` with declarative `<Source>`/`<Layer>`, `MapProvider`, and Map callback props — not imperative `new maplibregl.Map` / `useEffect` + `map.on`.
 5. Trees/detail layers start at **z17** — at z16 only fills/lines from ground/streets/buildings show (expected).
 
 **Commands**

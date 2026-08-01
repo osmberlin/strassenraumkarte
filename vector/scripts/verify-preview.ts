@@ -13,6 +13,9 @@ page.on('console', (msg) => {
   if (msg.type() === 'error') console.error('[console.error]', msg.text())
 })
 page.on('pageerror', (err) => console.error('[pageerror]', err.message))
+page.on('requestfailed', (req) => {
+  console.error('[requestfailed]', req.url(), req.failure()?.errorText)
+})
 
 await page.goto(url, { waitUntil: 'networkidle' })
 
@@ -25,18 +28,19 @@ await page.waitForFunction(
   { timeout: 30000 },
 )
 
-await page.waitForTimeout(1000)
+await page.waitForTimeout(1500)
 
 const status = await page.locator('.bar').innerText()
 const probe = await page.evaluate(() => {
-  const m = (window as unknown as { __srkMap?: any }).__srkMap
-  const tm = m?.style?.tileManagers?.strassenraumkarte
+  const m = window.__mainMap ?? window.__srkMap
+  const tm = (m as any)?.style?.tileManagers?.strassenraumkarte
   const ids = tm?.getIds?.() ?? []
   return {
     loaded: m?.loaded?.(),
     styleLoaded: m?.isStyleLoaded?.(),
     tileCount: ids.length,
     renderable: tm?.getRenderableIds?.()?.length ?? 0,
+    hasMainMap: !!window.__mainMap,
   }
 })
 

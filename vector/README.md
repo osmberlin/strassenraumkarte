@@ -1,6 +1,6 @@
 # Straßenraumkarte · vector output (prep)
 
-PostGIS → GeoJSONSeq → tippecanoe → `.pmtiles`, previewed in MapLibre with a basic geometry-type style.
+PostGIS → GeoJSONSeq → tippecanoe → `.pmtiles`, previewed with **react-map-gl/maplibre** and a basic geometry-type style.
 
 ## Prerequisites
 
@@ -26,7 +26,7 @@ Optional: export a subset with `bun run export highway_area tree`.
 Smoke the map (needs `bun run dev` and Playwright Chromium):
 
 ```bash
-bun run scripts/verify-preview.ts
+bun run verify-preview
 ```
 
 ## Style (prep)
@@ -37,22 +37,33 @@ bun run scripts/verify-preview.ts
 | lines | purple |
 | points | red circles (detail layers from **z17**) |
 
-QGIS-faithful styling is out of scope for this prep pass — see the vector output channel plan.
+## MapLibre 6 + Vite (required)
+
+Per the [v5→v6 migration guide](https://maplibre.org/maplibre-gl-js/docs/guides/v5-to-v6-migration-guide/) and install docs:
+
+```ts
+import { setWorkerUrl, addProtocol } from 'maplibre-gl'
+import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
+import { Protocol } from 'pmtiles'
+
+setWorkerUrl(workerUrl)
+const protocol = new Protocol({ metadata: true })
+addProtocol('pmtiles', (req, ac) => protocol.tile(req, ac))
+```
+
+Use **`?worker&url`**, not plain `?url` — otherwise the worker chunk is missing shared deps and vector tiles never load.
+
+## React (react-map-gl)
+
+Preview uses `react-map-gl/maplibre`: `<MapProvider>`, declarative `<Source>` / `<Layer>` (no `addSource`/`addLayer`), Map event props (`onLoad` / `onIdle`), and `window.__mainMap` in dev via `exposeMainMapForDebugging`.
 
 ## Layout
 
 | Path | Role |
 | --- | --- |
 | `layers.ts` | Layer list: table, columns, zoom, tippecanoe group, paint kind |
-| `scripts/export.ts` | `ogr2ogr` GeoJSONSeq export (`ST_SetSRID(geom,3857)` then transform) |
+| `scripts/export.ts` | `ogr2ogr` GeoJSONSeq export |
 | `scripts/build-tiles.ts` | tippecanoe per group + `tile-join` |
-| `vite.config.ts` | Vite + `/mvt/{z}/{x}/{y}.mvt` middleware reading the PMTiles archive |
-| `src/style/basic.ts` | Prep MapLibre style |
-| `out/` | GeoJSONSeq + intermediate tiles (gitignored) |
+| `src/maplibre-setup.ts` | `setWorkerUrl` + pmtiles `addProtocol` |
+| `src/App.tsx` | react-map-gl preview |
 | `public/tiles/` | Final `.pmtiles` (gitignored except `.gitkeep`) |
-
-## Tooling notes (MapLibre 6 + Vite)
-
-- **Browser delivery is HTTP MVT**, not `pmtiles://` protocol: MapLibre 6 loads tiles in a **web worker** where `addProtocol('pmtiles')` does not run. The Vite middleware serves `/mvt/...` via `pmtiles.getZxy` from `public/tiles/strassenraumkarte.pmtiles`.
-- **Pin the worker** with `setWorkerUrl(.../maplibre-gl-worker.mjs?url)` and keep `maplibre-gl` in `optimizeDeps.exclude` so Vite does not break the worker path.
-- Tippecanoe groups (z15–16 ground, z15–17 streets/buildings/labels, z17–18 detail) match the plan; joined archive is ~13 MiB for the current Berlin extract.
