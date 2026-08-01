@@ -1,17 +1,13 @@
 /**
  * Style builder — emits a MapLibre StyleSpecification for the vector channel.
- *
- * Prep: geometry-type paints via `basicLayerSpecs`. Later work packages replace
- * those with QGIS-faithful modules while keeping this entrypoint + validation.
  */
 import type { LayerSpecification, StyleSpecification } from '@maplibre/maplibre-gl-style-spec'
 
 import { MAP_MAX_ZOOM, MAP_MIN_ZOOM } from '../../layers'
-import { basicLayerSpecs } from './basic'
+import { qgisLayerSpecs } from './qgis'
 import { GLYPHS_URL, SOURCE_ID, vectorSourceSpec, type SourceUrlOptions } from './source'
 
 export type BuildStyleOptions = SourceUrlOptions & {
-  /** Include sprite key (default false until w5 packer exists). */
   includeSprite?: boolean
   sprite?: string
   glyphs?: string
@@ -21,7 +17,7 @@ export type BuildStyleOptions = SourceUrlOptions & {
 
 const BACKGROUND = '#ededed'
 
-/** Full style document (sources + layers) for validation, export, and future non-React use. */
+/** Full style document (sources + layers) for validation and non-React use. */
 export function buildStyle(options: BuildStyleOptions): StyleSpecification {
   const {
     url,
@@ -38,7 +34,7 @@ export function buildStyle(options: BuildStyleOptions): StyleSpecification {
       type: 'background',
       paint: { 'background-color': backgroundColor },
     },
-    ...(basicLayerSpecs() as LayerSpecification[]),
+    ...qgisLayerSpecs(),
   ]
 
   const style: StyleSpecification = {
@@ -62,7 +58,6 @@ export function buildStyle(options: BuildStyleOptions): StyleSpecification {
   return style
 }
 
-/** Empty-base style for react-map-gl when sources/layers are declarative children. */
 export function emptyBaseStyle(
   options: Pick<BuildStyleOptions, 'name' | 'glyphs' | 'backgroundColor'> = {},
 ): StyleSpecification {

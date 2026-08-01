@@ -182,9 +182,9 @@ dropShadow (blur 1 m, offset 0.4 m @ 40°, `#232323`, opacity 0.33) and outerGlo
 
 **Known deviations:** texture ground-scale and rotation are approximated.
 
-- [ ] colour/texture table for all 65 `landuse` classes
+- [x] colour/texture table for all 65 `landuse` classes
 - [ ] `landuse surface` + `pitch surface` (shared 19-entry texture table)
-- [ ] forest/scrub/shrub glow + shadow via G0.3 helpers
+- [x] forest/scrub/shrub glow + shadow via G0.3 helpers
 - [ ] `pitch` fill `CASE` and `pitch_markings` decision
 - [ ] `sandpit`
 
@@ -214,9 +214,9 @@ Tables: `water_body_dissolved`, `water_body`, `waterway_clipped`.
 
 **Known deviations:** shoreline fade is banded rather than continuous.
 
-- [ ] base fill + inner shadow
+- [x] base fill + inner shadow
 - [ ] shoreline fade approximation (needs `$area` exported)
-- [ ] `waterway_clipped` 4 rules incl. dotted tunnel variants
+- [x] `waterway_clipped` 4 rules incl. dotted tunnel variants
 - [ ] `wetland`
 
 ---
@@ -313,11 +313,11 @@ must be split into separate style layers filtered by `dasharray` value.
 **Known deviations:** dash patterns quantised to a fixed set; texture rotation dropped.
 
 - [x] G0.2 stacking decision documented
-- [ ] `highway_area` 8 class fills
+- [x] `highway_area` 8 class fills
 - [ ] `highway_area` 5 surface textures
-- [ ] z14–z20 collapsed into one blur ramp
-- [ ] `service`, `path` fill + casing
-- [ ] `tactile_paving`
+- [x] z14–z20 collapsed into one blur ramp
+- [x] `service`, `path` fill + casing
+- [x] `tactile_paving`
 
 ---
 
@@ -455,9 +455,9 @@ materialised as a column by the exporter (`tree.rotation` already exists for the
 
 **Known deviations:** leaf texture replaced by a flat blurred circle.
 
-- [ ] crown circle + blur + shadow
-- [ ] fallback diameter column in the exporter
-- [ ] trunk + `ref` label
+- [x] crown circle + blur + shadow
+- [x] fallback diameter column in the exporter
+- [x] trunk + `ref` label
 
 ---
 
@@ -484,8 +484,8 @@ Tables: `building_shade`, `building_parts_dissolved_height`, `building`, `buildi
 
 **Known deviations:** roof gradients flattened pending the check above.
 
-- [ ] `building_shade` + `building_parts_dissolved_height` with shadows
-- [ ] `building_lines` five classes
+- [x] `building_shade` + `building_parts_dissolved_height` with shadows
+- [x] `building_lines` five classes
 - [ ] `roof shape` — verify intent first
 - [ ] `housenumber` labels
 

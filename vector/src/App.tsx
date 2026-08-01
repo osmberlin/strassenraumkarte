@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import type { MapLibreEvent } from 'maplibre-gl'
+import type { LayerSpecification, MapLibreEvent } from 'maplibre-gl'
 import {
   Layer,
   Map,
@@ -19,12 +19,16 @@ import {
 import { Legend } from './components/Legend'
 import { exposeMainMapForDebugging } from './lib/expose-main-map'
 import { pmtilesSourceUrl } from './maplibre-setup'
-import { BASE_STYLE, DEFAULT_VIEW, SOURCE_ID, basicLayerSpecs } from './style/basic'
-import { legendEntries } from './style/legend'
+import { emptyBaseStyle } from './style/build-style'
+import { DEFAULT_VIEW } from './style/basic'
+import { SOURCE_ID } from './style/source'
+import { legendEntries, layerMatchesLegend } from './style/legend'
+import { qgisLayerSpecs } from './style/qgis'
 
 const MAP_ID = 'mainMap'
-const layers = basicLayerSpecs()
+const allLayers = qgisLayerSpecs() as LayerSpecification[]
 const legend = legendEntries()
+const BASE_STYLE = emptyBaseStyle({ name: 'Straßenraumkarte vector' })
 
 function MapCanvas({
   onStatus,
@@ -74,10 +78,15 @@ function MapCanvas({
     [onError],
   )
 
-  const visibleLayers = useMemo(
-    () => layers.filter((layer) => !hidden.has(layer.id)),
-    [hidden],
-  )
+  const visibleLayers = useMemo(() => {
+    return allLayers.filter((layer) => {
+      const hiddenBy = [...hidden].some((legendId) => {
+        const entry = legend.find((e) => e.id === legendId)
+        return entry ? layerMatchesLegend(layer.id, entry) : false
+      })
+      return !hiddenBy
+    })
+  }, [hidden])
 
   return (
     <Map
@@ -101,10 +110,6 @@ function MapCanvas({
       <NavigationControl position="top-right" />
       <ScaleControl position="bottom-right" unit="metric" />
 
-      {/*
-        Source min/maxzoom = PMTiles archive (tippecanoe), not MAP_MAX_ZOOM.
-        At map z19–20 MapLibre overscales z18 tiles; raising source maxzoom would 404.
-      */}
       <Source
         id={SOURCE_ID}
         type="vector"
@@ -113,7 +118,9 @@ function MapCanvas({
         maxzoom={SOURCE_MAXZOOM}
       />
       {visibleLayers.map((layer) => (
-        <Layer key={layer.id} {...layer} />
+        // LayerSpecification → react-map-gl LayerProps (compatible at runtime).
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        <Layer key={layer.id} {...(layer as any)} />
       ))}
     </Map>
   )
@@ -125,20 +132,17 @@ export function App() {
   const [zoom, setZoom] = useState<number>(DEFAULT_VIEW.zoom)
   const [hidden, setHidden] = useState<ReadonlySet<string>>(() => new Set())
 
-  const toggle = useCallback((layerId: string) => {
+  const toggle = useCallback((legendId: string) => {
     setHidden((prev) => {
       const next = new Set(prev)
-      if (next.has(layerId)) next.delete(layerId)
-      else next.add(layerId)
+      if (next.has(legendId)) next.delete(legendId)
+      else next.add(legendId)
       return next
     })
   }, [])
 
   const showAll = useCallback(() => setHidden(new Set()), [])
-  const hideAll = useCallback(
-    () => setHidden(new Set(legend.map((e) => e.id))),
-    [],
-  )
+  const hideAll = useCallback(() => setHidden(new Set(legend.map((e) => e.id))), [])
 
   return (
     <MapProvider>
@@ -146,7 +150,7 @@ export function App() {
         <header className="bar">
           <strong>Straßenraumkarte · vector preview</strong>
           <span className="muted">
-            legend grows with style · hash URL keeps the view ·{' '}
+            QGIS-faithful core paints · hash keeps the view ·{' '}
             <code>pmtiles://…/strassenraumkarte.pmtiles</code>
           </span>
           <span className={error ? 'err' : 'ok'}>{error ?? status}</span>

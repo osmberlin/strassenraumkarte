@@ -25,7 +25,7 @@ todos:
     status: completed
   - id: w4c-layers
     content: "Core layer styling (/implementer): translate the QGIS rules for ground (landuse, water, waterway), streets (highway_area, service, path), structures (building*, building_lines), trees, and road markings (road_marking_*, separation, tactile_paving) into MapLibre layers using `metresToPixels` and `effects.ts`. Prefer `circle`/`line`/`fill` primitives over icons; use `line-dasharray` for marking patterns. (Apply effect params from w4b to real layers here.)"
-    status: pending
+    status: completed
   - id: w5-images
     content: "Graphics (/implementer): `scripts/build-sprite.ts` packs `style/textures/*.png` (+ rasterized pitch SVGs) into `sprite.png`/`sprite.json` with @2x for `fill-pattern`; runtime resolver using `map.setMissingStyleImageResolver` rasterizes `style/symbols/**/*.svg` on demand for expression-driven `icon-image` ids, guarded by `hasImage`, filtering `'null'`/`''`, and re-registering after `setStyle`."
     status: pending

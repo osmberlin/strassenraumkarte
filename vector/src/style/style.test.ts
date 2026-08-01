@@ -58,15 +58,15 @@ describe('effects', () => {
       url: 'pmtiles://http://127.0.0.1:5177/tiles/strassenraumkarte.pmtiles',
     })
     style.layers.push(
-      ...dropShadow('landuse', base, {
+      ...dropShadow('fx-landuse', base, {
         blurM: 1,
         offsetM: 0.4,
         angleDeg: 40,
         color: '#232323',
         opacity: 0.33,
       }),
-      ...innerShadow('water', base, { blurM: 4, color: '#a396d9', opacity: 0.5 }),
-      ...outerGlow('forest', base, { blurM: 0.75, color: '#c8dbb6' }),
+      ...innerShadow('fx-water', base, { blurM: 4, color: '#a396d9', opacity: 0.5 }),
+      ...outerGlow('fx-forest', base, { blurM: 0.75, color: '#c8dbb6' }),
     )
     const errors = validateStyleMin(style)
     expect(errors).toEqual([])

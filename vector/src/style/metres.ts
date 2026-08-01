@@ -48,6 +48,29 @@ export function metresToPixels(
   ] as ExpressionSpecification
 }
 
+/**
+ * Data-driven metres (feature property) → px without nesting zoom expressions.
+ * Stop values multiply `coalesce(get prop, fallback)` by the z15/z20 factors.
+ */
+export function metresToPixelsFromProp(
+  prop: string,
+  fallbackM: number,
+  lat: number = DEFAULT_LAT,
+): ExpressionSpecification {
+  const z15 = metresFactorAtZoom(15, lat)
+  const z20 = metresFactorAtZoom(20, lat)
+  const value = ['coalesce', ['get', prop], fallbackM] as ExpressionSpecification
+  return [
+    'interpolate',
+    ['exponential', 2],
+    ['zoom'],
+    15,
+    ['*', value, z15],
+    20,
+    ['*', value, z20],
+  ] as ExpressionSpecification
+}
+
 /** Pixel factor at a single zoom (tests / one-off calcs). */
 export function metresToPixelsAtZoom(m: number, zoom: number, lat: number = DEFAULT_LAT): number {
   return m * metresFactorAtZoom(zoom, lat)

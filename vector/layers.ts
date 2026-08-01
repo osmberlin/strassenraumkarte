@@ -1,8 +1,8 @@
 /**
  * Single source of truth for vector export / tippecanoe layer groups.
  *
- * Prep pass: export osm_id (when present) + geom only; style is geometry-type based.
- * `highway path` from the plan is covered by `highway_area` (footway/path/cycleway areas).
+ * Columns are the styled attributes needed for the QGIS-faithful MapLibre port (w4c).
+ * Identifiers with colons/keywords are double-quoted for PostgreSQL.
  */
 
 export type GeomKind = 'fill' | 'line' | 'circle'
@@ -20,7 +20,7 @@ export type LayerDef = {
   minzoom: number
   /** Tippecanoe maxzoom (-z); MapLibre overzooms above this */
   maxzoom: number
-  /** How the basic preview paints this layer */
+  /** Fallback geometry family for legend / prep */
   paint: GeomKind
   /** Tippecanoe build group (one tippecanoe run per group, then tile-join) */
   group: 'ground' | 'streets' | 'buildings' | 'detail' | 'labels'
@@ -31,7 +31,7 @@ export const LAYERS: LayerDef[] = [
   {
     id: 'landuse',
     table: 'landuse',
-    columns: ['osm_id'],
+    columns: ['osm_id', 'class'],
     minzoom: 15,
     maxzoom: 16,
     paint: 'fill',
@@ -49,7 +49,7 @@ export const LAYERS: LayerDef[] = [
   {
     id: 'waterway_clipped',
     table: 'waterway_clipped',
-    columns: [],
+    columns: ['osm_id', 'width', 'waterway', 'tunnel', 'covered'],
     minzoom: 15,
     maxzoom: 16,
     paint: 'line',
@@ -60,7 +60,15 @@ export const LAYERS: LayerDef[] = [
   {
     id: 'highway_area',
     table: 'highway_area',
-    columns: ['osm_id', 'layer'],
+    columns: [
+      'osm_id',
+      'layer',
+      '"area:highway"',
+      'surface',
+      'type',
+      'class',
+      'direction',
+    ],
     minzoom: 15,
     maxzoom: 17,
     paint: 'fill',
@@ -69,7 +77,7 @@ export const LAYERS: LayerDef[] = [
   {
     id: 'highway_service',
     table: 'highway_service',
-    columns: ['layer'],
+    columns: ['class', 'width', 'layer'],
     minzoom: 15,
     maxzoom: 17,
     paint: 'line',
@@ -80,7 +88,7 @@ export const LAYERS: LayerDef[] = [
   {
     id: 'building',
     table: 'building',
-    columns: ['osm_id'],
+    columns: ['osm_id', 'height'],
     minzoom: 15,
     maxzoom: 17,
     paint: 'fill',
@@ -89,7 +97,7 @@ export const LAYERS: LayerDef[] = [
   {
     id: 'building_parts_dissolved_height',
     table: 'building_parts_dissolved_height',
-    columns: [],
+    columns: ['height'],
     minzoom: 15,
     maxzoom: 17,
     paint: 'fill',
@@ -107,7 +115,7 @@ export const LAYERS: LayerDef[] = [
   {
     id: 'building_lines',
     table: 'building_lines',
-    columns: [],
+    columns: ['class'],
     minzoom: 15,
     maxzoom: 17,
     paint: 'line',
@@ -118,7 +126,7 @@ export const LAYERS: LayerDef[] = [
   {
     id: 'road_marking_polygon',
     table: 'road_marking_polygon',
-    columns: [],
+    columns: ['road_marking', 'pattern', 'colour', 'layer'],
     minzoom: 17,
     maxzoom: 18,
     paint: 'fill',
@@ -127,7 +135,7 @@ export const LAYERS: LayerDef[] = [
   {
     id: 'road_marking_way',
     table: 'road_marking_way',
-    columns: ['osm_id'],
+    columns: ['osm_id', 'road_marking', 'width', 'colour', 'dasharray', 'layer'],
     minzoom: 17,
     maxzoom: 18,
     paint: 'line',
@@ -136,7 +144,7 @@ export const LAYERS: LayerDef[] = [
   {
     id: 'road_marking_node',
     table: 'road_marking_node',
-    columns: ['osm_id'],
+    columns: ['osm_id', 'arrow', 'symbol', 'direction', 'length', 'width', 'layer'],
     minzoom: 17,
     maxzoom: 18,
     paint: 'circle',
@@ -145,7 +153,7 @@ export const LAYERS: LayerDef[] = [
   {
     id: 'separation',
     table: 'separation',
-    columns: [],
+    columns: ['separation', 'layer'],
     minzoom: 17,
     maxzoom: 18,
     paint: 'line',
@@ -154,7 +162,7 @@ export const LAYERS: LayerDef[] = [
   {
     id: 'tactile_paving',
     table: 'tactile_paving',
-    columns: [],
+    columns: ['class', 'layer'],
     minzoom: 17,
     maxzoom: 18,
     paint: 'line',
@@ -163,18 +171,25 @@ export const LAYERS: LayerDef[] = [
   {
     id: 'tree',
     table: 'tree',
-    columns: ['osm_id'],
+    // Materialise fallback crown diameter (QGIS randf is not reproducible in MapLibre).
+    columns: [
+      'osm_id',
+      '"natural"',
+      'COALESCE(diameter_crown, CASE WHEN "natural" = \'shrub\' THEN 4.5 ELSE 7 END) AS diameter_crown',
+      'COALESCE(circumference, 1.57) AS circumference',
+      'rotation',
+    ],
     minzoom: 17,
     maxzoom: 18,
     paint: 'circle',
     group: 'detail',
   },
 
-  // labels z15–17 (line geometries used for placement later)
+  // labels z15–17
   {
     id: 'label_highway',
     table: 'label_highway',
-    columns: [],
+    columns: ['name', 'class', 'zoom'],
     minzoom: 15,
     maxzoom: 17,
     paint: 'line',

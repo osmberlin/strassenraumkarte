@@ -2,7 +2,6 @@ import { legendGroups, type LegendEntry } from '../style/legend'
 
 type Props = {
   entries?: LegendEntry[]
-  /** Current map zoom — dims entries outside their tippecanoe minzoom. */
   zoom: number
   hidden: ReadonlySet<string>
   onToggle: (layerId: string) => void
@@ -79,8 +78,8 @@ export function Legend({
                       }
                       title={
                         belowMin
-                          ? `Visible from z${entry.minzoom} (tippecanoe)`
-                          : `z${entry.minzoom}–${entry.maxzoom} in archive`
+                          ? `Visible from z${entry.minzoom}`
+                          : `z${entry.minzoom}–${entry.maxzoom}`
                       }
                     >
                       <input
