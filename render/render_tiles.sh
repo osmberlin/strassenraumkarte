@@ -48,13 +48,16 @@ GUTTER=1
 DPI=96
 BACKGROUND="#ededed"
 FORMAT="jpg"
+WORKERS="${RENDER_WORKERS:-1}"
+FONTS_DIR=""
+NO_FONTS=0
 
 log() {
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [$1] $2"
 }
 
 usage() {
-  echo "Usage: $0 [--bbox xmin,ymin,xmax,ymax] [--project path] [--out dir] [--zmin N] [--zmax N] [--metatile N] [--gutter N] [--dpi N] [--background #rrggbb] [--format png|jpg]"
+  echo "Usage: $0 [--bbox xmin,ymin,xmax,ymax] [--project path] [--out dir] [--zmin N] [--zmax N] [--metatile N] [--gutter N] [--dpi N] [--background #rrggbb] [--format png|jpg] [--workers N] [--fonts-dir path] [--no-fonts]"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -108,6 +111,20 @@ while [[ $# -gt 0 ]]; do
       [[ -z "${2:-}" || "$2" == --* ]] && { log ERROR "--format requires png or jpg"; usage; exit 1; }
       FORMAT="$2"
       shift 2
+      ;;
+    --workers)
+      [[ -z "${2:-}" || "$2" == --* ]] && { log ERROR "--workers requires a number"; usage; exit 1; }
+      WORKERS="$2"
+      shift 2
+      ;;
+    --fonts-dir)
+      [[ -z "${2:-}" || "$2" == --* ]] && { log ERROR "--fonts-dir requires a path"; usage; exit 1; }
+      FONTS_DIR="$2"
+      shift 2
+      ;;
+    --no-fonts)
+      NO_FONTS=1
+      shift
       ;;
     -h|--help)
       usage
@@ -195,19 +212,33 @@ log INFO "Starting PyQGIS metatile renderer..."
 log INFO "  python=$PYTHON"
 log INFO "  project=$PROJECT"
 log INFO "  out=$OUT"
-log INFO "  zoom=${ZMIN}-${ZMAX} metatile=$METATILE gutter=$GUTTER dpi=$DPI format=$FORMAT bg=$BACKGROUND"
+log INFO "  zoom=${ZMIN}-${ZMAX} metatile=$METATILE gutter=$GUTTER dpi=$DPI format=$FORMAT workers=$WORKERS bg=$BACKGROUND"
 
-DETAIL=$(python3 -c 'import json,sys; print(json.dumps({"project":sys.argv[1],"extent":sys.argv[2],"zmin":sys.argv[3],"zmax":sys.argv[4],"metatile":sys.argv[5],"gutter":sys.argv[6]}))' \
-  "$PROJECT" "$EXTENT" "$ZMIN" "$ZMAX" "$METATILE" "$GUTTER")
-perf_step "xyz_tiles_render" "render" --detail "$DETAIL" -- \
-  "$PYTHON" "$SCRIPT_DIR/xyz_tiles.py" \
-  --project "$PROJECT" \
-  --extent "$EXTENT" \
-  --out "$OUT" \
-  --zmin "$ZMIN" \
-  --zmax "$ZMAX" \
-  --metatile "$METATILE" \
-  --gutter "$GUTTER" \
-  --dpi "$DPI" \
-  --background "$BACKGROUND" \
+EXTRA_ARGS=()
+if [[ "$NO_FONTS" -eq 1 ]]; then
+  EXTRA_ARGS+=(--no-fonts)
+elif [[ -n "$FONTS_DIR" ]]; then
+  EXTRA_ARGS+=(--fonts-dir "$(resolve_path "$FONTS_DIR")")
+fi
+
+DETAIL=$(python3 -c 'import json,sys; print(json.dumps({"project":sys.argv[1],"extent":sys.argv[2],"zmin":sys.argv[3],"zmax":sys.argv[4],"metatile":sys.argv[5],"gutter":sys.argv[6],"workers":sys.argv[7]}))' \
+  "$PROJECT" "$EXTENT" "$ZMIN" "$ZMAX" "$METATILE" "$GUTTER" "$WORKERS")
+# bash 3.2 + set -u: empty "${arr[@]}" is an unbound-variable error
+RENDER_CMD=(
+  "$PYTHON" "$SCRIPT_DIR/xyz_tiles.py"
+  --project "$PROJECT"
+  --extent "$EXTENT"
+  --out "$OUT"
+  --zmin "$ZMIN"
+  --zmax "$ZMAX"
+  --metatile "$METATILE"
+  --gutter "$GUTTER"
+  --dpi "$DPI"
+  --background "$BACKGROUND"
   --format "$FORMAT"
+  --workers "$WORKERS"
+)
+if [[ ${#EXTRA_ARGS[@]} -gt 0 ]]; then
+  RENDER_CMD+=("${EXTRA_ARGS[@]}")
+fi
+perf_step "xyz_tiles_render" "render" --detail "$DETAIL" -- "${RENDER_CMD[@]}"

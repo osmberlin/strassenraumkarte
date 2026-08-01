@@ -35,6 +35,9 @@ export QGIS_PKG_DATA_PATH="$QGIS_APP/Contents/Resources/qgis"
 
 # Headless metatile rendering (also set in render_tiles.sh as a fallback).
 export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-offscreen}"
+# Avoid Qt rejecting large SVG/raster symbol buffers during metatile paint
+# (seen as "QImageIOHandler: … exceeds … 512 megabytes" on dense z17+).
+export QT_IMAGEIO_MAXALLOC="${QT_IMAGEIO_MAXALLOC:-0}"
 
 # Quiet PROJ/GDAL lookup noise when running outside the GUI.
 if [[ -d "$QGIS_APP/Contents/Resources/qgis/proj" ]]; then
