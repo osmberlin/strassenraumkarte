@@ -22,9 +22,9 @@ bun run dev                     # http://127.0.0.1:5177
 ```
 
 Preview: http://127.0.0.1:5177/#16/52.4768/13.4222  
-Compare (QGIS · Rust · Vector): http://127.0.0.1:5177/?compare=1&location=intersection&mode=side-by-side  
+Compare (QGIS · Rust · Vector): http://127.0.0.1:5177/?compare=1&location=intersection&mode=side-by-side&panes=qgis,rust,vector  
 
-Side-by-side shows three synced maps. Swipe/blend stay QGIS vs Vector. Rust coverage is the starter-bbox bench (`intersection` is inside; other locations may 404 until you re-bench a larger extent).
+Side-by-side lays panes in one horizontal row. Toggle QGIS / Rust / Vector in the header (synced to `?panes=`). Swipe/blend overlay one raster vs vector.
 
 ```bash
 bun run screenshots   # needs dev (+ raster server) → compare-output/index.html

@@ -16,7 +16,7 @@ import {
   SOURCE_MAXZOOM,
   SOURCE_MINZOOM,
 } from '../layers'
-import { locationById, modeById, type CompareMode } from '../locations'
+import { locationById, modeById, panesFromParam, panesToParam, type CompareMode, type ComparePanes } from '../locations'
 import { ComparePage } from './compare/ComparePage'
 import { Legend } from './components/Legend'
 import { exposeMainMapForDebugging } from './lib/expose-main-map'
@@ -36,26 +36,39 @@ const BASE_STYLE = emptyBaseStyle({
   sprite: absoluteSpriteUrl(window.location.origin),
 })
 
-function readRoute(): { compare: boolean; location: string; mode: CompareMode } {
+function readRoute(): {
+  compare: boolean
+  location: string
+  mode: CompareMode
+  panes: ComparePanes
+} {
   const q = new URLSearchParams(window.location.search)
   return {
     compare: q.get('compare') === '1' || q.get('view') === 'compare',
     location: locationById(q.get('location')).id,
     mode: modeById(q.get('mode')),
+    panes: panesFromParam(q.get('panes')),
   }
 }
 
-function writeRoute(next: { compare: boolean; location: string; mode: CompareMode }) {
+function writeRoute(next: {
+  compare: boolean
+  location: string
+  mode: CompareMode
+  panes: ComparePanes
+}) {
   const url = new URL(window.location.href)
   if (next.compare) {
     url.searchParams.set('compare', '1')
     url.searchParams.set('location', next.location)
     url.searchParams.set('mode', next.mode)
+    url.searchParams.set('panes', panesToParam(next.panes))
   } else {
     url.searchParams.delete('compare')
     url.searchParams.delete('view')
     url.searchParams.delete('location')
     url.searchParams.delete('mode')
+    url.searchParams.delete('panes')
   }
   window.history.replaceState(null, '', url.toString())
 }
@@ -190,8 +203,10 @@ export function App() {
         <ComparePage
           locationId={route.location}
           mode={route.mode}
+          panes={route.panes}
           onLocation={(location) => setRoute((r) => ({ ...r, location }))}
           onMode={(mode) => setRoute((r) => ({ ...r, mode }))}
+          onPanes={(panes) => setRoute((r) => ({ ...r, panes }))}
           onBack={() => setRoute((r) => ({ ...r, compare: false }))}
         />
       </MapProvider>

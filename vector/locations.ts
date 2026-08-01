@@ -70,3 +70,45 @@ export function modeById(id: string | null | undefined): CompareMode {
   if (id === 'swipe' || id === 'blend' || id === 'side-by-side') return id
   return 'side-by-side'
 }
+
+/** Compare panes that can be toggled on/off. */
+export type ComparePaneId = 'qgis' | 'rust' | 'vector'
+
+export const COMPARE_PANES: { id: ComparePaneId; label: string }[] = [
+  { id: 'qgis', label: 'QGIS' },
+  { id: 'rust', label: 'Rust' },
+  { id: 'vector', label: 'Vector' },
+]
+
+export type ComparePanes = Record<ComparePaneId, boolean>
+
+export const DEFAULT_COMPARE_PANES: ComparePanes = {
+  qgis: true,
+  rust: true,
+  vector: true,
+}
+
+/** Parse `?panes=qgis,rust,vector` (comma-separated). Empty/invalid → all on. */
+export function panesFromParam(raw: string | null | undefined): ComparePanes {
+  if (raw == null || raw.trim() === '') return { ...DEFAULT_COMPARE_PANES }
+  const set = new Set(
+    raw
+      .split(',')
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean),
+  )
+  if (set.size === 0) return { ...DEFAULT_COMPARE_PANES }
+  const next: ComparePanes = { qgis: false, rust: false, vector: false }
+  for (const id of COMPARE_PANES) {
+    if (set.has(id.id)) next[id.id] = true
+  }
+  // Keep at least one pane visible.
+  if (!next.qgis && !next.rust && !next.vector) return { ...DEFAULT_COMPARE_PANES }
+  return next
+}
+
+export function panesToParam(panes: ComparePanes): string {
+  return COMPARE_PANES.filter((p) => panes[p.id])
+    .map((p) => p.id)
+    .join(',')
+}
