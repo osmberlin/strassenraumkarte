@@ -1,0 +1,3 @@
+[install]
+# Prefer the shared Bun package cache when available.
+globalStore = true

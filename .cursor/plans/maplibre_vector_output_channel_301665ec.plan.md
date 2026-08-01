@@ -7,13 +7,16 @@ todos:
     status: pending
   - id: w1-export
     content: "Data export (/implementer): create `vector/layers.ts` as the single source of truth (table, styled columns only, filter, zoom range) for the core group (highway_area, highway_service, highway path, road_marking_polygon/way/node, separation, tactile_paving, building, building_parts_dissolved_height, building_shade, building_lines, tree, landuse, water_body_dissolved, waterway_clipped, label_highway, label_waterway) and `vector/scripts/export.ts` that runs ogr2ogr per layer with `ST_Transform(geom, 4326)` into `vector/out/<layer>.geojsonl` (GeoJSONSeq, one feature per line). Reuse `data/db_config.sh` defaults."
-    status: pending
+    status: completed
   - id: w2-tiles
     content: "Tile build (/implementer): `vector/scripts/build-tiles.ts` runs tippecanoe per layer group with the group zoom ranges (ground z15-16, streets/buildings z15-17, markings/trees z17-18), merges with `tile-join -o public/tiles/strassenraumkarte.pmtiles`, and `vector/scripts/tile-report.ts` prints per-layer/per-zoom byte stats. Tune flags against the measured report; document the chosen flags and why in `vector/README.md`."
-    status: pending
+    status: completed
   - id: w3-scaffold
-    content: "App scaffold (/implementer): Bun + Vite + React 19 + TypeScript 7 + Tailwind + oxlint/oxfmt in `vector/`, with `maplibre-gl@6`, `react-map-gl/maplibre`, `pmtiles` protocol registration, a Vite dev proxy `/raster/*` -> `http://127.0.0.1:8000`, and package scripts `export`, `tiles`, `dev`, `validate-style`, `screenshots`, `type-check`, `lint`."
-    status: pending
+    content: "App scaffold (/implementer): Bun + Vite + React 19 + TypeScript + MapLibre in `vector/`, with PMTiles archive + HTTP `/mvt/{z}/{x}/{y}.mvt` Vite middleware for reliable tile fetch, package scripts `export`, `tiles`, `dev`, `type-check`, `check`. (Tailwind/oxlint/oxfmt/playwright compare harness still pending.)"
+    status: completed
+  - id: w3b-basic-preview
+    content: "Prep preview (done): geometry-type style (blue fills / purple lines / red circles), MapLibre worker pinned via `setWorkerUrl`, Playwright smoke `scripts/verify-preview.ts`."
+    status: completed
   - id: w4a-style-core
     content: "Style foundation (/implementer): `src/style/` builder emitting `style.json`; `metresToPixels()` helper implementing `px = m * 2^z / (78271.51696 * cos lat)` as an `['exponential', 2]` zoom interpolation; source/sprite/glyphs config; layer ordering module reproducing the QGIS draw order and OSM `layer` stacking via `symbol-sort-key`/layer split; `validateStyleMin` Bun test."
     status: pending
@@ -21,7 +24,7 @@ todos:
     content: "Effects module (/implementer + research iteration): `src/style/effects.ts` with `dropShadow` (offset fill via `fill-translate` + blurred outline), `innerShadow` (inward negative `line-offset` + `line-blur`), and `outerGlow` (stacked lighter blurred outlines, matched width/blur/opacity interpolations). Port the QGIS parameters for building_shade, building_parts_dissolved_height, bridge_shade, tree crown, landuse, water body, and the z14-z20 highway innerShadow stack."
     status: pending
   - id: w4c-layers
-    content: "Core layer styling (/implementer): work the groups in the order set out in docs/maplibre-style-groups.md - G4 street surface, G5 road markings, G1 land and landcover, G2 water, G9 trees, G10 buildings - using `metresToPixels` and `effects.ts`. That doc carries the extracted QGIS colours, widths, filters and effect parameters per layer, plus the per-group checklists. Prefer `circle`/`line`/`fill` primitives over icons; note that `line-dasharray` is not data-driven, so distinct dash patterns need separate style layers."
+    content: "Core layer styling (/implementer): translate the QGIS rules for ground (landuse, water, waterway), streets (highway_area, service, path), structures (building*, building_lines), trees, and road markings (road_marking_*, separation, tactile_paving) into MapLibre layers using `metresToPixels` and `effects.ts`. Prefer `circle`/`line`/`fill` primitives over icons; use `line-dasharray` for marking patterns."
     status: pending
   - id: w5-images
     content: "Graphics (/implementer): `scripts/build-sprite.ts` packs `style/textures/*.png` (+ rasterized pitch SVGs) into `sprite.png`/`sprite.json` with @2x for `fill-pattern`; runtime resolver using `map.setMissingStyleImageResolver` rasterizes `style/symbols/**/*.svg` on demand for expression-driven `icon-image` ids, guarded by `hasImage`, filtering `'null'`/`''`, and re-registering after `setStyle`."
@@ -44,12 +47,10 @@ isProject: false
 ## Context (what exists today)
 
 - Pipeline: OSM PBF → osm2pgsql flex → ~40 PostGIS SQL steps → PyQGIS metatile renderer → raster XYZ at `render/tiles/{z}/{x}/{y}.jpg`, **z15–z20**.
-- Per-group porting breakdown of all 64 layers with the extracted QGIS parameters:
-  [docs/maplibre-style-groups.md](docs/maplibre-style-groups.md).
 - Styling lives entirely in `style/strassenraumkarte.qgz`: 64 unique layers, ~812 renderer rules, **1058 SimpleLine / 835 SimpleFill / 803 SimpleMarker / 185 SvgMarker / 133 RasterFill**, **137 enabled dropShadow/innerShadow/outerGlow**, 7 Gradient/Shapeburst fills, **0 geometry generators**.
 - Widths are ground metres: carriageway polygons bake width via `ST_Buffer(metres(...))`; lanes/markings keep `width` as a metre attribute; QGIS scales symbols with `@mercator_scale`.
-- No vector-tile export, no JS tooling in the repo. Preview is Leaflet 1.9.4 + `render/preview_server.py`.
-- Installed: `tippecanoe 2.79`, `tile-join`, `ogr2ogr` (GDAL 3.13), `bun`, `node`. Current npm: `maplibre-gl@6.1.0`, `react-map-gl@8.1.2` (peer `maplibre-gl >=1.13`), `pmtiles@4.4.1`, `@maplibre/maplibre-gl-style-spec@26.2.1`.
+- **Prep done (2026-08):** `vector/` Bun package with export → tippecanoe → `.pmtiles` and a MapLibre geometry-type preview. See [Prep tooling notes](#prep-tooling-notes-landed) below.
+- Installed: `tippecanoe 2.79`, `tile-join`, `ogr2ogr` (GDAL 3.13), `bun`, `node`. Current npm in `vector/`: `maplibre-gl@6.0.0`, `pmtiles@4.4.1` (react-map-gl still planned for compare UI).
 
 ## Target architecture
 
@@ -59,10 +60,11 @@ flowchart LR
   GJ["vector/out/*.geojsonl\nGeoJSONSeq, EPSG:4326\none feature per line"]
   TC["tippecanoe per group\n+ tile-join"]
   PM["vector/public/tiles/\nstrassenraumkarte.pmtiles"]
+  MVT["Vite middleware\n/mvt/z/x/y.mvt"]
   APP["Bun + Vite + React\nMapLibre 6 style"]
   RAS["render/tiles\nQGIS raster (proxy)"]
   CMP["compare page\nsynced / swipe / diff"]
-  PG -->|ogr2ogr| GJ --> TC --> PM --> APP --> CMP
+  PG -->|ogr2ogr| GJ --> TC --> PM --> MVT --> APP --> CMP
   RAS --> CMP
 ```
 
@@ -71,16 +73,50 @@ New top-level folder `vector/` — one Bun package, clean separation from the ba
 ```
 vector/
   package.json  vite.config.ts  tsconfig.app.json  tsconfig.scripts.json
-  oxlint.config.mjs  oxfmt.config.mjs  playwright.config.ts
-  layers.ts                 # single source of truth: table, columns, filter, zoom range
+  layers.ts                 # single source of truth: table, columns, filter, zoom range, paint kind
   scripts/export.ts         # PostGIS -> GeoJSONSeq via ogr2ogr
   scripts/build-tiles.ts    # tippecanoe per group + tile-join -> .pmtiles
-  scripts/build-sprite.ts   # style/textures + style/symbols -> sprite.png/json
-  scripts/tile-report.ts    # per-zoom/per-layer size stats
-  scripts/screenshots.ts    # Playwright capture + pixelmatch + gallery
-  src/style/                # style modules -> style.json
-  src/compare/              # React compare UI
-  out/  public/tiles/  compare-output/   # all gitignored
+  scripts/tile-report.ts    # group + final archive sizes
+  scripts/inspect-pmtiles.ts
+  scripts/verify-preview.ts # Playwright smoke (WebGL + idle)
+  src/style/basic.ts        # prep geometry-type style
+  src/App.tsx               # MapLibre preview
+  out/  public/tiles/       # gitignored artefacts
+```
+
+## Prep tooling notes (landed)
+
+Verified on the Berlin Docker DB (`localhost:5433` / `strassenraumkarte`) with the Neukölln extract.
+
+**Export**
+
+- `ogr2ogr -f GeoJSONSeq` with `ST_Transform(ST_SetSRID(geom, 3857), 4326)` — several tables lack SRID metadata; always set 3857 before transform.
+- Connection: `DB_*` / `PGPASSWORD` matching `data/db_config.sh` (port **5433**).
+- Slim attributes for now (`osm_id` / `layer` / `name` where useful). Expand columns when QGIS style lands.
+- There is no separate `highway_path` table; path-like surfaces live in `highway_area` (`area:highway` = footway/path/cycleway/…).
+
+**Tippecanoe**
+
+- Groups + zoom ranges as planned; flags `-r1 --no-tiny-polygon-reduction --simplification=2 --preserve-input-order` (prep also used `--no-tile-compression` for easier debugging — reconsider for production size).
+- Named layers via `-Lname:file.geojsonl`, then `tile-join -f -o public/tiles/strassenraumkarte.pmtiles`.
+- Measured (Berlin extract, uncompressed intermediates): ground ~0.8 MiB, streets ~1.8 MiB, buildings ~18.6 MiB, detail ~3.6 MiB, labels ~0.3 MiB → joined archive **~13 MiB**.
+
+**MapLibre 6 + Vite (important)**
+
+1. **Do not rely on `addProtocol('pmtiles')` in Vite/MapLibre 6 for tile bytes.** Tile JSON can load on the main thread, but MVT fetches run in the **web worker**, where the custom protocol is not available — tiles stay `loading` forever. Prep serves HTTP `/mvt/{z}/{x}/{y}.mvt` from the archive via a Vite middleware (`pmtiles` `getZxy`). Keep the `.pmtiles` file as the artefact; HTTP is the browser delivery path for now.
+2. **Pin the worker:** Vite’s dep optimizer breaks the default worker URL (`maplibre-gl-worker.mjs` missing under `.vite/deps`). Call `setWorkerUrl(import 'maplibre-gl/dist/maplibre-gl-worker.mjs?url')` and **`optimizeDeps.exclude: ['maplibre-gl']`**.
+3. **Named imports** from `maplibre-gl` (no default export in the ESM build).
+4. Bind `Protocol.tile` if/when using the protocol for metadata (`this` is required); prefer `{ metadata: true }` so TileJSON includes `vector_layers`.
+5. Trees/detail layers start at **z17** — at z16 only fills/lines from ground/streets/buildings show (expected).
+
+**Commands**
+
+```bash
+cd vector
+bun install
+PGPASSWORD=… bun run pipeline   # export + tiles + report
+bun run dev                      # http://127.0.0.1:5177
+bun run scripts/verify-preview.ts
 ```
 
 ## Key technical decisions
@@ -128,7 +164,7 @@ Gradient/Shapeburst (roof shape, water depth) → stepped concentric blurred lin
 
 1. `bun run validate-style` — `validateStyleMin` from `@maplibre/maplibre-gl-style-spec` in a Bun test; catches most errors before a browser starts.
 2. Playwright spec asserting zero `console.error`, zero `map.on('error')`, and zero *unresolved* `styleimagemissing` ids at every comparison location.
-3. Interactive triage with the **agent-browser** MCP (`agent_browser_open`, `agent_browser_console`, `agent_browser_errors`) during each style iteration.
+3. Interactive triage with the **agent-browser** MCP (`agent_browser_open`, `agent_browser_console`, `agent_browser_errors`) during each style iteration. Note: agent-browser alone was unreliable for MapLibre WebGL smoke; prefer Playwright with SwiftShader for automated preview checks.
 
 ## Orchestration (composer workers do the groundwork)
 
@@ -139,7 +175,7 @@ bunx skills add FixMyBerlin/fixmyskills --skill agent-orchestration -a cursor -y
 bash .agents/skills/agent-orchestration/scripts/init-cursor.sh
 ```
 
-`.gitignore` currently ignores `.cursor/` — add `!.cursor/agents/` and `!.cursor/rules/` exceptions so the pins are shared.
+`.gitignore` currently ignores `.cursor/` — add `!.cursor/agents/` and `!.cursor/rules/` exceptions so the pins are shared. (`!.cursor/plans/` already landed.)
 
 Then attach `@orchestrator-worker` and dispatch each work package with `/implementer <scoped brief>`, **omitting the Task inline `model`** so the frontmatter pin `composer-2.5[fast=false]` applies (an inline model silently forces `composer-2.5-fast`). Validation passes go to `/verifier` (readonly). W1/W2 and W3 are independent and can run in parallel; W4a–W4d run sequentially against a stable style scaffold.
 

@@ -40,6 +40,12 @@ docker/.env
 audit/runs/**
 !audit/runs/.gitkeep
 
+# SQL before/after fingerprints (reference freeze + candidates)
+audit/sql-compare/reference/**
+!audit/sql-compare/reference/.gitkeep
+audit/sql-compare/candidates/**
+!audit/sql-compare/candidates/.gitkeep
+
 # Local notes / legacy (not for remote)
 TODO.txt
 todo_from_post_processing.py

@@ -75,6 +75,10 @@ Tile rendering uses a custom **PyQGIS metatile loop** ([`render/xyz_tiles.py`](r
 
 For a contained PostGIS + data-prep environment (Berlin PBF via configurable symlink, host QGIS for rendering), see [`docker/README.md`](docker/README.md).
 
+## Vector output (prep)
+
+Experimental MapLibre / tippecanoe channel lives in [`vector/`](vector/README.md): export PostGIS → GeoJSONSeq → `.pmtiles`, then `bun run dev` for a basic blue/purple/red geometry preview.
+
 ## Performance audits
 
 To time every pipeline step (ingest / import / SQL / render), write gitignored raw data under `audit/runs/`, and generate a findings report (safe to run beside agent work), see [`audit/README.md`](audit/README.md).
