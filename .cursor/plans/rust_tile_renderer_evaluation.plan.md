@@ -36,7 +36,7 @@ todos:
     content: "Phase 3 — effects module (/implementer): port `QgsImageOperation::stackBlur` (4-pass box blur), `gaussianBlur`, `overlayColor`, `multiplyOpacity`, `invertPixels` and the Felzenszwalb `distanceTransform`, then build `dropShadow` / `innerShadow` / `outerGlow` / `innerGlow` with QGIS's offset convention (`-dist*cos(angle+π/2)`, `-dist*sin(angle+π/2)`), the `blurLevel*2+10` px bounding-rect padding, and the ≤16-radius stack-vs-gaussian switch. Validate per primitive against QGIS: render a synthetic shape + one effect through PyQGIS and through Rust, compare in isolation before any real tile. 77 dropShadow + 60 innerShadow uses make this the dominant visual risk."
     status: pending
   - id: p3-symbols
-    content: "Phase 3 — symbol coverage (/implementer): SimpleMarker (bounding-box size semantics, rotation origin, cache-vs-direct path), SvgMarker via `resvg`/`usvg` 0.47 with `param(fill|outline|outline-width|…)` substitution, RasterFill/RasterMarker with **viewport-anchored** pattern origin (feature-anchored mode causes tile seams), MarkerLine/HashLine/CentroidFill/pattern fills, FontMarker. Each new symbol type gets its own isolate fixtures in the harness manifest before it is considered done. **2026-08-01 partial:** full-approx uses SimpleFill + SimpleLine + circle crowns only; SVG/RasterFill/MarkerLine still pending."
+    content: "Phase 3 — symbol coverage (/implementer): SimpleMarker (bounding-box size semantics, rotation origin, cache-vs-direct path), SvgMarker via `resvg`/`usvg` 0.47 with `param(fill|outline|outline-width|…)` substitution, RasterFill/RasterMarker with **viewport-anchored** pattern origin (feature-anchored mode causes tile seams), MarkerLine/HashLine/CentroidFill/pattern fills, FontMarker. Each new symbol type gets its own isolate fixtures in the harness manifest before it is considered done. **2026-08-01 v1:** RasterFill textures + RasterMarker tree crowns + building ShapeburstFill shipped; SVG/MarkerLine still pending."
     status: in_progress
   - id: p3-order
     content: "Phase 3 — draw order and compositing (/implementer): 64 logical layers × 6 OSM `layer` buckets (256 maplayer entries), symbol levels (`renderingPass` buckets features globally — layer N of all features after layer N−1 of all features), per-layer offscreen image + blend mode (6× Multiply, 2× Screen) + opacity (22 layers), and `enableorderby` on `building_parts_dissolved_height`. Getting this 'almost right' fails the harness everywhere at once, so it lands as one cohesive work package with its own isolate suite. **2026-08-01 partial:** full-approx bottom→top sandwich + `ORDER BY coalesce(layer,0)` / building height; symbol levels + blend modes still pending."
@@ -55,6 +55,13 @@ isProject: false
 
 ## Progress
 
+- **2026-08-01 (style-iterate v1: textures/trees/buildings)** — `/implementer` on `composer-2.5` (`e0e424f`).
+  - **RasterFill v1** (`textures.rs`): map-anchored Pattern fill for `highway_area` surface + `landuse` overlays from sprite PNGs.
+  - **Tree crowns v1** (`tree_markers.rs`): QGIS crown PNG RasterMarker stamps + under-disk shadow; honours `diameter_crown`, `leaf_type`, `rotation`.
+  - **Building shapeburst v1** (`paint.rs::ShapeburstFill`): mask−blur edge darkening on `building` + `building_parts`; exterior SE drop-shadow retained.
+  - Style-iterate pixelmatch on Herrfurthplatz `17/70422/43011`: **11.48% → 9.79%** (flat → textures → trees → buildings). Gap report: `audit/tile-regression/STYLE_ITERATE_GAPS.md`.
+  - Large-bbox bench: `scripts/bench-large-fullapprox.sh` (103 915 tiles z15–z20, ~15 min) → `runs/latest-rust`. Report: `LARGE_BBOX_TIMING.md`.
+  - `p3-symbols`: **partial** — RasterFill + RasterMarker + ShapeburstFill v1 done; SVG/MarkerLine deferred.
 - **2026-08-01 (full-approx shadows/trees/landuse)** — `/implementer` on `cursor-grok-4.5-high` (no commit; parent finish-work).
   - Landuse palette aligned to `vector` colors + explicit urban greys (`residential`/`commercial`/`retail`/… → `#d8dacf`/`#dbdde1`, never `#ffe9e9`). Tile `17/70422/43011` classes are greens/`ground`/`kindergarten` — large pink areas are building footprints (~38%), not landuse mispaint.
   - Building SE drop-shadow (premul tint + 3× box blur; ~2.5 m / 2.2 m / α 0.28, `#232323`). Soft trees: crown α≈0.62 + darker under-disk.
