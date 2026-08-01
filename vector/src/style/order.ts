@@ -18,7 +18,8 @@
  * stay single.
  *
  * Within each bucket, paint order matches the QGIS highway subgroup:
- * path → service → tactile → highway_area (+ blur) → road markings → separation.
+ * path → service → tactile → highway_area (+ blur) → road markings → separation
+ * → furniture / barriers / playground.
  */
 import type { ExpressionSpecification, FilterSpecification } from '@maplibre/maplibre-gl-style-spec'
 
@@ -32,6 +33,15 @@ export const OSM_STACKED_SOURCE_LAYERS = [
   'road_marking_way',
   'road_marking_node',
   'separation',
+  'feature_polygon',
+  'feature_way',
+  'barrier_polygon',
+  'barrier_way',
+  'playground_way',
+  'playground_polygon',
+  'playground_node',
+  'feature_node',
+  'barrier_node',
 ] as const
 
 export type OsmStackedSourceLayer = (typeof OSM_STACKED_SOURCE_LAYERS)[number]
@@ -107,6 +117,15 @@ export const CORE_PAINT_ORDER = [
   'road_marking_way',
   'road_marking_node',
   'separation',
+  'feature_polygon',
+  'feature_way',
+  'barrier_polygon',
+  'barrier_way',
+  'playground_way',
+  'playground_polygon',
+  'playground_node',
+  'feature_node',
+  'barrier_node',
   'building_shade',
   'building',
   'building_parts_dissolved_height',

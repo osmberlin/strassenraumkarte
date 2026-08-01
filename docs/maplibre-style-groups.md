@@ -414,13 +414,22 @@ the data), so the runtime resolver is still needed as the fallback. Verify
 icons or a text symbol layer; CentroidFill becomes a separate `symbol` layer on the polygon
 source; several markers combine 2–4 stacked symbol layers per rule.
 
-**Known deviations:** compound multi-part markers may be simplified.
+**Known deviations:** compound multi-part markers simplified (street_lamp bent-mast / wall
+directed stacks → single grey circle; gate MarkerLine stacks → one access-coloured circle;
+flagpole `~` FontMarker omitted). CentroidFill icons use polygon centroid via `symbol` layers.
+`feature_polygon` / pier dropShadow and fountain RasterFill omitted. Barrier-way MarkerLine
+bollard/palisade use ● text (same compromise as G5 separation). Playground climbingframe
+crossed LinePatternFills → flat orange fill. Sandpit stays in G1. Label rules
+(capacity / ref / hydrant diameter) not ported. `entrance` / memorial / mast / viewpoint
+POIs stay in G11 (not middleground). Icon pipeline: runtime
+`setMissingStyleImageResolver` + Vite `/symbols/` (benches, bike, traffic panels, rocks, …);
+closed textures remain in the build-time sprite.
 
-- [ ] icon pipeline proven end to end (sprite + resolver)
-- [ ] `feature_node (middleground)` 37 rules
-- [ ] `feature_polygon` background + middleground
-- [ ] `barrier_node` / `barrier_way` / `barrier_polygon`
-- [ ] `playground_*`
+- [x] icon pipeline proven end to end (sprite + resolver)
+- [x] `feature_node (middleground)` 37 rules
+- [x] `feature_polygon` background + middleground
+- [x] `barrier_node` / `barrier_way` / `barrier_polygon`
+- [x] `playground_*`
 
 ---
 

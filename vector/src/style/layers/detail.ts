@@ -8,6 +8,7 @@ import { MARKING_DEFAULT, TREE_CROWN, TREE_SHADOW, TREE_TRUNK } from '../colors'
 import { OSM_LAYER_BUCKETS, styleLayerId, type OsmLayerBucketId } from '../order'
 import { base, withOsmBucket } from '../expr'
 import { metresToPixels, metresToPixelsFromProp } from '../metres'
+import { furnitureLayersForBucket } from './furniture'
 
 /**
  * Distinct `dasharray` metre pairs from PostGIS (`params.sql` + live sample).
@@ -542,6 +543,9 @@ export function detailLayers(): LayerSpecification[] {
         'line-dasharray': [1, 7],
       },
     })
+
+    // G6 furniture & barriers (QGIS: above separation within each OSM bucket)
+    layers.push(...furnitureLayersForBucket(b))
   }
 
   // Trees — circle crowns (graphics optional later). Shadow then crown then trunk.
