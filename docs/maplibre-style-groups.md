@@ -354,12 +354,21 @@ Part of the ×7 `layer` stack.
   development as a "did I miss a case" signal, drop it before release.
 - `road_marking_way` has an `osm_id` label at placement 2; that is debug output, do not port.
 
-**Known deviations:** restriction patterns become generated geometry rather than pattern fills.
+**Known deviations:** restriction `stripes` / `crosshatch` / `chessboard` use flat white fills
+(opacity stand-in) rather than rotated LinePatternFill / PointPatternFill — MapLibre cannot
+data-drive pattern angle or ground-metre spacing; PostGIS hatch geometry (like zebra stripes)
+would be the faithful path. `line-dasharray` splits use metre pairs divided by the 0.12 m
+reference width (wide markings get proportionally longer dashes). Double-line sides that
+encode mixed `dashed;solid` strokes share one dasharray. `sharks_teeth` triangles are a ▼
+text MarkerLine stand-in (not SVG triangles). Separation bollard / flex_post / vertical_panel
+use ● text along the line (not SimpleMarker circles); bump HashLine is an along-line dash
+(same compromise as G4 steps). Arrow icons are square (`length` for both axes); QGIS width
+expression `length * 0.3 * clamp(…)` is dropped. Polygon ELSE `#b7484b` debug fill omitted.
 
-- [ ] `road_marking_way` incl. double lines and dash splitting
-- [ ] `road_marking_polygon` fills; decide pattern-vs-geometry
-- [ ] `road_marking_node` arrows/signs via runtime icons
-- [ ] `separation` four variants
+- [x] `road_marking_way` incl. double lines and dash splitting
+- [x] `road_marking_polygon` fills; decide pattern-vs-geometry
+- [x] `road_marking_node` arrows/signs via runtime icons
+- [x] `separation` four variants
 
 ---
 
