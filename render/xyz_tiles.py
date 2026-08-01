@@ -908,8 +908,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--workers",
         type=int,
-        default=1,
-        help="Parallel metatile worker processes (default: 1). Each loads QGIS once.",
+        default=2,
+        help="Parallel metatile worker processes (default: 2). Each loads QGIS once.",
     )
     p.add_argument(
         "--fonts-dir",
