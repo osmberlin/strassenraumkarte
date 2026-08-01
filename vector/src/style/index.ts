@@ -19,6 +19,7 @@ export {
 } from './source'
 export { buildStyle, emptyBaseStyle } from './build-style'
 export { BASE_STYLE, DEFAULT_VIEW, basicLayerSpecs } from './basic'
+export { legendEntries, legendGroups, PREP_COLORS } from './legend'
 export {
   dropShadow,
   innerShadow,

@@ -6,16 +6,16 @@ import type {
 } from '@maplibre/maplibre-gl-style-spec'
 
 import { LAYERS, type LayerDef } from '../../layers'
+import { PREP_COLORS } from './legend'
 import { CORE_PAINT_ORDER } from './order'
 import { GLYPHS_URL, SOURCE_ID } from './source'
 
 export { SOURCE_ID }
 
-const FILL = 'rgba(30, 100, 220, 0.35)'
-const FILL_OUTLINE = 'rgba(30, 100, 220, 0.7)'
-const LINE = '#7c3aed'
-const CIRCLE = '#dc2626'
-const BACKGROUND = '#ededed'
+const FILL = PREP_COLORS.fill
+const FILL_OUTLINE = PREP_COLORS.fillOutline
+const LINE = PREP_COLORS.line
+const CIRCLE = PREP_COLORS.circle
 
 /**
  * Prep style: areas = transparent blue, lines = purple, points = red.
@@ -32,7 +32,7 @@ export const BASE_STYLE: StyleSpecification = {
     {
       id: 'background',
       type: 'background',
-      paint: { 'background-color': BACKGROUND },
+      paint: { 'background-color': PREP_COLORS.background },
     },
   ],
 }
@@ -67,6 +67,7 @@ function layerSpec(def: LayerDef): BasicLayerSpec {
       minzoom: def.minzoom,
       paint: {
         'fill-color': FILL,
+        'fill-opacity': 0.45,
         'fill-outline-color': FILL_OUTLINE,
       },
     }

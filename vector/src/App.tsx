@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import type { MapLibreEvent } from 'maplibre-gl'
 import {
   Layer,
@@ -16,37 +16,53 @@ import {
   SOURCE_MAXZOOM,
   SOURCE_MINZOOM,
 } from '../layers'
+import { Legend } from './components/Legend'
 import { exposeMainMapForDebugging } from './lib/expose-main-map'
 import { pmtilesSourceUrl } from './maplibre-setup'
 import { BASE_STYLE, DEFAULT_VIEW, SOURCE_ID, basicLayerSpecs } from './style/basic'
+import { legendEntries } from './style/legend'
 
 const MAP_ID = 'mainMap'
 const layers = basicLayerSpecs()
+const legend = legendEntries()
 
 function MapCanvas({
   onStatus,
   onError,
+  onZoom,
+  hidden,
 }: {
   onStatus: (s: string) => void
   onError: (s: string | null) => void
+  onZoom: (z: number) => void
+  hidden: ReadonlySet<string>
 }) {
   const handleLoad = useCallback(
     (event: MapLibreEvent) => {
       exposeMainMapForDebugging(event.target)
+      onZoom(event.target.getZoom())
       onStatus('Map loaded')
       onError(null)
     },
-    [onError, onStatus],
+    [onError, onStatus, onZoom],
   )
 
   const handleIdle = useCallback(
     (event: MapLibreEvent) => {
       const map = event.target
+      onZoom(map.getZoom())
       onStatus(
         `idle · z${map.getZoom().toFixed(1)} · ${map.getCenter().lng.toFixed(5)}, ${map.getCenter().lat.toFixed(5)}`,
       )
     },
-    [onStatus],
+    [onStatus, onZoom],
+  )
+
+  const handleMove = useCallback(
+    (event: MapLibreEvent) => {
+      onZoom(event.target.getZoom())
+    },
+    [onZoom],
   )
 
   const handleError = useCallback(
@@ -56,6 +72,11 @@ function MapCanvas({
       onError(msg)
     },
     [onError],
+  )
+
+  const visibleLayers = useMemo(
+    () => layers.filter((layer) => !hidden.has(layer.id)),
+    [hidden],
   )
 
   return (
@@ -74,10 +95,11 @@ function MapCanvas({
       attributionControl={false}
       onLoad={handleLoad}
       onIdle={handleIdle}
+      onMove={handleMove}
       onError={handleError}
     >
       <NavigationControl position="top-right" />
-      <ScaleControl position="bottom-left" unit="metric" />
+      <ScaleControl position="bottom-right" unit="metric" />
 
       {/*
         Source min/maxzoom = PMTiles archive (tippecanoe), not MAP_MAX_ZOOM.
@@ -90,7 +112,7 @@ function MapCanvas({
         minzoom={SOURCE_MINZOOM}
         maxzoom={SOURCE_MAXZOOM}
       />
-      {layers.map((layer) => (
+      {visibleLayers.map((layer) => (
         <Layer key={layer.id} {...layer} />
       ))}
     </Map>
@@ -100,6 +122,23 @@ function MapCanvas({
 export function App() {
   const [status, setStatus] = useState('Starting…')
   const [error, setError] = useState<string | null>(null)
+  const [zoom, setZoom] = useState<number>(DEFAULT_VIEW.zoom)
+  const [hidden, setHidden] = useState<ReadonlySet<string>>(() => new Set())
+
+  const toggle = useCallback((layerId: string) => {
+    setHidden((prev) => {
+      const next = new Set(prev)
+      if (next.has(layerId)) next.delete(layerId)
+      else next.add(layerId)
+      return next
+    })
+  }, [])
+
+  const showAll = useCallback(() => setHidden(new Set()), [])
+  const hideAll = useCallback(
+    () => setHidden(new Set(legend.map((e) => e.id))),
+    [],
+  )
 
   return (
     <MapProvider>
@@ -107,13 +146,28 @@ export function App() {
         <header className="bar">
           <strong>Straßenraumkarte · vector preview</strong>
           <span className="muted">
-            areas blue · lines purple · points red ·{' '}
+            legend grows with style · hash URL keeps the view ·{' '}
             <code>pmtiles://…/strassenraumkarte.pmtiles</code>
           </span>
           <span className={error ? 'err' : 'ok'}>{error ?? status}</span>
         </header>
-        <div className="map">
-          <MapCanvas onStatus={setStatus} onError={setError} />
+        <div className="workspace">
+          <Legend
+            entries={legend}
+            zoom={zoom}
+            hidden={hidden}
+            onToggle={toggle}
+            onShowAll={showAll}
+            onHideAll={hideAll}
+          />
+          <div className="map">
+            <MapCanvas
+              onStatus={setStatus}
+              onError={setError}
+              onZoom={setZoom}
+              hidden={hidden}
+            />
+          </div>
         </div>
       </div>
     </MapProvider>
