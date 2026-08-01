@@ -27,6 +27,6 @@ Raw run: `audit/render-explore/20260801T131243Z/` (gitignored).
 
 ## Next steps
 
-- Retest `--workers 2–4` on the **large** bbox (thousands of metatiles) — that is where parallel should scale.
-- Tile equivalence (SSIM) before claiming visual parity under parallel.
+- ~~Retest `--workers 2–4` on the **large** bbox~~ → see [LARGE_WORKERS.md](./LARGE_WORKERS.md) (z16: ~1.6× with 2 workers; 4≈2).
+- ~~Tile equivalence (SSIM)~~ → see `audit/tile-compare/RESULTS.md` (PASS).
 - Profile layer cost / metatile size at z18 (still the big city-scale pain).
