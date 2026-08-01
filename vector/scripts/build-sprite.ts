@@ -1,6 +1,9 @@
 /**
  * Pack style/textures/*.png (+ rasterized pitch SVGs) into MapLibre sprites.
  *
+ * MapUnit RasterFill textures are resized so one tile ≈ QGIS ground width at
+ * TEXTURE_REF_ZOOM (z18). Pixel-width textures (grass/gravel/sand/forest) stay native.
+ *
  * Outputs:
  *   public/sprites/strassenraumkarte.png + .json
  *   public/sprites/strassenraumkarte@2x.png + .json
@@ -19,6 +22,32 @@ const PITCHES = path.join(TEXTURES, 'pitches')
 const PAW_SVG = path.join(REPO, 'style', 'symbols', 'leisure', 'paw.svg')
 const OUT = path.join(ROOT, 'public', 'sprites')
 
+/** Match vector/src/style/metres.ts (Berlin / Neukölln). */
+const DEFAULT_LAT = 52.48
+const METRES_PER_PIXEL_Z0 = 78271.51696
+/** Archive/compare detail zoom — bake MapUnit texture widths here. */
+const TEXTURE_REF_ZOOM = 18
+const MIN_PATTERN_PX = 16
+
+function pxPerMetre(z: number, lat = DEFAULT_LAT): number {
+  return 2 ** z / (METRES_PER_PIXEL_Z0 * Math.cos((lat * Math.PI) / 180))
+}
+
+/**
+ * QGIS RasterFill MapUnit widths (style/strassenraumkarte.qgz, class="RasterFill").
+ * Keys are sprite ids. Pixel-width textures omitted → keep native resolution.
+ */
+const TEXTURE_WIDTH_M: Record<string, number> = {
+  'surface/sett': 11,
+  'surface/paving_stones': 4.5,
+  'surface/concrete': 3,
+  'surface/asphalt': 6,
+  wetland: 30,
+  water: 35,
+  woodchips: 8,
+  flowerbed: 10,
+}
+
 type SpriteEntry = {
   id: string
   buffer: Buffer
@@ -35,6 +64,31 @@ type SpriteLayout = {
   pixelRatio: number
 }
 
+/** Resize a MapUnit texture so its CSS width matches `widthM` at TEXTURE_REF_ZOOM. */
+async function rescaleMapUnitTexture(
+  id: string,
+  buffer: Buffer,
+  srcW: number,
+  srcH: number,
+  widthM: number,
+): Promise<SpriteEntry> {
+  const ppm = pxPerMetre(TEXTURE_REF_ZOOM)
+  const targetW = Math.max(MIN_PATTERN_PX, Math.round(widthM * ppm))
+  const targetH = Math.max(1, Math.round((srcH * targetW) / srcW))
+  if (targetW === srcW && targetH === srcH) {
+    return { id, buffer, width: srcW, height: srcH }
+  }
+  const out = await sharp(buffer)
+    .resize(targetW, targetH, { kernel: 'lanczos3', fit: 'fill' })
+    .ensureAlpha()
+    .png()
+    .toBuffer()
+  console.log(
+    `[sprite] ${id} ${srcW}×${srcH} → ${targetW}×${targetH} (${widthM} m @ z${TEXTURE_REF_ZOOM})`,
+  )
+  return { id, buffer: out, width: targetW, height: targetH }
+}
+
 async function collectPngs(dir: string, prefix = ''): Promise<SpriteEntry[]> {
   const entries: SpriteEntry[] = []
   let names: string[]
@@ -46,15 +100,18 @@ async function collectPngs(dir: string, prefix = ''): Promise<SpriteEntry[]> {
   for (const name of names) {
     const full = path.join(dir, name)
     if (name.endsWith('.png')) {
-      const id = prefix ? `${prefix}/${name.replace(/\.png$/i, '')}` : name.replace(/\.png$/i, '')
+      const id = (prefix ? `${prefix}/${name.replace(/\.png$/i, '')}` : name.replace(/\.png$/i, ''))
+        .replaceAll('\\', '/')
       const meta = await sharp(full).metadata()
+      const srcW = meta.width ?? 0
+      const srcH = meta.height ?? 0
       const buffer = await sharp(full).ensureAlpha().png().toBuffer()
-      entries.push({
-        id: id.replaceAll('\\', '/'),
-        buffer,
-        width: meta.width ?? 0,
-        height: meta.height ?? 0,
-      })
+      const widthM = TEXTURE_WIDTH_M[id]
+      if (widthM != null && srcW > 0 && srcH > 0) {
+        entries.push(await rescaleMapUnitTexture(id, buffer, srcW, srcH, widthM))
+      } else {
+        entries.push({ id, buffer, width: srcW, height: srcH })
+      }
     }
   }
   return entries
@@ -89,13 +146,15 @@ async function collectPitchSvgs(pixelRatio: number): Promise<SpriteEntry[]> {
 }
 
 /**
- * G8 construction LinePatternFill stand-in: diagonal orange hatch @ ~67°.
- * Tile size chosen so fill-pattern reads as medium-density stripes (not ground-metre exact).
+ * G8 construction LinePatternFill: diagonal orange hatch @ ~67°.
+ * QGIS ~1 m stroke / 2.2 m gap → baked at TEXTURE_REF_ZOOM (~5.5 px / ~12 px).
  */
 async function buildConstructionHatch(pixelRatio: number): Promise<SpriteEntry> {
-  const size = Math.round(64 * pixelRatio)
-  // Stripe width ≈ 1/5 of tile, spacing ≈ tile (QGIS: 1 m line / 2.2 m gap at fixed pixel scale).
-  const stroke = Math.max(2, Math.round(8 * pixelRatio))
+  const ppm = pxPerMetre(TEXTURE_REF_ZOOM)
+  // ~2.2 m × 3 line slots ≈ 36 px; clamp into the 36–48 px band.
+  const size1x = Math.min(48, Math.max(36, Math.round(2.2 * ppm * 3)))
+  const size = Math.round(size1x * pixelRatio)
+  const stroke = Math.max(1, Math.round(1 * ppm * pixelRatio))
   const svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
   <g transform="rotate(67 ${size / 2} ${size / 2})" stroke="rgba(255,83,0,0.35)" stroke-width="${stroke}" stroke-linecap="square">
@@ -106,6 +165,11 @@ async function buildConstructionHatch(pixelRatio: number): Promise<SpriteEntry> 
 </svg>`
   const buffer = await sharp(Buffer.from(svg)).ensureAlpha().png().toBuffer()
   const meta = await sharp(buffer).metadata()
+  if (pixelRatio === 1) {
+    console.log(
+      `[sprite] patterns/construction-hatch ${size}×${size} (1 m stroke / 2.2 m gap @ z${TEXTURE_REF_ZOOM})`,
+    )
+  }
   return {
     id: 'patterns/construction-hatch',
     buffer,
@@ -115,12 +179,15 @@ async function buildConstructionHatch(pixelRatio: number): Promise<SpriteEntry> 
 }
 
 /**
- * G8 dog-park PointPatternFill stand-in: transparent tile with centred paw.
- * Displacement / 10 m grid dropped (G0.4 fixed sprite pixel scale).
+ * G8 dog-park PointPatternFill: transparent tile with centred paw.
+ * QGIS ~10 m grid → tile ≈ 55 px @ z18; paw ~20 px. Displacement dropped.
  */
 async function buildDogParkPaw(pixelRatio: number): Promise<SpriteEntry> {
-  const tile = Math.round(96 * pixelRatio)
-  const pawSize = Math.round(36 * pixelRatio)
+  const ppm = pxPerMetre(TEXTURE_REF_ZOOM)
+  const tile1x = Math.round(10 * ppm)
+  const paw1x = Math.round(20)
+  const tile = Math.round(tile1x * pixelRatio)
+  const pawSize = Math.round(paw1x * pixelRatio)
   const paw = await sharp(PAW_SVG, { density: 96 * pixelRatio })
     .resize(pawSize, pawSize, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
     .ensureAlpha()
@@ -139,6 +206,11 @@ async function buildDogParkPaw(pixelRatio: number): Promise<SpriteEntry> {
     .composite([{ input: paw, left, top }])
     .png()
     .toBuffer()
+  if (pixelRatio === 1) {
+    console.log(
+      `[sprite] patterns/dog-park-paw ${tile}×${tile} (paw ${pawSize}px, 10 m grid @ z${TEXTURE_REF_ZOOM})`,
+    )
+  }
   return {
     id: 'patterns/dog-park-paw',
     buffer,
@@ -227,8 +299,10 @@ async function writeSprite(entries: SpriteEntry[], pixelRatio: number, suffix: s
 async function main() {
   await mkdir(OUT, { recursive: true })
 
+  // Collect once at 1× (MapUnit textures already ground-scaled @ z18).
   const rootPngs = await collectPngs(TEXTURES)
   const surfacePngs = await collectPngs(path.join(TEXTURES, 'surface'), 'surface')
+  const textures1x = [...rootPngs, ...surfacePngs]
 
   for (const ratio of [1, 2] as const) {
     const suffix = ratio === 2 ? '@2x' : ''
@@ -237,14 +311,14 @@ async function main() {
       buildConstructionHatch(ratio),
       buildDogParkPaw(ratio),
     ])
-    // Scale 1x textures for @2x by resizing
+    // @2×: scale the already ground-scaled 1× buffers.
     const textures =
       ratio === 1
-        ? [...rootPngs, ...surfacePngs]
+        ? textures1x
         : await Promise.all(
-            [...rootPngs, ...surfacePngs].map(async (e) => {
+            textures1x.map(async (e) => {
               const buffer = await sharp(e.buffer)
-                .resize(e.width * 2, e.height * 2, { kernel: 'nearest' })
+                .resize(e.width * 2, e.height * 2, { kernel: 'lanczos3' })
                 .png()
                 .toBuffer()
               return { ...e, buffer, width: e.width * 2, height: e.height * 2 }

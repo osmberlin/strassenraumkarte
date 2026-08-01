@@ -397,7 +397,7 @@ export function streetLayers(): LayerSpecification[] {
       }),
     )
 
-    // Surface textures from the packed sprite. Rotation / ground-metre scale dropped (G0.4).
+    // Surface textures from the packed sprite (MapUnit widths baked @ z18; rotation dropped, G0.4).
     for (const [surface, pattern, opacity] of [
       ['asphalt', 'surface/asphalt', 0.06],
       ['concrete', 'surface/concrete', 0.35],

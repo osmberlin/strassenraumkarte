@@ -96,16 +96,18 @@ A closed set of ~12 PNG textures under `style/textures/` covers all 133 RasterFi
 `surface/sett.png`, plus `style/textures/pitches/*.svg`.
 
 Because the set is closed and known, put them in a build-time sprite rather than loading at
-runtime. Two RasterFill parameters have no clean MapLibre equivalent and need a decision:
+runtime. RasterFill parameters vs MapLibre:
 
-- **`width` in MapUnit** (e.g. sett 11 m, water 30–35 m, paving_stones 4.5 m) — `fill-pattern`
-  tiles at the sprite's own pixel size, so ground-metre texture scale is lost. Options: bake
-  several pre-scaled sprite variants per zoom band, or accept a fixed pixel scale.
+- **`width` in MapUnit** (e.g. sett 11 m, water 35 m, paving_stones 4.5 m) — `fill-pattern`
+  tiles at the sprite's own pixel size, so there is no per-zoom ground scale. **v1:** bake
+  each MapUnit texture to its QGIS width at z18 (`vector/scripts/build-sprite.ts`
+  `TEXTURE_WIDTH_M` / `TEXTURE_REF_ZOOM`). Pixel-width textures (`0 Pixel`: grass, gravel,
+  sand; also forest) stay native.
 - **`angle` expressions** (e.g. sett `"direction"`, paving_stones `"direction" + 45`) —
-  `fill-pattern` cannot rotate. Either bake rotated variants or drop the rotation.
+  `fill-pattern` cannot rotate. Rotation is dropped for v1.
 
 `width 0 Pixel` in the XML means *native texture resolution* (no ground scaling) — those cases
-map cleanly onto `fill-pattern`.
+map cleanly onto `fill-pattern` without resize.
 
 ### G0.5 Runtime icons (unbounded set)
 
@@ -180,11 +182,11 @@ dropShadow (blur 1 m, offset 0.4 m @ 40°, `#232323`, opacity 0.33) and outerGlo
 - `outdoor_seating` uses a LinePatternFill at 1.2 m / 135° with a `#0000ff` base fill — almost
   certainly a debugging leftover; confirm before porting.
 
-**Known deviations:** texture ground-scale and rotation dropped (`fill-pattern` uses
-sprite pixel size; `direction` / `sett:length` exported for future use). `pitch_markings`
-use packed `pitches/*` sprites sized uniformly from `dist_long` (×0.95) — MapLibre cannot
-independently fit width/height to the pitch aspect ratio the way QGIS does. Wetland stays
-in G2 (not a landuse `class` overlay).
+**Known deviations:** MapUnit textures baked to QGIS ground width at z18 (no per-zoom
+rescale); rotation dropped (`direction` / `sett:length` exported for future use).
+`pitch_markings` use packed `pitches/*` sprites sized uniformly from `dist_long` (×0.95) —
+MapLibre cannot independently fit width/height to the pitch aspect ratio the way QGIS does.
+Wetland stays in G2 (not a landuse `class` overlay).
 
 - [x] colour/texture table for all 65 `landuse` classes
 - [x] `landuse surface` + `pitch surface` (shared 19-entry texture table)
@@ -218,10 +220,9 @@ Tables: `water_body_dissolved`, `water_body`, `waterway_clipped`.
 
 **Known deviations:** shoreline fade is banded rather than continuous (3 inward
 blurred `line` rings scaled by exported `shore_m`); water.png RasterFill and the
-green `water body (depth effect)` Shapeburst are not ported; wetland texture
-ground-metre scale dropped (`fill-pattern` sprite pixels); waterway open vs
-tunnel/covered are split layers with class-based width fallbacks when `"width"`
-is null.
+green `water body (depth effect)` Shapeburst are not ported; wetland texture baked
+to 30 m at z18 (G0.4); waterway open vs tunnel/covered are split layers with
+class-based width fallbacks when `"width"` is null.
 
 - [x] base fill + inner shadow
 - [x] shoreline fade approximation (needs `$area` exported)
@@ -323,8 +324,8 @@ dash arrays built with `array_foreach(string_to_array("dasharray", ';'), … * @
 MapLibre `line-dasharray` does **not** accept data-driven expressions, so distinct dash patterns
 must be split into separate style layers filtered by `dasharray` value.
 
-**Known deviations:** dash patterns quantised to a fixed set; texture rotation and ground-metre
-texture scale dropped (`fill-pattern` uses sprite pixel size; `sett:length` / `direction`
+**Known deviations:** dash patterns quantised to a fixed set; MapUnit highway-area
+textures baked to QGIS width at z18, rotation dropped (`sett:length` / `direction`
 exported for future use); segregated sidepath dual-offset omitted (no `segregated` column in
 PostGIS); steps / access_aisle HashLines approximated with along-line `line-dasharray` (not
 perpendicular ticks); tactile MarkerLine `cross2` markers omitted (offset kerb line only);
@@ -469,14 +470,14 @@ upstream parking data lands. Open question #3 closed for the current vector chan
 | `construction` | LinePatternFill 2.2 m @ 67°, sub-line `#ff5300` α 0.35 1 m, plus a `#ff5300` α 0.65 outline 0.4 m |
 | `dog park` | PointPatternFill 10×10 m with 5/2.5 m displacement, SvgMarker `leisure/paw.svg` 3 m; visible only above ~z16.5 (`minScale` 6000) |
 
-Both are pattern fills, so both hit the G0.4 constraint. Hatching at a fixed 67° is a good
-candidate for a baked sprite pattern; the paw grid is a good candidate for
-`fill-pattern` with a transparent tile.
+Both are pattern fills, so both hit the G0.4 constraint. Hatching at a fixed 67° and the
+paw grid are baked as sprite `fill-pattern`s sized to QGIS metres at z18 (~1 m stroke /
+2.2 m gap; ~10 m paw tile).
 
-**Known deviations:** construction hatch and dog-park paw grid use baked sprite
-`fill-pattern`s (`patterns/construction-hatch`, `patterns/dog-park-paw`) at fixed
-pixel scale — ground-metre spacing (2.2 m / 10 m) and paw displacement (5/2.5 m)
-dropped. Dog park `minScale` 6000 → `minzoom` 17.
+**Known deviations:** construction hatch and dog-park paw use baked sprite
+`fill-pattern`s (`patterns/construction-hatch`, `patterns/dog-park-paw`) at z18 ground
+scale — no per-zoom rescale; paw displacement (5/2.5 m) dropped. Dog park `minScale`
+6000 → `minzoom` 17.
 
 - [x] `construction` hatch
 - [x] `dog park` paw grid
@@ -625,4 +626,5 @@ Place ranks for town/city (QGIS z12–14) are styled but sit below the PMTiles a
 5. ~~**G11** — is `feature_node (foreground) Kopie` intentional or a stray duplicate?~~
    **Resolved:** intentional foreground set → port (see G11 decision).
 6. ~~**G0.4** — bake pre-scaled/rotated texture variants, or accept fixed-pixel patterns?~~
-   **Resolved for v1:** accept fixed-pixel `fill-pattern` (documented in Known deviations); bake variants later if diffs demand it.
+   **Resolved for v1:** bake MapUnit textures to QGIS ground width at z18 in the sprite
+   build; keep Pixel-width textures native; drop rotation / per-zoom scale (Known deviations).

@@ -72,7 +72,8 @@ export const FOREST_CLASSES = ["forest","scrub","shrub","shrubbery","trees","woo
 /**
  * Shared 19-entry `surface` → sprite `fill-pattern` table for QGIS
  * `landuse surface` and `pitch surface` (identical categories).
- * Ground-metre width / rotation dropped (G0.4 — fixed sprite pixel scale).
+ * MapUnit textures are baked to QGIS ground width at z18 in `bun run sprite`
+ * (G0.4); rotation and per-zoom scale still dropped.
  */
 export type SurfacePattern = {
   /** OSM `surface` values that share this pattern + opacity. */

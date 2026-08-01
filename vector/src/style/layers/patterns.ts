@@ -2,8 +2,8 @@
  * G8 — Symbol patterns (construction hatch + dog-park paw grid).
  *
  * Both use `landuse` polygons filtered by `class`. Patterns are baked into the
- * build-time sprite (`patterns/construction-hatch`, `patterns/dog-park-paw`).
- * Ground-metre spacing / displacement dropped (G0.4).
+ * build-time sprite (`patterns/construction-hatch`, `patterns/dog-park-paw`)
+ * at QGIS metres @ z18 (G0.4); paw displacement dropped.
  */
 import type {
   ExpressionSpecification,
