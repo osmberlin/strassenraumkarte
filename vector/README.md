@@ -29,13 +29,30 @@ Smoke the map (needs `bun run dev` and Playwright Chromium):
 bun run verify-preview
 ```
 
-## Style (prep)
+## Style (prep + foundation)
 
 | Geometry | Paint |
 | --- | --- |
 | polygons / multipolygons | transparent blue fill |
 | lines | purple |
 | points | red circles (detail layers from **z17**) |
+
+Shared modules under `src/style/`:
+
+| Module | Role |
+| --- | --- |
+| `metres.ts` | `metresToPixels` / `mmToPixels` (QGIS MapUnit → CSS px) |
+| `order.ts` | QGIS paint order + OSM `layer` bucket filters (G0.2: one set per bucket) |
+| `source.ts` | vector source zooms, glyphs URL |
+| `effects.ts` | `dropShadow` / `innerShadow` / `outerGlow` (+ highway MM blur table) |
+| `build-style.ts` | `buildStyle()` → StyleSpecification |
+| `basic.ts` | prep geometry-type layers (ordered) |
+
+```bash
+bun run validate-style   # validateStyleMin
+bun test src/style       # metres + style validation
+```
+
 
 ## Zoom (tippecanoe ↔ MapLibre)
 

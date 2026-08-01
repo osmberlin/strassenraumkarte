@@ -1,7 +1,12 @@
 {
   // Soft-aligned to total-typescript bundler/no-dom (no extends).
-  "include": ["scripts/**/*.ts", "layers.ts"],
-  "exclude": ["node_modules", "scripts/verify-preview.ts", "scripts/debug-tm.ts"],
+  "include": ["scripts/**/*.ts", "layers.ts", "src/style/**/*.ts"],
+  "exclude": [
+    "node_modules",
+    "scripts/verify-preview.ts",
+    "scripts/debug-tm.ts",
+    "src/style/**/*.test.ts"
+  ],
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2022"],

@@ -58,14 +58,16 @@ One expression in `path (way, fill)` / access_aisle uses `@scale_factor` instead
 copies: `"layer" >= 3`, `= 2`, `= 1`, `= 0 OR IS NULL`, `= -1`, `<= -2`. This affects G4, G5, G6
 and parts of G3.
 
-In MapLibre, do **not** create six copies of every layer. Emit each layer once and drive the
-stacking with the draw order plus the feature's `layer` value. Decide early between:
+In MapLibre, do **not** create six copies of every layer *naively without a plan*. Decide early between:
 
 - one style layer per `layer` bucket (faithful, verbose), or
 - a single layer per style layer with `symbol-sort-key` / `sort-key` on `["get","layer"]`
   (compact, but interleaving across *different* style layers is lost).
 
-This decision is a prerequisite for G4 and should be made and documented before starting it.
+**Decision (w4a):** use **one style-layer set per OSM bucket** for stacked source-layers
+(`highway_area`, `highway_service`, markings, …). Helpers: `vector/src/style/order.ts`
+(`OSM_LAYER_BUCKETS`, `osmLayerFilter`). `sort-key` alone cannot put markings on `layer=1`
+above highway on `layer=0` while still under highway on `layer=1`.
 
 ### G0.3 Effect primitives (137 enabled effects)
 
@@ -310,7 +312,7 @@ must be split into separate style layers filtered by `dasharray` value.
 
 **Known deviations:** dash patterns quantised to a fixed set; texture rotation dropped.
 
-- [ ] G0.2 stacking decision documented
+- [x] G0.2 stacking decision documented
 - [ ] `highway_area` 8 class fills
 - [ ] `highway_area` 5 surface textures
 - [ ] z14–z20 collapsed into one blur ramp

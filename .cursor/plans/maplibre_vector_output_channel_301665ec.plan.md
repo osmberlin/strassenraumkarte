@@ -19,12 +19,12 @@ todos:
     status: completed
   - id: w4a-style-core
     content: "Style foundation (/implementer): `src/style/` builder emitting `style.json`; `metresToPixels()` helper implementing `px = m * 2^z / (78271.51696 * cos lat)` as an `['exponential', 2]` zoom interpolation; source/sprite/glyphs config; layer ordering module reproducing the QGIS draw order and OSM `layer` stacking via `symbol-sort-key`/layer split; `validateStyleMin` Bun test."
-    status: pending
+    status: completed
   - id: w4b-effects
     content: "Effects module (/implementer + research iteration): `src/style/effects.ts` with `dropShadow` (offset fill via `fill-translate` + blurred outline), `innerShadow` (inward negative `line-offset` + `line-blur`), and `outerGlow` (stacked lighter blurred outlines, matched width/blur/opacity interpolations). Port the QGIS parameters for building_shade, building_parts_dissolved_height, bridge_shade, tree crown, landuse, water body, and the z14-z20 highway innerShadow stack."
-    status: pending
+    status: completed
   - id: w4c-layers
-    content: "Core layer styling (/implementer): translate the QGIS rules for ground (landuse, water, waterway), streets (highway_area, service, path), structures (building*, building_lines), trees, and road markings (road_marking_*, separation, tactile_paving) into MapLibre layers using `metresToPixels` and `effects.ts`. Prefer `circle`/`line`/`fill` primitives over icons; use `line-dasharray` for marking patterns."
+    content: "Core layer styling (/implementer): translate the QGIS rules for ground (landuse, water, waterway), streets (highway_area, service, path), structures (building*, building_lines), trees, and road markings (road_marking_*, separation, tactile_paving) into MapLibre layers using `metresToPixels` and `effects.ts`. Prefer `circle`/`line`/`fill` primitives over icons; use `line-dasharray` for marking patterns. (Apply effect params from w4b to real layers here.)"
     status: pending
   - id: w5-images
     content: "Graphics (/implementer): `scripts/build-sprite.ts` packs `style/textures/*.png` (+ rasterized pitch SVGs) into `sprite.png`/`sprite.json` with @2x for `fill-pattern`; runtime resolver using `map.setMissingStyleImageResolver` rasterizes `style/symbols/**/*.svg` on demand for expression-driven `icon-image` ids, guarded by `hasImage`, filtering `'null'`/`''`, and re-registering after `setStyle`."
@@ -78,11 +78,26 @@ vector/
   scripts/build-tiles.ts    # tippecanoe per group + tile-join -> .pmtiles
   scripts/tile-report.ts    # group + final archive sizes
   scripts/inspect-pmtiles.ts
+  scripts/validate-style.ts # validateStyleMin on buildStyle()
   scripts/verify-preview.ts # Playwright smoke (WebGL + idle)
-  src/style/basic.ts        # prep geometry-type style
+  src/style/
+    metres.ts               # metresToPixels / mmToPixels
+    order.ts                # QGIS paint order + OSM layer buckets (G0.2)
+    source.ts               # vector source + glyphs
+    effects.ts              # dropShadow / innerShadow / outerGlow
+    build-style.ts          # buildStyle() → StyleSpecification
+    basic.ts                # prep geometry-type style (ordered)
+    style.test.ts
   src/App.tsx               # MapLibre preview
   out/  public/tiles/       # gitignored artefacts
 ```
+
+## Style foundation notes (w4a/w4b landed)
+
+- `metresToPixels` / `metresInterpolate` — exact z15–z20 exponential; never nest zoom expressions (bake scales into stops).
+- G0.2 decision: **one style-layer set per OSM `layer` bucket** (`order.ts`); `sort-key` alone cannot interleave markings across highway fills.
+- Effects helpers validate with `validateStyleMin`; QGIS parameter application waits for **w4c** (needs styled columns in export).
+- `bun run validate-style` + `bun test src/style` are part of `bun run check`.
 
 ## Prep tooling notes (landed)
 
