@@ -1,6 +1,13 @@
 # srk-render
 
-Minimal Rust XYZ tile renderer for the Straßenraumkarte evaluation. First vertical slice: **`highway_area`** only (flat SimpleFill + 1 px outline, no effects/labels/SVG).
+Rust XYZ tile renderer for the Straßenraumkarte evaluation.
+
+## Presets (`--layers`)
+
+| Preset | Purpose |
+| --- | --- |
+| `full-approx` (**default**) | Paint stack: landuse → pitch → water → waterway → path/service → highway_area → buildings (SE drop-shadow) → trees (soft crowns). No labels, SVG, RasterFill, or full QGIS effect stacks. |
+| `highway_area` | Isolate: SimpleFill class rules only (parity smoke vs QGIS `--layers highway_area`). |
 
 ## Build
 
@@ -16,8 +23,15 @@ cargo build --release
 export PATH="$HOME/.cargo/bin:$PATH"
 export DB_HOST=localhost DB_PORT=5433 DB_USER=postgres DB_NAME=strassenraumkarte
 export PGPASSWORD=postgres
-# optional: PGPASSFILE=/tmp/srk-pgpass/.pgpass
 
+# Full approximate stack (intersection / Herrfurthplatz-like)
+./target/release/srk-render \
+  --tiles 17/70422/43011 \
+  --layers full-approx \
+  --out audit/tile-regression/runs/full-approx-local/rust \
+  --format png
+
+# Isolate (still supported)
 ./target/release/srk-render \
   --tiles 17/70422/43008 \
   --layers highway_area \
@@ -25,9 +39,10 @@ export PGPASSWORD=postgres
   --format png
 ```
 
-Output: `/tmp/srk-one-tile-cand/17/70422/43008.png` (256×256, background `#ededed`, EPSG:3857 tile math matching `render/xyz_tiles.py`).
+Also supports `--bbox xmin,ymin,xmax,ymax --zmin 15 --zmax 18` (writes `timing.json`).
 
 ## Notes
 
-- Fill colours approximate the QGIS / MapLibre `area:highway` palette (`#a8a8a7` road/parking, `#e1e3bd` footway, …). Surface textures and the z14–z20 blur stack are out of scope for this slice.
-- Geometries are clipped with `ST_ClipByBox2D` in EPSG:3857.
+- Tile math matches `render/xyz_tiles.py` (`ORIGIN_SHIFT`, 256 px, EPSG:3857, background `#ededed`).
+- Geometries clipped with `ST_ClipByBox2D` in EPSG:3857; `ORDER BY coalesce(layer,0)` where present.
+- **Deferred:** PAL labels, SvgMarker, RasterFill textures, dropShadow/innerShadow/glow, symbol levels, blend modes.

@@ -1,0 +1,99 @@
+{
+  "generated_at": "2026-08-01",
+  "layer": "full-style",
+  "rust_layers": "full-approx",
+  "bbox": "13.4132,52.4715,13.4312,52.4821",
+  "notes": "Full-style suite: QGIS reference with NO --layers filter vs Rust --layers full-approx. Tiles span z15–z20 inside starter bbox. Intersection (13.4222,52.4768) seeds several zooms; density neighbors included.",
+  "tiles": [
+    {
+      "id": "15/17605/10752",
+      "z": 15,
+      "x": 17605,
+      "y": 10752,
+      "label": "intersection parent z15",
+      "strata": ["compare-location", "intersection", "zoom"],
+      "suite": "full"
+    },
+    {
+      "id": "15/17606/10752",
+      "z": 15,
+      "x": 17606,
+      "y": 10752,
+      "label": "density z15",
+      "strata": ["density", "zoom"],
+      "suite": "full"
+    },
+    {
+      "id": "16/35211/21505",
+      "z": 16,
+      "x": 35211,
+      "y": 21505,
+      "label": "intersection z16",
+      "strata": ["compare-location", "intersection", "zoom"],
+      "suite": "full"
+    },
+    {
+      "id": "16/35212/21505",
+      "z": 16,
+      "x": 35212,
+      "y": 21505,
+      "label": "density z16",
+      "strata": ["density", "zoom"],
+      "suite": "full"
+    },
+    {
+      "id": "17/70422/43011",
+      "z": 17,
+      "x": 70422,
+      "y": 43011,
+      "label": "intersection z17 (Herrfurthplatz)",
+      "strata": ["compare-location", "intersection", "zoom"],
+      "suite": "full"
+    },
+    {
+      "id": "17/70425/43010",
+      "z": 17,
+      "x": 70425,
+      "y": 43010,
+      "label": "density peak z17",
+      "strata": ["density", "zoom"],
+      "suite": "full"
+    },
+    {
+      "id": "18/140845/86023",
+      "z": 18,
+      "x": 140845,
+      "y": 86023,
+      "label": "intersection z18",
+      "strata": ["compare-location", "intersection", "zoom"],
+      "suite": "full"
+    },
+    {
+      "id": "18/140851/86021",
+      "z": 18,
+      "x": 140851,
+      "y": 86021,
+      "label": "density z18",
+      "strata": ["density", "zoom"],
+      "suite": "full"
+    },
+    {
+      "id": "19/281691/172046",
+      "z": 19,
+      "x": 281691,
+      "y": 172046,
+      "label": "intersection z19",
+      "strata": ["compare-location", "intersection", "zoom"],
+      "suite": "full"
+    },
+    {
+      "id": "20/563382/344092",
+      "z": 20,
+      "x": 563382,
+      "y": 344092,
+      "label": "intersection z20",
+      "strata": ["compare-location", "intersection", "zoom"],
+      "suite": "full"
+    }
+  ]
+}

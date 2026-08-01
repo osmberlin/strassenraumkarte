@@ -4,13 +4,31 @@ Compare QGIS (reference) and Rust (candidate) XYZ tiles at the pixel level so a 
 
 ## Status
 
-**Multi-tile smoke suite** is available for the `highway_area` isolate: committed `manifest.json` (12 tiles, z15–z18 inside the starter bbox) → QGIS + Rust batch render → `compare-run` dark HTML gallery. One-tile MVP (`compare-one-tile`) still works for ad-hoc checks.
+**Full-style suite** (QGIS full project vs Rust `full-approx`): [`manifest-full.json`](manifest-full.json) · [`scripts/render-suite-full.sh`](scripts/render-suite-full.sh) · report [`FULL_STYLE_REPORT.md`](FULL_STYLE_REPORT.md). Latest run: `runs/full-approx-20260801-175611/` (mean pixelmatch ~**11.0%** after building drop-shadow + soft trees + landuse greys; prior ~12.7%).
 
-Latest interim results: [`REPORT.md`](REPORT.md) (mean **0.079%** after style-filter alignment). Rules dump: [`HIGHWAY_AREA_RULES.md`](HIGHWAY_AREA_RULES.md). Gallery: `runs/20260801-172219-smoke/index.html`.
+**Multi-tile smoke suite** remains for the `highway_area` isolate: committed `manifest.json` (12 tiles, z15–z18) → QGIS + Rust → `compare-run` gallery. Interim isolate results: [`REPORT.md`](REPORT.md) (mean **0.079%**). Rules dump: [`HIGHWAY_AREA_RULES.md`](HIGHWAY_AREA_RULES.md).
 
-Still later: stratified `sample-tiles`, DSSIM/SSIMULACRA2 budgets, seam-check, full/standard suites.
+Still later: stratified `sample-tiles`, DSSIM/SSIMULACRA2 budgets, seam-check, standard suite expansion.
 
-**Anchor tile:** `17/70422/43008`
+**Intersection check tile:** `17/70422/43011` (Herrfurthplatz-like)
+**Isolate anchor:** `17/70422/43008`
+
+## Full-style workflow (QGIS full vs Rust full-approx)
+
+```bash
+# from repo root
+./audit/tile-regression/scripts/render-suite-full.sh
+```
+
+Writes `runs/full-approx-<ts>/{qgis,rust,compare}/` and symlinks `runs/latest-rust` → rust tiles.
+
+Serve in the vector compare UI:
+
+```bash
+RUST_TILES_ROOT=audit/tile-regression/runs/latest-rust bun run --cwd vector dev
+# or explicit:
+# RUST_TILES_ROOT=audit/tile-regression/runs/full-approx-<ts>/rust bun run --cwd vector dev
+```
 
 ## Canonical render mode
 
@@ -29,7 +47,7 @@ Production keeps `--metatile 8 --gutter 1`. QGIS-vs-QGIS measurement on the star
 ```bash
 cd audit/tile-regression
 bun install
-chmod +x scripts/render-qgis-tile.sh scripts/render-suite.sh scripts/bench-bbox.sh
+chmod +x scripts/render-qgis-tile.sh scripts/render-suite.sh scripts/render-suite-full.sh scripts/bench-bbox.sh
 ```
 
 Env (typical local Docker DB on 5433):

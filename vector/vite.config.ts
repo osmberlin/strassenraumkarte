@@ -13,15 +13,18 @@ const tileRegressionRuns = path.resolve(rootDir, '../audit/tile-regression/runs'
 const RASTER_TILE_RE = /^\/raster\/(\d+)\/(\d+)\/(\d+)\.(jpg|jpeg|png)$/i
 const RUST_TILE_RE = /^\/raster-rust\/(\d+)\/(\d+)\/(\d+)\.(png|jpg|jpeg)$/i
 
-// Prefer RUST_TILES_ROOT env, else newest audit/tile-regression/runs/bench-*/rust.
+// Prefer RUST_TILES_ROOT env, else newest full-approx-*/rust or bench-*/rust
+// by mtime, else runs/latest-rust symlink from render-suite-full.sh.
 function resolveRustTilesRoot(): string {
   const fromEnv = process.env.RUST_TILES_ROOT?.trim()
   if (fromEnv) return path.resolve(fromEnv)
   if (!existsSync(tileRegressionRuns)) {
     return path.resolve(tileRegressionRuns, 'bench-missing/rust')
   }
-  const benches = readdirSync(tileRegressionRuns)
-    .filter((name) => name.startsWith('bench-'))
+  const candidates = readdirSync(tileRegressionRuns)
+    .filter(
+      (name) => name.startsWith('full-approx-') || name.startsWith('bench-'),
+    )
     .map((name) => {
       const rustDir = path.join(tileRegressionRuns, name, 'rust')
       try {
@@ -33,7 +36,18 @@ function resolveRustTilesRoot(): string {
     })
     .filter((x): x is { rustDir: string; mtime: number } => x != null)
     .sort((a, b) => b.mtime - a.mtime)
-  return benches[0]?.rustDir ?? path.resolve(tileRegressionRuns, 'bench-missing/rust')
+  if (candidates[0]?.rustDir) return candidates[0].rustDir
+
+  const latestLink = path.join(tileRegressionRuns, 'latest-rust')
+  if (existsSync(latestLink)) {
+    try {
+      const st = statSync(latestLink)
+      if (st.isDirectory()) return latestLink
+    } catch {
+      /* fall through */
+    }
+  }
+  return path.resolve(tileRegressionRuns, 'bench-missing/rust')
 }
 
 const rustTilesRoot = resolveRustTilesRoot()
@@ -102,7 +116,7 @@ function rasterTilesPlugin(): Plugin {
 }
 
 /**
- * Serve Rust XYZ tiles from a bench run (or `RUST_TILES_ROOT`) at
+ * Serve Rust XYZ tiles from a full-approx/bench run (or `RUST_TILES_ROOT`) at
  * `/raster-rust/{z}/{x}/{y}.png`. PNG-first with jpg fallback.
  */
 function rustRasterTilesPlugin(): Plugin {

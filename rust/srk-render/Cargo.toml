@@ -2,7 +2,7 @@
 name = "srk-render"
 version = "0.1.0"
 edition = "2021"
-description = "Straßenraumkarte PostGIS → XYZ raster tile renderer (Rust vertical slice)"
+description = "Straßenraumkarte PostGIS → XYZ raster tile renderer (Rust; full-approx + highway_area isolate)"
 publish = false
 
 [[bin]]

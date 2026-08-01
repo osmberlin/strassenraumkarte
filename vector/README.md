@@ -8,7 +8,7 @@ PostGIS → GeoJSONSeq → tippecanoe → `.pmtiles`, styled with a MapLibre por
 - `ogr2ogr` (GDAL), `tippecanoe`, `tile-join`, `bun`
 - `PGPASSWORD` (or `~/.pgpass`) for the DB user
 - Optional for compare: QGIS tiles under `render/tiles/` (Vite serves them at `/raster/…`; `./render/preview_server.py` on `:8000` is only needed for the standalone QGIS preview UI)
-- Optional for 3-pane compare: Rust `highway_area` tiles from `./audit/tile-regression/scripts/bench-bbox.sh` (Vite serves newest `audit/tile-regression/runs/bench-*/rust` at `/raster-rust/…`, or set `RUST_TILES_ROOT`)
+- Optional for 3-pane compare: Rust **full-approx** tiles from `./audit/tile-regression/scripts/render-suite-full.sh` (Vite serves newest `runs/full-approx-*/rust` or `runs/latest-rust` at `/raster-rust/…`, or set `RUST_TILES_ROOT=… bun run dev`)
 
 ## Workflow
 

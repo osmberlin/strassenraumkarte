@@ -36,11 +36,11 @@ todos:
     content: "Phase 3 — effects module (/implementer): port `QgsImageOperation::stackBlur` (4-pass box blur), `gaussianBlur`, `overlayColor`, `multiplyOpacity`, `invertPixels` and the Felzenszwalb `distanceTransform`, then build `dropShadow` / `innerShadow` / `outerGlow` / `innerGlow` with QGIS's offset convention (`-dist*cos(angle+π/2)`, `-dist*sin(angle+π/2)`), the `blurLevel*2+10` px bounding-rect padding, and the ≤16-radius stack-vs-gaussian switch. Validate per primitive against QGIS: render a synthetic shape + one effect through PyQGIS and through Rust, compare in isolation before any real tile. 77 dropShadow + 60 innerShadow uses make this the dominant visual risk."
     status: pending
   - id: p3-symbols
-    content: "Phase 3 — symbol coverage (/implementer): SimpleMarker (bounding-box size semantics, rotation origin, cache-vs-direct path), SvgMarker via `resvg`/`usvg` 0.47 with `param(fill|outline|outline-width|…)` substitution, RasterFill/RasterMarker with **viewport-anchored** pattern origin (feature-anchored mode causes tile seams), MarkerLine/HashLine/CentroidFill/pattern fills, FontMarker. Each new symbol type gets its own isolate fixtures in the harness manifest before it is considered done."
-    status: pending
+    content: "Phase 3 — symbol coverage (/implementer): SimpleMarker (bounding-box size semantics, rotation origin, cache-vs-direct path), SvgMarker via `resvg`/`usvg` 0.47 with `param(fill|outline|outline-width|…)` substitution, RasterFill/RasterMarker with **viewport-anchored** pattern origin (feature-anchored mode causes tile seams), MarkerLine/HashLine/CentroidFill/pattern fills, FontMarker. Each new symbol type gets its own isolate fixtures in the harness manifest before it is considered done. **2026-08-01 partial:** full-approx uses SimpleFill + SimpleLine + circle crowns only; SVG/RasterFill/MarkerLine still pending."
+    status: in_progress
   - id: p3-order
-    content: "Phase 3 — draw order and compositing (/implementer): 64 logical layers × 6 OSM `layer` buckets (256 maplayer entries), symbol levels (`renderingPass` buckets features globally — layer N of all features after layer N−1 of all features), per-layer offscreen image + blend mode (6× Multiply, 2× Screen) + opacity (22 layers), and `enableorderby` on `building_parts_dissolved_height`. Getting this 'almost right' fails the harness everywhere at once, so it lands as one cohesive work package with its own isolate suite."
-    status: pending
+    content: "Phase 3 — draw order and compositing (/implementer): 64 logical layers × 6 OSM `layer` buckets (256 maplayer entries), symbol levels (`renderingPass` buckets features globally — layer N of all features after layer N−1 of all features), per-layer offscreen image + blend mode (6× Multiply, 2× Screen) + opacity (22 layers), and `enableorderby` on `building_parts_dissolved_height`. Getting this 'almost right' fails the harness everywhere at once, so it lands as one cohesive work package with its own isolate suite. **2026-08-01 partial:** full-approx bottom→top sandwich + `ORDER BY coalesce(layer,0)` / building height; symbol levels + blend modes still pending."
+    status: in_progress
   - id: p3-labels
     content: "Phase 3 — labels, staged and honest (/implementer + decision): stage 1 — compare label-free tiles only (QGIS reference rendered with labeling off) so symbology parity is measurable without label noise. Stage 2 — text rendering with `cosmic-text` + the pinned `render/fonts/` files, validated on pre-positioned labels. Stage 3 — placement: explicitly a separate decision (port a simplified PAL, export label anchors from QGIS, or keep labels in QGIS). Do not let label placement block the symbology verdict."
     status: pending
@@ -55,6 +55,18 @@ isProject: false
 
 ## Progress
 
+- **2026-08-01 (full-approx shadows/trees/landuse)** — `/implementer` on `cursor-grok-4.5-high` (no commit; parent finish-work).
+  - Landuse palette aligned to `vector` colors + explicit urban greys (`residential`/`commercial`/`retail`/… → `#d8dacf`/`#dbdde1`, never `#ffe9e9`). Tile `17/70422/43011` classes are greens/`ground`/`kindergarten` — large pink areas are building footprints (~38%), not landuse mispaint.
+  - Building SE drop-shadow (premul tint + 3× box blur; ~2.5 m / 2.2 m / α 0.28, `#232323`). Soft trees: crown α≈0.62 + darker under-disk.
+  - Vite `resolveRustTilesRoot`: newest `full-approx-*/rust` / `bench-*/rust` by mtime first, then `latest-rust`.
+  - Suite `runs/full-approx-20260801-175611/`: mean **12.7% → 11.0%**, max **14.2% → 13.3%**, intersection **12.65% → 10.59%**. Still short of &lt;10% mean (labels/textures/effects). Report updated.
+- **2026-08-01 (full-approx pivot)** — `/implementer` on `cursor-grok-4.5-high` (no commit; parent finish-work).
+  - **Pivot from isolate-only to full-approx.** User feedback: Rust compare pane was roads-only; MapLibre vector looked closer to QGIS. Expanded `rust/srk-render` with `--layers full-approx` (default) keeping `highway_area` isolate.
+  - Modules: `tile.rs`, `palette.rs`, `paint.rs`, `layers.rs`. Paint stack: landuse → pitch → water → waterway → path/service → highway_area → building* → tree. Deferred: labels, SVG, RasterFill, effects (documented).
+  - Harness: `manifest-full.json` (10 tiles z15–z20), `scripts/render-suite-full.sh` → `runs/full-approx-<ts>/{qgis,rust,compare}/` + `latest-rust` symlink. Vite prefers `full-approx-*/rust` / `RUST_TILES_ROOT`. Compare label: "Raster (Rust full-approx)".
+  - E2E after one fix pass (path under area, tree α): mean pixelmatch **12.7%**, max **14.2%**, 10/10 `bad`, 0 hard-fail. Intersection `17/70422/43011` shows parks + pink buildings + trees + roads. Report: `audit/tile-regression/FULL_STYLE_REPORT.md`.
+  - `p3-symbols` / `p3-order`: **partially in progress** (flat SimpleFill/Line/circle crowns + draw-order sandwich; no SVG/RasterFill/effects/symbol-levels yet).
+  - `p4-verdict` stays **pending**; full-approx is evidence, not go/no-go.
 - **2026-08-01 (p0 + calibrate + style-ir)** — `/implementer` on `cursor-grok-4.5-high` (no commit; parent finish-work).
   - **`p0-decisions` completed.** Existing `audit/sql-compare/reference/baseline.json` freeze recorded in `fixture-lock.json` (sha256 `bf1a594c…`, mtime 2026-08-01 14:59, freeze git `e3d3df82`, large bbox). Live starter-bbox DB snapshotted as `reference/starter.json` (does not match baseline — expected). Also pinned: HEAD `562ca96`, PostGIS image `imresamu/postgis:17-3.5-bookworm` digests, osm2pgsql 2.1.1, PBF sha256. No multi-hour re-freeze.
   - **`p1-calibrate` completed.** `audit/tile-regression/CALIBRATION.md`: QGIS A/A on 3 tiles = **0%**; dpi 96 vs 97 on `highway_area` = **0%**; layer swap landuse = **26.3%**; bg wipe = **92.5%**; metatile referenced from `RENDER_MODE.md`. Confirmed bands **ok≤1% / review≤5% / bad≤50% / hard-fail >50%**. `--no-fonts` skipped (isolate has no labels).

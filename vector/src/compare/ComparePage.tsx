@@ -223,7 +223,9 @@ export function ComparePage({
         )}
         <span className="muted">
           {location.note}
-          {panes.rust ? ' · Rust = highway_area isolate (starter bbox)' : ''}
+          {panes.rust
+            ? ' · Rust = full-approx raster (starter bbox; set RUST_TILES_ROOT)'
+            : ''}
         </span>
       </header>
 
@@ -265,7 +267,7 @@ export function ComparePage({
 
         {split && showRustSplit && (
           <div className="compare-pane">
-            <div className="compare-label">Raster (Rust)</div>
+            <div className="compare-label">Raster (Rust full-approx)</div>
             <Map
               id="compare-rust"
               style={{ width: '100%', height: '100%' }}
@@ -360,7 +362,7 @@ export function ComparePage({
                 : undefined
             }
           >
-            <div className="compare-label">Raster (Rust)</div>
+            <div className="compare-label">Raster (Rust full-approx)</div>
             <Map
               id="compare-rust"
               style={{ width: '100%', height: '100%' }}
