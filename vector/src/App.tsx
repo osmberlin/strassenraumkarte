@@ -13,7 +13,7 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 
 import { LAYERS, MAP_MAX_ZOOM, MAP_MIN_ZOOM, SOURCE_MAXZOOM, SOURCE_MINZOOM } from '../layers'
 import {
-  locationById,
+  findLocation,
   modeById,
   panesFromParam,
   panesToParam,
@@ -90,14 +90,15 @@ const debugLegend = debugLegendEntries()
 
 function mapFallbackForRoute(compare: boolean, locationId: string): MapParam {
   if (!compare) return mapParamFallback
-  const loc = locationById(locationId)
+  const loc = findLocation(locationId)
+  if (!loc) return mapParamFallback
   return { zoom: loc.zoom, lat: loc.latitude, lng: loc.longitude }
 }
 
 function readRoute(): RouteState {
   const q = new URLSearchParams(window.location.search)
   const compare = q.get('compare') === '1' || q.get('view') === 'compare'
-  const location = locationById(q.get('location')).id
+  const location = findLocation(q.get('location'))?.id ?? ''
   const map =
     parseMapParam(q.get('map')) ?? mapFallbackForRoute(compare, location)
   return {
@@ -118,7 +119,9 @@ function writeRoute(next: RouteState) {
   const parts: string[] = []
   if (next.compare) {
     parts.push('compare=1')
-    parts.push(`location=${encodeURIComponent(next.location)}`)
+    if (next.location) {
+      parts.push(`location=${encodeURIComponent(next.location)}`)
+    }
     parts.push(`mode=${encodeURIComponent(next.mode)}`)
     parts.push(`panes=${encodeURIComponent(panesToParam(next.panes))}`)
   }

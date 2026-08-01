@@ -62,8 +62,41 @@ export const COMPARE_MODES: { id: CompareMode; label: string }[] = [
   { id: 'blend', label: 'Blend' },
 ]
 
+/** Named compare spot, or `undefined` when none / unknown id. */
+export function findLocation(
+  id: string | null | undefined,
+): CompareLocation | undefined {
+  if (id == null || id === '') return undefined
+  return COMPARE_LOCATIONS.find((l) => l.id === id)
+}
+
 export function locationById(id: string | null | undefined): CompareLocation {
-  return COMPARE_LOCATIONS.find((l) => l.id === id) ?? COMPARE_LOCATIONS[0]!
+  return findLocation(id) ?? COMPARE_LOCATIONS[0]!
+}
+
+/** Approx. ground distance (m) between map center and a compare location. */
+export function metersFromLocation(
+  map: { lat: number; lng: number },
+  loc: CompareLocation,
+): number {
+  const dLat = (map.lat - loc.latitude) * 111_000
+  const dLng =
+    (map.lng - loc.longitude) *
+    111_000 *
+    Math.cos((map.lat * Math.PI) / 180)
+  return Math.hypot(dLat, dLng)
+}
+
+/** Clear the location select when the camera has left the named spot. */
+export const LOCATION_CLEAR_METERS = 350
+export const LOCATION_CLEAR_ZOOM_DELTA = 1.5
+
+export function isNearCompareLocation(
+  map: { lat: number; lng: number; zoom: number },
+  loc: CompareLocation,
+): boolean {
+  if (Math.abs(map.zoom - loc.zoom) > LOCATION_CLEAR_ZOOM_DELTA) return false
+  return metersFromLocation(map, loc) <= LOCATION_CLEAR_METERS
 }
 
 export function modeById(id: string | null | undefined): CompareMode {

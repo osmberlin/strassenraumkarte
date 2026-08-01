@@ -295,7 +295,22 @@ body,
 }
 
 .compare-panes-toggles {
-  gap: 0.65rem;
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.15rem 0;
+  font-weight: 700;
+}
+
+.compare-panes-item {
+  display: inline-flex;
+  align-items: baseline;
+}
+
+.compare-panes-sep {
+  margin: 0 0.35rem;
+  opacity: 0.55;
+  font-weight: 700;
 }
 
 .compare-toggle {
@@ -305,6 +320,11 @@ body,
   cursor: pointer;
   user-select: none;
   white-space: nowrap;
+}
+
+.compare-toggle:has(input:not(:checked)) {
+  opacity: 0.45;
+  font-weight: 500;
 }
 
 .compare-toggle input {

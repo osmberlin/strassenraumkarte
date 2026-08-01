@@ -19,7 +19,8 @@ import {
   COMPARE_LOCATIONS,
   COMPARE_MODES,
   COMPARE_PANES,
-  locationById,
+  findLocation,
+  isNearCompareLocation,
   modeById,
   type CompareMode,
   type ComparePaneId,
@@ -73,7 +74,7 @@ export function ComparePage({
   onPanes,
   onBack,
 }: Props) {
-  const location = locationById(locationId)
+  const location = findLocation(locationId)
   // Ephemeral controlled sync across panes; seeded from ?map= and written back on move end.
   const [view, setView] = useState<MapParam>(map)
   const [blend, setBlend] = useState(0.5)
@@ -94,7 +95,12 @@ export function ComparePage({
 
   const jump = useCallback(
     (id: string) => {
-      const loc = locationById(id)
+      if (!id) {
+        onLocation('')
+        return
+      }
+      const loc = findLocation(id)
+      if (!loc) return
       const next: MapParam = {
         zoom: loc.zoom,
         lat: loc.latitude,
@@ -125,8 +131,12 @@ export function ComparePage({
       const next = clampMapFromEvent(e)
       setView(next)
       onMap(next)
+      const loc = findLocation(locationId)
+      if (loc && !isNearCompareLocation(next, loc)) {
+        onLocation('')
+      }
     },
-    [onMap],
+    [locationId, onLocation, onMap],
   )
 
   const onRasterLoad = useCallback((e: MapLibreEvent) => {
@@ -159,20 +169,42 @@ export function ComparePage({
     [view.lng, view.lat, view.zoom, onMove, onMoveEnd],
   )
 
-  const title = COMPARE_PANES.filter((p) => panes[p.id])
-    .map((p) => p.label)
-    .join(' · ')
-
   return (
     <div className="compare">
       <header className="bar">
         <button type="button" className="legend-btn" onClick={onBack}>
           ← Preview
         </button>
-        <strong>{title || 'Compare'}</strong>
+        <div
+          className="compare-panes-toggles"
+          role="group"
+          aria-label="Compare panes"
+        >
+          {COMPARE_PANES.map((p, i) => (
+            <span key={p.id} className="compare-panes-item">
+              {i > 0 ? (
+                <span className="compare-panes-sep" aria-hidden>
+                  ·
+                </span>
+              ) : null}
+              <label className="compare-toggle">
+                <input
+                  type="checkbox"
+                  checked={panes[p.id]}
+                  onChange={() => togglePane(p.id)}
+                />
+                {p.label}
+              </label>
+            </span>
+          ))}
+        </div>
         <label className="compare-field">
           Location
-          <select value={location.id} onChange={(e) => jump(e.target.value)}>
+          <select
+            value={location?.id ?? ''}
+            onChange={(e) => jump(e.target.value)}
+          >
+            <option value="">—</option>
             {COMPARE_LOCATIONS.map((l) => (
               <option key={l.id} value={l.id}>
                 {l.label}
@@ -193,18 +225,6 @@ export function ComparePage({
             ))}
           </select>
         </label>
-        <div className="compare-field compare-panes-toggles" role="group" aria-label="Panes">
-          {COMPARE_PANES.map((p) => (
-            <label key={p.id} className="compare-toggle">
-              <input
-                type="checkbox"
-                checked={panes[p.id]}
-                onChange={() => togglePane(p.id)}
-              />
-              {p.label}
-            </label>
-          ))}
-        </div>
         {mode === 'blend' && showVector && (
           <label className="compare-field compare-field--grow">
             Vector opacity {Math.round(blend * 100)}%
@@ -231,12 +251,6 @@ export function ComparePage({
             />
           </label>
         )}
-        <span className="muted">
-          {location.note}
-          {panes.rust
-            ? ' · Rust = full-approx raster (large bbox z15–20; set RUST_TILES_ROOT)'
-            : ''}
-        </span>
       </header>
 
       <div
