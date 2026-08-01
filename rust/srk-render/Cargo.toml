@@ -19,3 +19,4 @@ postgres = "0.19"
 tiny-skia = "0.12"
 webp = "0.3"
 wkb = "0.7"
+image = { version = "0.25", default-features = false, features = ["jpeg"] }

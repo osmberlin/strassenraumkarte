@@ -8,10 +8,10 @@ use crate::paint::{
     clip_line_wkb_sql_fast, clip_point_wkb_sql, clip_polygon_wkb_sql_fast, decode_wkb,
     draw_tree_crown_marker, envelope_sql, fill_circles_m, fill_polygons,
     fill_polygons_batch_with_shadow, fill_polygons_shadow_only, fill_polygons_textured,
-    fill_tree_crown_soft, geometry_points, map_to_px, stroke_lines, DropShadow,
+    geometry_points, map_to_px, stroke_lines, DropShadow,
 };
 use crate::palette::{
-    fill_building, fill_for_area_highway, fill_for_landuse, fill_pitch, fill_tree_crown,
+    fill_building, fill_for_area_highway, fill_for_landuse, fill_pitch,
     fill_tree_trunk, fill_water, highway_surface_texture, landuse_class_texture,
     landuse_surface_texture, stroke_path, stroke_service, stroke_waterway, surface_colour,
     AREA_HIGHWAY_PAINTED,
@@ -20,7 +20,7 @@ use crate::profile::{StageSlot, StageTimers};
 use crate::sql_cache::{query_prep, PreparedCache};
 use crate::textures::TextureCatalog;
 use crate::tile::{
-    mercator_scale, parse_hex_color, tile_bounds_3857, TileBounds, DEFAULT_BACKGROUND, TILE_SIZE_PX,
+    crop_core_tile, mercator_scale, parse_hex_color, RenderExtent, DEFAULT_BACKGROUND,
 };
 use crate::tree_markers::TreeMarkerCatalog;
 
@@ -54,19 +54,19 @@ impl LayerPreset {
     }
 }
 
-fn empty_pixmap() -> Result<Pixmap> {
+fn empty_pixmap(extent: RenderExtent) -> Result<Pixmap> {
     let bg = parse_hex_color(DEFAULT_BACKGROUND)?;
-    let mut pixmap = Pixmap::new(TILE_SIZE_PX, TILE_SIZE_PX).context("pixmap alloc")?;
+    let mut pixmap = Pixmap::new(extent.width_px, extent.height_px).context("pixmap alloc")?;
     pixmap.fill(bg);
     Ok(pixmap)
 }
 
-/// Write a tile image. Extension selects codec: `.png` (lossless) or `.webp`
-/// (lossy at `webp_quality`, matching production JPEG-q90 intent).
+/// Write a tile image. Extension selects codec: `.png` (lossless harness),
+/// `.webp` / `.jpg` / `.jpeg` (lossy at `quality`, live farm formats).
 pub fn save_tile(
     pixmap: &Pixmap,
     out_path: &std::path::Path,
-    webp_quality: f32,
+    quality: f32,
     timers: &mut Option<&mut StageTimers>,
 ) -> Result<()> {
     if let Some(parent) = out_path.parent() {
@@ -86,12 +86,35 @@ pub fn save_tile(
                 let w = pixmap.width();
                 let h = pixmap.height();
                 let encoder = webp::Encoder::from_rgba(pixmap.data(), w, h);
-                let q = webp_quality.clamp(0.0, 100.0);
+                let q = quality.clamp(0.0, 100.0);
                 let memory = encoder.encode(q);
                 std::fs::write(out_path, memory.as_ref())
                     .with_context(|| format!("write webp {}", out_path.display()))?;
             }
-            other => anyhow::bail!("unsupported tile extension .{other} (use png or webp)"),
+            "jpg" | "jpeg" => {
+                let w = pixmap.width();
+                let h = pixmap.height();
+                let rgba = pixmap.data();
+                let mut rgb = Vec::with_capacity((w * h * 3) as usize);
+                for px in rgba.chunks_exact(4) {
+                    rgb.push(px[0]);
+                    rgb.push(px[1]);
+                    rgb.push(px[2]);
+                }
+                let img = image::RgbImage::from_raw(w, h, rgb)
+                    .context("build rgb image for jpeg")?;
+                let q = quality.clamp(1.0, 100.0) as u8;
+                let mut file = std::fs::File::create(out_path)
+                    .with_context(|| format!("create jpeg {}", out_path.display()))?;
+                let mut encoder =
+                    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut file, q);
+                encoder
+                    .encode(img.as_raw(), w, h, image::ExtendedColorType::Rgb8)
+                    .with_context(|| format!("encode jpeg {}", out_path.display()))?;
+            }
+            other => {
+                anyhow::bail!("unsupported tile extension .{other} (use png, webp, or jpg)")
+            }
         }
         Ok::<(), anyhow::Error>(())
     })?;
@@ -141,19 +164,21 @@ pub fn render_highway_area(
     textures: &TextureCatalog,
     webp_quality: f32,
     timers: &mut Option<&mut StageTimers>,
+    gutter: u32,
 ) -> Result<()> {
-    let bounds = tile_bounds_3857(x, y, z);
-    let mut pixmap = empty_pixmap()?;
+    let extent = RenderExtent::for_tile(x, y, z, gutter);
+    let mut pixmap = empty_pixmap(extent)?;
     let painted = paint_highway_area(
         client,
         prep_cache,
         &mut pixmap,
-        bounds,
+        extent,
         z,
         textures,
         timers,
     )?;
-    save_tile(&pixmap, out_path, webp_quality, timers)?;
+    let core = crop_core_tile(&pixmap, extent);
+    save_tile(&core, out_path, webp_quality, timers)?;
     if !quiet {
         eprintln!(
             "rendered {z}/{x}/{y} → {} (highway_area parts≈{painted})",
@@ -167,7 +192,7 @@ fn paint_highway_area(
     client: &mut Client,
     prep_cache: &mut PreparedCache,
     pixmap: &mut Pixmap,
-    bounds: TileBounds,
+    extent: RenderExtent,
     z: u32,
     textures: &TextureCatalog,
     timers: &mut Option<&mut StageTimers>,
@@ -191,7 +216,7 @@ fn paint_highway_area(
         prep_cache,
         timers,
         &sql,
-        &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
+        &[&extent.bounds.minx, &extent.bounds.miny, &extent.bounds.maxx, &extent.bounds.maxy],
     )?;
     let mut painted = 0usize;
     crate::profile::time_stage(timers, StageSlot::Paint, || {
@@ -210,7 +235,7 @@ fn paint_highway_area(
             };
             match decode_wkb(&wkb) {
                 Ok(geom) => {
-                    fill_polygons_textured(pixmap, bounds, geom, fill_color, texture);
+                    fill_polygons_textured(pixmap, extent, geom, fill_color, texture);
                     painted += 1;
                 }
                 Err(e) => eprintln!("warn: skip highway_area WKB: {e:?}"),
@@ -237,9 +262,11 @@ pub fn render_full_approx(
     tree_markers: &TreeMarkerCatalog,
     webp_quality: f32,
     timers: &mut Option<&mut StageTimers>,
+    gutter: u32,
 ) -> Result<()> {
-    let bounds = tile_bounds_3857(x, y, z);
-    let mut pixmap = empty_pixmap()?;
+    let extent = RenderExtent::for_tile(x, y, z, gutter);
+    let mut pixmap = empty_pixmap(extent)?;
+    let b = extent.bounds;
 
     let check_sql = tile_has_any_data_sql(cache);
     let hit_rows = query_prep(
@@ -247,48 +274,49 @@ pub fn render_full_approx(
         prep_cache,
         timers,
         &check_sql,
-        &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
+        &[&b.minx, &b.miny, &b.maxx, &b.maxy],
     )?;
     let any_hit: bool = hit_rows[0].get("any_hit");
     if !any_hit {
-        save_tile(&pixmap, out_path, webp_quality, timers)?;
+        let core = crop_core_tile(&pixmap, extent);
+        save_tile(&core, out_path, webp_quality, timers)?;
         if !quiet {
             eprintln!("rendered {z}/{x}/{y} → {} (full-approx, empty)", out_path.display());
         }
         return Ok(());
     }
 
-    paint_landuse(client, prep_cache, &mut pixmap, bounds, z, textures, timers)?;
+    paint_landuse(client, prep_cache, &mut pixmap, extent, z, textures, timers)?;
     if cache.pitch {
-        paint_pitch(client, prep_cache, &mut pixmap, bounds, z, timers)?;
+        paint_pitch(client, prep_cache, &mut pixmap, extent, z, timers)?;
     }
     if cache.water_body {
-        paint_water_body(client, prep_cache, &mut pixmap, bounds, z, timers)?;
+        paint_water_body(client, prep_cache, &mut pixmap, extent, z, timers)?;
     }
     if cache.waterway {
-        paint_waterway(client, prep_cache, &mut pixmap, bounds, z, timers)?;
+        paint_waterway(client, prep_cache, &mut pixmap, extent, z, timers)?;
     }
     // Streets: path → service → highway_area (matches QGIS / MapLibre sandwich).
     if cache.highway {
-        paint_highway_path(client, prep_cache, &mut pixmap, bounds, z, timers)?;
+        paint_highway_path(client, prep_cache, &mut pixmap, extent, z, timers)?;
     }
     if cache.highway_service {
-        paint_highway_service(client, prep_cache, &mut pixmap, bounds, z, timers)?;
+        paint_highway_service(client, prep_cache, &mut pixmap, extent, z, timers)?;
     }
     paint_highway_area(
         client,
         prep_cache,
         &mut pixmap,
-        bounds,
+        extent,
         z,
         textures,
         timers,
     )?;
     if cache.road_marking_polygon {
-        paint_road_marking_polygon(client, prep_cache, &mut pixmap, bounds, z, timers)?;
+        paint_road_marking_polygon(client, prep_cache, &mut pixmap, extent, z, timers)?;
     }
     if cache.building_shade {
-        paint_building_shade(client, prep_cache, &mut pixmap, bounds, z, timers)?;
+        paint_building_shade(client, prep_cache, &mut pixmap, extent, z, timers)?;
     }
     // QGIS paints `building_parts_dissolved_height` only (no separate `building` maplayer).
     if cache.building_parts {
@@ -296,7 +324,7 @@ pub fn render_full_approx(
             client,
             prep_cache,
             &mut pixmap,
-            bounds,
+            extent,
             z,
             cache.building_parts_has_height,
             timers,
@@ -307,7 +335,7 @@ pub fn render_full_approx(
             client,
             prep_cache,
             &mut pixmap,
-            bounds,
+            extent,
             z,
             cache,
             tree_markers,
@@ -315,7 +343,8 @@ pub fn render_full_approx(
         )?;
     }
 
-    save_tile(&pixmap, out_path, webp_quality, timers)?;
+    let core = crop_core_tile(&pixmap, extent);
+    save_tile(&core, out_path, webp_quality, timers)?;
     if !quiet {
         eprintln!("rendered {z}/{x}/{y} → {} (full-approx)", out_path.display());
     }
@@ -421,7 +450,7 @@ fn paint_landuse(
     client: &mut Client,
     prep_cache: &mut PreparedCache,
     pixmap: &mut Pixmap,
-    bounds: TileBounds,
+    extent: RenderExtent,
     z: u32,
     textures: &TextureCatalog,
     timers: &mut Option<&mut StageTimers>,
@@ -441,7 +470,7 @@ fn paint_landuse(
         prep_cache,
         timers,
         &sql,
-        &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
+        &[&extent.bounds.minx, &extent.bounds.miny, &extent.bounds.maxx, &extent.bounds.maxy],
     )?;
     crate::profile::time_stage(timers, StageSlot::Paint, || {
         for row in &rows {
@@ -457,7 +486,7 @@ fn paint_landuse(
                 .or_else(|| class.as_deref().and_then(landuse_class_texture))
                 .and_then(|(id, opacity)| textures.get(id).map(|t| (t, opacity)));
             match decode_wkb(&wkb) {
-                Ok(geom) => fill_polygons_textured(pixmap, bounds, geom, base, texture),
+                Ok(geom) => fill_polygons_textured(pixmap, extent, geom, base, texture),
                 Err(e) => eprintln!("warn: skip landuse WKB: {e:?}"),
             }
         }
@@ -469,7 +498,7 @@ fn paint_pitch(
     client: &mut Client,
     prep_cache: &mut PreparedCache,
     pixmap: &mut Pixmap,
-    bounds: TileBounds,
+    extent: RenderExtent,
     z: u32,
     timers: &mut Option<&mut StageTimers>,
 ) -> Result<()> {
@@ -488,7 +517,7 @@ fn paint_pitch(
         prep_cache,
         timers,
         &sql,
-        &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
+        &[&extent.bounds.minx, &extent.bounds.miny, &extent.bounds.maxx, &extent.bounds.maxy],
     )?;
     crate::profile::time_stage(timers, StageSlot::Paint, || {
         for row in &rows {
@@ -496,7 +525,7 @@ fn paint_pitch(
                 continue;
             };
             if let Ok(geom) = decode_wkb(&wkb) {
-                fill_polygons(pixmap, bounds, geom, fill_pitch());
+                fill_polygons(pixmap, extent, geom, fill_pitch());
             }
         }
     });
@@ -507,7 +536,7 @@ fn paint_water_body(
     client: &mut Client,
     prep_cache: &mut PreparedCache,
     pixmap: &mut Pixmap,
-    bounds: TileBounds,
+    extent: RenderExtent,
     z: u32,
     timers: &mut Option<&mut StageTimers>,
 ) -> Result<()> {
@@ -525,7 +554,7 @@ fn paint_water_body(
         prep_cache,
         timers,
         &sql,
-        &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
+        &[&extent.bounds.minx, &extent.bounds.miny, &extent.bounds.maxx, &extent.bounds.maxy],
     )?;
     crate::profile::time_stage(timers, StageSlot::Paint, || {
         for row in &rows {
@@ -533,7 +562,7 @@ fn paint_water_body(
                 continue;
             };
             if let Ok(geom) = decode_wkb(&wkb) {
-                fill_polygons(pixmap, bounds, geom, fill_water());
+                fill_polygons(pixmap, extent, geom, fill_water());
             }
         }
     });
@@ -544,7 +573,7 @@ fn paint_waterway(
     client: &mut Client,
     prep_cache: &mut PreparedCache,
     pixmap: &mut Pixmap,
-    bounds: TileBounds,
+    extent: RenderExtent,
     z: u32,
     timers: &mut Option<&mut StageTimers>,
 ) -> Result<()> {
@@ -562,7 +591,7 @@ fn paint_waterway(
         prep_cache,
         timers,
         &sql,
-        &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
+        &[&extent.bounds.minx, &extent.bounds.miny, &extent.bounds.maxx, &extent.bounds.maxy],
     )?;
     crate::profile::time_stage(timers, StageSlot::Paint, || {
         for row in &rows {
@@ -574,7 +603,7 @@ fn paint_waterway(
                 continue;
             };
             if let Ok(geom) = decode_wkb(&wkb) {
-                stroke_lines(pixmap, bounds, geom, stroke_waterway(), width_m);
+                stroke_lines(pixmap, extent, geom, stroke_waterway(), width_m);
             }
         }
     });
@@ -585,7 +614,7 @@ fn paint_highway_service(
     client: &mut Client,
     prep_cache: &mut PreparedCache,
     pixmap: &mut Pixmap,
-    bounds: TileBounds,
+    extent: RenderExtent,
     z: u32,
     timers: &mut Option<&mut StageTimers>,
 ) -> Result<()> {
@@ -604,7 +633,7 @@ fn paint_highway_service(
         prep_cache,
         timers,
         &sql,
-        &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
+        &[&extent.bounds.minx, &extent.bounds.miny, &extent.bounds.maxx, &extent.bounds.maxy],
     )?;
     crate::profile::time_stage(timers, StageSlot::Paint, || {
         for row in &rows {
@@ -621,8 +650,8 @@ fn paint_highway_service(
                 continue;
             };
             if let Ok(geom) = decode_wkb(&wkb) {
-                let width_map = width_m * mercator_scale(bounds);
-                stroke_lines(pixmap, bounds, geom, stroke_service(), width_map);
+                let width_map = width_m * mercator_scale(extent.bounds);
+                stroke_lines(pixmap, extent, geom, stroke_service(), width_map);
             }
         }
     });
@@ -633,7 +662,7 @@ fn paint_highway_path(
     client: &mut Client,
     prep_cache: &mut PreparedCache,
     pixmap: &mut Pixmap,
-    bounds: TileBounds,
+    extent: RenderExtent,
     z: u32,
     timers: &mut Option<&mut StageTimers>,
 ) -> Result<()> {
@@ -653,7 +682,7 @@ fn paint_highway_path(
         prep_cache,
         timers,
         &sql,
-        &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
+        &[&extent.bounds.minx, &extent.bounds.miny, &extent.bounds.maxx, &extent.bounds.maxy],
     )?;
     crate::profile::time_stage(timers, StageSlot::Paint, || {
         for row in &rows {
@@ -666,10 +695,10 @@ fn paint_highway_path(
                 continue;
             };
             if let Ok(geom) = decode_wkb(&wkb) {
-                let width_map = width_m * mercator_scale(bounds);
+                let width_map = width_m * mercator_scale(extent.bounds);
                 stroke_lines(
                     pixmap,
-                    bounds,
+                    extent,
                     geom,
                     stroke_path(highway.as_deref()),
                     width_map,
@@ -684,7 +713,7 @@ fn paint_road_marking_polygon(
     client: &mut Client,
     prep_cache: &mut PreparedCache,
     pixmap: &mut Pixmap,
-    bounds: TileBounds,
+    extent: RenderExtent,
     z: u32,
     timers: &mut Option<&mut StageTimers>,
 ) -> Result<()> {
@@ -706,7 +735,7 @@ fn paint_road_marking_polygon(
         prep_cache,
         timers,
         &sql,
-        &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
+        &[&extent.bounds.minx, &extent.bounds.miny, &extent.bounds.maxx, &extent.bounds.maxy],
     )?;
     crate::profile::time_stage(timers, StageSlot::Paint, || {
         for row in &rows {
@@ -719,7 +748,7 @@ fn paint_road_marking_polygon(
                 continue;
             };
             if let Ok(geom) = decode_wkb(&wkb) {
-                fill_polygons(pixmap, bounds, geom, fill);
+                fill_polygons(pixmap, extent, geom, fill);
             }
         }
     });
@@ -730,7 +759,7 @@ fn paint_building_shade(
     client: &mut Client,
     prep_cache: &mut PreparedCache,
     pixmap: &mut Pixmap,
-    bounds: TileBounds,
+    extent: RenderExtent,
     z: u32,
     timers: &mut Option<&mut StageTimers>,
 ) -> Result<()> {
@@ -748,7 +777,7 @@ fn paint_building_shade(
         prep_cache,
         timers,
         &sql,
-        &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
+        &[&extent.bounds.minx, &extent.bounds.miny, &extent.bounds.maxx, &extent.bounds.maxy],
     )?;
     let mut geoms = Vec::new();
     for row in &rows {
@@ -760,7 +789,7 @@ fn paint_building_shade(
         }
     }
     // QGIS: dropShadow enabled, drawSource DISABLED — soft shadow only.
-    fill_polygons_shadow_only(pixmap, bounds, &geoms, DropShadow::building_shade(), timers);
+    fill_polygons_shadow_only(pixmap, extent, &geoms, DropShadow::building_shade(), timers);
     Ok(())
 }
 
@@ -768,7 +797,7 @@ fn paint_building_parts(
     client: &mut Client,
     prep_cache: &mut PreparedCache,
     pixmap: &mut Pixmap,
-    bounds: TileBounds,
+    extent: RenderExtent,
     z: u32,
     order_by_height: bool,
     timers: &mut Option<&mut StageTimers>,
@@ -793,7 +822,7 @@ fn paint_building_parts(
         prep_cache,
         timers,
         &sql,
-        &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
+        &[&extent.bounds.minx, &extent.bounds.miny, &extent.bounds.maxx, &extent.bounds.maxy],
     )?;
     // QGIS: flat `#ffe9e9` @ symbol α 0.7 + dropShadow (no ShapeburstFill).
     let mut color = fill_building();
@@ -808,7 +837,7 @@ fn paint_building_parts(
             Err(e) => eprintln!("warn: skip building_parts WKB: {e:?}"),
         }
     }
-    fill_polygons_batch_with_shadow(pixmap, bounds, &geoms, color, DropShadow::building(), timers);
+    fill_polygons_batch_with_shadow(pixmap, extent, &geoms, color, DropShadow::building(), timers);
     Ok(())
 }
 
@@ -816,7 +845,7 @@ fn paint_tree(
     client: &mut Client,
     prep_cache: &mut PreparedCache,
     pixmap: &mut Pixmap,
-    bounds: TileBounds,
+    extent: RenderExtent,
     _z: u32,
     cache: &TableCache,
     tree_markers: &TreeMarkerCatalog,
@@ -854,9 +883,9 @@ fn paint_tree(
         prep_cache,
         timers,
         &sql,
-        &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
+        &[&extent.bounds.minx, &extent.bounds.miny, &extent.bounds.maxx, &extent.bounds.maxy],
     )?;
-    let mscale = mercator_scale(bounds);
+    let mscale = mercator_scale(extent.bounds);
     crate::profile::time_stage(timers, StageSlot::Paint, || {
         for row in &rows {
         let natural: Option<String> = row.try_get("natural_tag").ok().flatten();
@@ -883,6 +912,8 @@ fn paint_tree(
         };
         if natural.as_deref() != Some("tree_stump") {
             let is_shrub = natural.as_deref() == Some("shrub");
+            // QGIS: if("diameter_crown", diameter_crown, randf(5,9)) / shrub randf(3,6).
+            // Deterministic midpoints stand in for randf.
             let crown_ground_m = diameter
                 .filter(|d| *d > 0.0)
                 .map(f64::from)
@@ -894,32 +925,28 @@ fn paint_tree(
                 DropShadow::tree()
             };
             let rotation_deg = rotation.unwrap_or(0.0);
-            let mut crown = fill_tree_crown();
-            crown.set_alpha(0.55);
-            if tree_markers.from_file {
-                let marker = tree_markers.for_leaf_type(leaf_type.as_deref());
-                for pt in geometry_points(geom.clone()) {
-                    let (cx, cy) = map_to_px(
-                        bounds,
-                        geo_types::Coord {
-                            x: pt.x(),
-                            y: pt.y(),
-                        },
-                    );
-                    draw_tree_crown_marker(
-                        pixmap,
-                        bounds,
-                        cx,
-                        cy,
-                        marker,
-                        crown_map_m,
-                        rotation_deg,
-                        shadow,
-                        0.35,
-                    );
-                }
+            let marker = tree_markers.for_leaf_type(leaf_type.as_deref());
+            for pt in geometry_points(geom.clone()) {
+                let (cx, cy) = map_to_px(
+                    extent,
+                    geo_types::Coord {
+                        x: pt.x(),
+                        y: pt.y(),
+                    },
+                );
+                // QGIS RasterMarker only (soft PNG + dropShadow). No hard circle overlay.
+                draw_tree_crown_marker(
+                    pixmap,
+                    extent,
+                    cx,
+                    cy,
+                    marker,
+                    crown_map_m,
+                    rotation_deg,
+                    shadow,
+                    0.82,
+                );
             }
-            fill_tree_crown_soft(pixmap, bounds, geom.clone(), crown, crown_map_m / 2.0);
         }
         if let Some(c) = circumference.filter(|c| *c > 0.0).map(f64::from) {
             let trunk_r_ground = c / (2.0 * std::f64::consts::PI);
@@ -927,7 +954,7 @@ fn paint_tree(
             trunk.set_alpha(0.8);
             fill_circles_m(
                 pixmap,
-                bounds,
+                extent,
                 geom,
                 trunk,
                 trunk_r_ground * mscale,

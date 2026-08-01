@@ -111,6 +111,83 @@ pub fn tile_bounds_3857(x: u32, y: u32, z: u32) -> TileBounds {
     }
 }
 
+/// Render extent matching QGIS metatile gutter: core tile ± `gutter` neighbour tiles.
+///
+/// Features (trees, shadows, AA rims) are painted into this larger buffer; the core
+/// 256×256 is cropped afterward so adjacent tiles share the same edge pixels.
+#[derive(Clone, Copy, Debug)]
+pub struct RenderExtent {
+    pub bounds: TileBounds,
+    pub width_px: u32,
+    pub height_px: u32,
+    /// Pixel origin of the core tile inside the render buffer.
+    pub core_ox: u32,
+    pub core_oy: u32,
+    pub gutter: u32,
+}
+
+impl RenderExtent {
+    /// Same as QGIS `metatile_for_single_tile(z,x,y,gutter)` then `metatile_extent_3857`.
+    pub fn for_tile(x: u32, y: u32, z: u32, gutter: u32) -> Self {
+        let max_xy = (1u32 << z).saturating_sub(1);
+        let rx0 = x.saturating_sub(gutter);
+        let rx1 = (x + gutter).min(max_xy);
+        let ry0 = y.saturating_sub(gutter);
+        let ry1 = (y + gutter).min(max_xy);
+        let nw = tile_bounds_3857(rx0, ry0, z);
+        let se = tile_bounds_3857(rx1, ry1, z);
+        Self {
+            bounds: TileBounds {
+                minx: nw.minx,
+                maxx: se.maxx,
+                maxy: nw.maxy,
+                miny: se.miny,
+            },
+            width_px: (rx1 - rx0 + 1) * TILE_SIZE_PX,
+            height_px: (ry1 - ry0 + 1) * TILE_SIZE_PX,
+            core_ox: (x - rx0) * TILE_SIZE_PX,
+            core_oy: (y - ry0) * TILE_SIZE_PX,
+            gutter,
+        }
+    }
+
+    pub fn map_to_px(self, x: f64, y: f64) -> (f32, f32) {
+        let w = self.bounds.maxx - self.bounds.minx;
+        let h = self.bounds.maxy - self.bounds.miny;
+        let px = ((x - self.bounds.minx) / w) * f64::from(self.width_px);
+        let py = ((self.bounds.maxy - y) / h) * f64::from(self.height_px);
+        (px as f32, py as f32)
+    }
+
+    pub fn metres_per_px(self) -> f64 {
+        (self.bounds.maxx - self.bounds.minx) / f64::from(self.width_px)
+    }
+
+    pub fn metres_to_px(self, metres: f64) -> f32 {
+        (metres / self.metres_per_px()) as f32
+    }
+}
+
+/// Crop the core XYZ tile out of a guttered render buffer (QGIS `image.copy(px,py,256,256)`).
+pub fn crop_core_tile(src: &tiny_skia::Pixmap, extent: RenderExtent) -> tiny_skia::Pixmap {
+    let mut dst =
+        tiny_skia::Pixmap::new(TILE_SIZE_PX, TILE_SIZE_PX).expect("core tile pixmap alloc");
+    let sw = src.width() as usize;
+    let ox = extent.core_ox as usize;
+    let oy = extent.core_oy as usize;
+    let tw = TILE_SIZE_PX as usize;
+    debug_assert!(ox + tw <= src.width() as usize);
+    debug_assert!(oy + tw <= src.height() as usize);
+    let src_data = src.data();
+    let dst_data = dst.data_mut();
+    for row in 0..tw {
+        let s = ((oy + row) * sw + ox) * 4;
+        let d = row * tw * 4;
+        dst_data[d..d + tw * 4].copy_from_slice(&src_data[s..s + tw * 4]);
+    }
+    dst
+}
+
 pub fn parse_hex_color(hex: &str) -> Result<Color> {
     let h = hex.trim().trim_start_matches('#');
     if h.len() != 6 {
@@ -126,7 +203,7 @@ pub fn metres_per_px(bounds: TileBounds) -> f64 {
     (bounds.maxx - bounds.minx) / f64::from(TILE_SIZE_PX)
 }
 
-/// Convert EPSG:3857 map metres → pixels (RasterFill MapUnit widths, effect radii).
+/// Convert EPSG:3857 map metres → pixels for a single 256 px tile extent.
 pub fn metres_to_px(metres: f64, bounds: TileBounds) -> f32 {
     (metres / metres_per_px(bounds)) as f32
 }

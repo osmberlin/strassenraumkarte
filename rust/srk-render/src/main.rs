@@ -4,9 +4,9 @@
 //! - `highway_area` — isolate SimpleFill class rules (parity smoke)
 //! - `full-approx` — landuse/water/roads/buildings(+drop-shadow)/trees stack (RasterFill v1; no labels/SVG)
 //!
-//! Default output is **WebP** (lossy q90). Use `--format png` for regression
-//! harness pixelmatch. Tile math matches `render/xyz_tiles.py` (ORIGIN_SHIFT,
-//! 256 px, EPSG:3857, background `#ededed`).
+//! Default output is **WebP** (lossy q90). Use `--format jpg` for QGIS-like JPEG,
+//! `--format png` only for regression harness pixelmatch. Tile math matches
+//! `render/xyz_tiles.py` (ORIGIN_SHIFT, 256 px, EPSG:3857, background `#ededed`).
 
 mod layers;
 mod paint;
@@ -67,11 +67,11 @@ struct Cli {
     #[arg(long, default_value = "/tmp/srk-one-tile-cand")]
     out: PathBuf,
 
-    /// Image format: `webp` (default, lossy) or `png` (lossless; harness/compare).
+    /// Image format: `webp` (default, live), `jpg` (live, QGIS-like), or `png` (harness only).
     #[arg(long, default_value = "webp")]
     format: String,
 
-    /// WebP quality 0–100 (ignored for PNG). Default 90 matches QGIS JPEG intent.
+    /// Lossy quality 0–100 for webp/jpg (ignored for PNG). Default 90.
     #[arg(long, default_value_t = 90.0)]
     quality: f32,
 
@@ -95,6 +95,11 @@ struct Cli {
     /// Metatile size (deferred: only 1 is supported today).
     #[arg(long, default_value_t = 1)]
     metatile: u32,
+
+    /// Extra tiles around each core tile for symbol/shadow bleed (QGIS gutter).
+    /// Rendered then cropped. Default 1 matches `render/xyz_tiles.py --gutter 1`.
+    #[arg(long, default_value_t = 1)]
+    gutter: u32,
 
     #[arg(long, env = "DB_HOST", default_value = "localhost")]
     db_host: String,
@@ -159,6 +164,7 @@ struct SharedState {
     tree_markers: Arc<TreeMarkerCatalog>,
     webp_quality: f32,
     profile: bool,
+    gutter: u32,
 }
 
 fn connect(cli: &Cli) -> Result<Client> {
@@ -223,7 +229,8 @@ fn normalize_format(raw: &str) -> Result<&'static str> {
     match raw.to_ascii_lowercase().as_str() {
         "webp" => Ok("webp"),
         "png" => Ok("png"),
-        other => bail!("unsupported --format {other} (use webp or png)"),
+        "jpg" | "jpeg" => Ok("jpg"),
+        other => bail!("unsupported --format {other} (use webp, png, or jpg)"),
     }
 }
 
@@ -250,6 +257,7 @@ fn render_one_tile(
             shared.texture_catalog.as_ref(),
             shared.webp_quality,
             timers,
+            shared.gutter,
         )?,
         LayerPreset::FullApprox => {
             let cache = shared
@@ -269,6 +277,7 @@ fn render_one_tile(
                 shared.tree_markers.as_ref(),
                 shared.webp_quality,
                 timers,
+                shared.gutter,
             )?;
         }
     }
@@ -428,6 +437,7 @@ fn run_parallel(
             profile: cli.profile,
             workers: cli.workers,
             metatile: cli.metatile,
+            gutter: cli.gutter,
             db_host: cli.db_host.clone(),
             db_port: cli.db_port,
             db_user: cli.db_user.clone(),
@@ -489,6 +499,9 @@ fn main() -> Result<()> {
             cli.metatile
         );
     }
+    if cli.gutter > 4 {
+        bail!("--gutter {} is too large (max 4)", cli.gutter);
+    }
     if cli.workers == 0 {
         bail!("--workers must be >= 1");
     }
@@ -525,6 +538,7 @@ fn main() -> Result<()> {
         tree_markers,
         webp_quality: cli.quality,
         profile: cli.profile,
+        gutter: cli.gutter,
     });
 
     let started = Instant::now();
@@ -579,10 +593,10 @@ fn main() -> Result<()> {
         wall_ms,
         ms_per_tile,
         format: format.to_string(),
-        quality: if format == "webp" {
-            Some(cli.quality)
-        } else {
+        quality: if format == "png" {
             None
+        } else {
+            Some(cli.quality)
         },
         layers: cli.layers.clone(),
         workers: cli.workers,

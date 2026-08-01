@@ -23,6 +23,8 @@ Stratified sample of **120** tiles from the previous large-bbox PNG tree, re-enc
 
 **Verdict:** WebP is smaller. Lossy q90 matches the production intent of QGIS JPEG q90 and yields the large savings — adopted as the pipeline default. Harness stays on PNG so pixelmatch remains bit-stable.
 
+Full z18–z20 live compare (webp vs jpg vs png: wall, disk, quality): [`SPEED_ITERATIONS.md`](SPEED_ITERATIONS.md) and `runs/bench-codecs-*/summary.json` via `scripts/bench-codecs.sh`.
+
 ## Previous full-area PNG baseline (stored)
 
 Source: `runs/bench-large-fullapprox-20260801-171946/rust`  
