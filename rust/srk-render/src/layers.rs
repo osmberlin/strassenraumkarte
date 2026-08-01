@@ -17,6 +17,7 @@ use crate::palette::{
     AREA_HIGHWAY_PAINTED,
 };
 use crate::profile::{StageSlot, StageTimers};
+use crate::sql_cache::{query_prep, PreparedCache};
 use crate::textures::TextureCatalog;
 use crate::tile::{
     mercator_scale, parse_hex_color, tile_bounds_3857, TileBounds, DEFAULT_BACKGROUND, TILE_SIZE_PX,
@@ -131,6 +132,7 @@ fn wkb_from_row(row: &postgres::Row, col: &str) -> Option<Vec<u8>> {
 /// Isolate: `highway_area` class fills only.
 pub fn render_highway_area(
     client: &mut Client,
+    prep_cache: &mut PreparedCache,
     z: u32,
     x: u32,
     y: u32,
@@ -142,7 +144,15 @@ pub fn render_highway_area(
 ) -> Result<()> {
     let bounds = tile_bounds_3857(x, y, z);
     let mut pixmap = empty_pixmap()?;
-    let painted = paint_highway_area(client, &mut pixmap, bounds, z, textures, timers)?;
+    let painted = paint_highway_area(
+        client,
+        prep_cache,
+        &mut pixmap,
+        bounds,
+        z,
+        textures,
+        timers,
+    )?;
     save_tile(&pixmap, out_path, webp_quality, timers)?;
     if !quiet {
         eprintln!(
@@ -155,6 +165,7 @@ pub fn render_highway_area(
 
 fn paint_highway_area(
     client: &mut Client,
+    prep_cache: &mut PreparedCache,
     pixmap: &mut Pixmap,
     bounds: TileBounds,
     z: u32,
@@ -175,12 +186,13 @@ fn paint_highway_area(
         ORDER BY COALESCE(layer, 0), osm_id
         "#
     );
-    let rows = crate::profile::time_stage(timers, StageSlot::Sql, || {
-        client.query(
-            &sql,
-            &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
-        )
-    })?;
+    let rows = query_prep(
+        client,
+        prep_cache,
+        timers,
+        &sql,
+        &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
+    )?;
     let mut painted = 0usize;
     crate::profile::time_stage(timers, StageSlot::Paint, || {
         for row in &rows {
@@ -214,6 +226,7 @@ fn paint_highway_area(
 /// symbol levels, blend modes. RasterFill v1: map-anchored surface/class textures.
 pub fn render_full_approx(
     client: &mut Client,
+    prep_cache: &mut PreparedCache,
     z: u32,
     x: u32,
     y: u32,
@@ -228,34 +241,60 @@ pub fn render_full_approx(
     let bounds = tile_bounds_3857(x, y, z);
     let mut pixmap = empty_pixmap()?;
 
-    paint_landuse(client, &mut pixmap, bounds, z, textures, timers)?;
+    let check_sql = tile_has_any_data_sql(cache);
+    let hit_rows = query_prep(
+        client,
+        prep_cache,
+        timers,
+        &check_sql,
+        &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
+    )?;
+    let any_hit: bool = hit_rows[0].get("any_hit");
+    if !any_hit {
+        save_tile(&pixmap, out_path, webp_quality, timers)?;
+        if !quiet {
+            eprintln!("rendered {z}/{x}/{y} → {} (full-approx, empty)", out_path.display());
+        }
+        return Ok(());
+    }
+
+    paint_landuse(client, prep_cache, &mut pixmap, bounds, z, textures, timers)?;
     if cache.pitch {
-        paint_pitch(client, &mut pixmap, bounds, z, timers)?;
+        paint_pitch(client, prep_cache, &mut pixmap, bounds, z, timers)?;
     }
     if cache.water_body {
-        paint_water_body(client, &mut pixmap, bounds, z, timers)?;
+        paint_water_body(client, prep_cache, &mut pixmap, bounds, z, timers)?;
     }
     if cache.waterway {
-        paint_waterway(client, &mut pixmap, bounds, z, timers)?;
+        paint_waterway(client, prep_cache, &mut pixmap, bounds, z, timers)?;
     }
     // Streets: path → service → highway_area (matches QGIS / MapLibre sandwich).
     if cache.highway {
-        paint_highway_path(client, &mut pixmap, bounds, z, timers)?;
+        paint_highway_path(client, prep_cache, &mut pixmap, bounds, z, timers)?;
     }
     if cache.highway_service {
-        paint_highway_service(client, &mut pixmap, bounds, z, timers)?;
+        paint_highway_service(client, prep_cache, &mut pixmap, bounds, z, timers)?;
     }
-    paint_highway_area(client, &mut pixmap, bounds, z, textures, timers)?;
+    paint_highway_area(
+        client,
+        prep_cache,
+        &mut pixmap,
+        bounds,
+        z,
+        textures,
+        timers,
+    )?;
     if cache.road_marking_polygon {
-        paint_road_marking_polygon(client, &mut pixmap, bounds, z, timers)?;
+        paint_road_marking_polygon(client, prep_cache, &mut pixmap, bounds, z, timers)?;
     }
     if cache.building_shade {
-        paint_building_shade(client, &mut pixmap, bounds, z, timers)?;
+        paint_building_shade(client, prep_cache, &mut pixmap, bounds, z, timers)?;
     }
     // QGIS paints `building_parts_dissolved_height` only (no separate `building` maplayer).
     if cache.building_parts {
         paint_building_parts(
             client,
+            prep_cache,
             &mut pixmap,
             bounds,
             z,
@@ -264,7 +303,16 @@ pub fn render_full_approx(
         )?;
     }
     if cache.tree {
-        paint_tree(client, &mut pixmap, bounds, z, cache, tree_markers, timers)?;
+        paint_tree(
+            client,
+            prep_cache,
+            &mut pixmap,
+            bounds,
+            z,
+            cache,
+            tree_markers,
+            timers,
+        )?;
     }
 
     save_tile(&pixmap, out_path, webp_quality, timers)?;
@@ -272,6 +320,62 @@ pub fn render_full_approx(
         eprintln!("rendered {z}/{x}/{y} → {} (full-approx)", out_path.display());
     }
     Ok(())
+}
+
+/// One cheap EXISTS probe before painting; skips sparse edge tiles.
+fn tile_has_any_data_sql(cache: &TableCache) -> String {
+    let env = envelope_sql();
+    let mut parts = vec![
+        format!("EXISTS (SELECT 1 FROM landuse WHERE geom && {env})"),
+        format!(
+            r#"EXISTS (SELECT 1 FROM highway_area WHERE geom && {env} AND "area:highway" IN {AREA_HIGHWAY_PAINTED})"#
+        ),
+    ];
+    if cache.pitch {
+        parts.push(format!("EXISTS (SELECT 1 FROM pitch WHERE geom && {env})"));
+    }
+    if cache.water_body {
+        parts.push(format!(
+            "EXISTS (SELECT 1 FROM water_body_dissolved WHERE geom && {env})"
+        ));
+    }
+    if cache.waterway {
+        parts.push(format!(
+            "EXISTS (SELECT 1 FROM waterway_clipped WHERE geom && {env})"
+        ));
+    }
+    if cache.highway {
+        parts.push(format!(
+            "EXISTS (SELECT 1 FROM highway WHERE type = 'path' AND geom && {env})"
+        ));
+    }
+    if cache.highway_service {
+        parts.push(format!(
+            "EXISTS (SELECT 1 FROM highway_service WHERE geom && {env})"
+        ));
+    }
+    if cache.road_marking_polygon {
+        parts.push(format!(
+            r#"EXISTS (SELECT 1 FROM road_marking_polygon WHERE geom && {env}
+              AND road_marking IN ('surface_colour', 'crossing')
+              AND colour IS NOT NULL
+              AND colour NOT IN ('', 'no', 'none'))"#
+        ));
+    }
+    if cache.building_shade {
+        parts.push(format!(
+            "EXISTS (SELECT 1 FROM building_shade WHERE geom && {env})"
+        ));
+    }
+    if cache.building_parts {
+        parts.push(format!(
+            "EXISTS (SELECT 1 FROM building_parts_dissolved_height WHERE geom && {env})"
+        ));
+    }
+    if cache.tree {
+        parts.push(format!("EXISTS (SELECT 1 FROM tree WHERE geom && {env})"));
+    }
+    format!("SELECT ({}) AS any_hit", parts.join(" OR "))
 }
 
 #[derive(Clone, Debug)]
@@ -315,6 +419,7 @@ impl TableCache {
 
 fn paint_landuse(
     client: &mut Client,
+    prep_cache: &mut PreparedCache,
     pixmap: &mut Pixmap,
     bounds: TileBounds,
     z: u32,
@@ -331,12 +436,13 @@ fn paint_landuse(
         ORDER BY COALESCE(layer, 0), osm_id
         "#
     );
-    let rows = crate::profile::time_stage(timers, StageSlot::Sql, || {
-        client.query(
-            &sql,
-            &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
-        )
-    })?;
+    let rows = query_prep(
+        client,
+        prep_cache,
+        timers,
+        &sql,
+        &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
+    )?;
     crate::profile::time_stage(timers, StageSlot::Paint, || {
         for row in &rows {
             let class: Option<String> = row.get("class");
@@ -361,6 +467,7 @@ fn paint_landuse(
 
 fn paint_pitch(
     client: &mut Client,
+    prep_cache: &mut PreparedCache,
     pixmap: &mut Pixmap,
     bounds: TileBounds,
     z: u32,
@@ -376,12 +483,13 @@ fn paint_pitch(
         ORDER BY COALESCE(layer, 0), osm_id
         "#
     );
-    let rows = crate::profile::time_stage(timers, StageSlot::Sql, || {
-        client.query(
-            &sql,
-            &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
-        )
-    })?;
+    let rows = query_prep(
+        client,
+        prep_cache,
+        timers,
+        &sql,
+        &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
+    )?;
     crate::profile::time_stage(timers, StageSlot::Paint, || {
         for row in &rows {
             let Some(wkb) = wkb_from_row(row, "wkb") else {
@@ -397,6 +505,7 @@ fn paint_pitch(
 
 fn paint_water_body(
     client: &mut Client,
+    prep_cache: &mut PreparedCache,
     pixmap: &mut Pixmap,
     bounds: TileBounds,
     z: u32,
@@ -411,12 +520,13 @@ fn paint_water_body(
         WHERE geom && {env}
         "#
     );
-    let rows = crate::profile::time_stage(timers, StageSlot::Sql, || {
-        client.query(
-            &sql,
-            &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
-        )
-    })?;
+    let rows = query_prep(
+        client,
+        prep_cache,
+        timers,
+        &sql,
+        &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
+    )?;
     crate::profile::time_stage(timers, StageSlot::Paint, || {
         for row in &rows {
             let Some(wkb) = wkb_from_row(row, "wkb") else {
@@ -432,6 +542,7 @@ fn paint_water_body(
 
 fn paint_waterway(
     client: &mut Client,
+    prep_cache: &mut PreparedCache,
     pixmap: &mut Pixmap,
     bounds: TileBounds,
     z: u32,
@@ -446,12 +557,13 @@ fn paint_waterway(
         WHERE geom && {env}
         "#
     );
-    let rows = crate::profile::time_stage(timers, StageSlot::Sql, || {
-        client.query(
-            &sql,
-            &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
-        )
-    })?;
+    let rows = query_prep(
+        client,
+        prep_cache,
+        timers,
+        &sql,
+        &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
+    )?;
     crate::profile::time_stage(timers, StageSlot::Paint, || {
         for row in &rows {
             let width_m = opt_f32(row, "width")
@@ -471,6 +583,7 @@ fn paint_waterway(
 
 fn paint_highway_service(
     client: &mut Client,
+    prep_cache: &mut PreparedCache,
     pixmap: &mut Pixmap,
     bounds: TileBounds,
     z: u32,
@@ -486,12 +599,13 @@ fn paint_highway_service(
         ORDER BY COALESCE(layer, 0)
         "#
     );
-    let rows = crate::profile::time_stage(timers, StageSlot::Sql, || {
-        client.query(
-            &sql,
-            &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
-        )
-    })?;
+    let rows = query_prep(
+        client,
+        prep_cache,
+        timers,
+        &sql,
+        &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
+    )?;
     crate::profile::time_stage(timers, StageSlot::Paint, || {
         for row in &rows {
             let class: Option<String> = row.try_get("class").ok().flatten();
@@ -517,6 +631,7 @@ fn paint_highway_service(
 
 fn paint_highway_path(
     client: &mut Client,
+    prep_cache: &mut PreparedCache,
     pixmap: &mut Pixmap,
     bounds: TileBounds,
     z: u32,
@@ -533,12 +648,13 @@ fn paint_highway_path(
         ORDER BY COALESCE(layer, 0), osm_id
         "#
     );
-    let rows = crate::profile::time_stage(timers, StageSlot::Sql, || {
-        client.query(
-            &sql,
-            &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
-        )
-    })?;
+    let rows = query_prep(
+        client,
+        prep_cache,
+        timers,
+        &sql,
+        &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
+    )?;
     crate::profile::time_stage(timers, StageSlot::Paint, || {
         for row in &rows {
             let highway: Option<String> = row.try_get("highway").ok().flatten();
@@ -566,6 +682,7 @@ fn paint_highway_path(
 
 fn paint_road_marking_polygon(
     client: &mut Client,
+    prep_cache: &mut PreparedCache,
     pixmap: &mut Pixmap,
     bounds: TileBounds,
     z: u32,
@@ -584,12 +701,13 @@ fn paint_road_marking_polygon(
         ORDER BY osm_id
         "#
     );
-    let rows = crate::profile::time_stage(timers, StageSlot::Sql, || {
-        client.query(
-            &sql,
-            &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
-        )
-    })?;
+    let rows = query_prep(
+        client,
+        prep_cache,
+        timers,
+        &sql,
+        &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
+    )?;
     crate::profile::time_stage(timers, StageSlot::Paint, || {
         for row in &rows {
             let colour: Option<String> = row.try_get("colour").ok().flatten();
@@ -610,6 +728,7 @@ fn paint_road_marking_polygon(
 
 fn paint_building_shade(
     client: &mut Client,
+    prep_cache: &mut PreparedCache,
     pixmap: &mut Pixmap,
     bounds: TileBounds,
     z: u32,
@@ -624,12 +743,13 @@ fn paint_building_shade(
         WHERE geom && {env}
         "#
     );
-    let rows = crate::profile::time_stage(timers, StageSlot::Sql, || {
-        client.query(
-            &sql,
-            &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
-        )
-    })?;
+    let rows = query_prep(
+        client,
+        prep_cache,
+        timers,
+        &sql,
+        &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
+    )?;
     let mut geoms = Vec::new();
     for row in &rows {
         let Some(wkb) = wkb_from_row(row, "wkb") else {
@@ -646,6 +766,7 @@ fn paint_building_shade(
 
 fn paint_building_parts(
     client: &mut Client,
+    prep_cache: &mut PreparedCache,
     pixmap: &mut Pixmap,
     bounds: TileBounds,
     z: u32,
@@ -667,12 +788,13 @@ fn paint_building_parts(
         {order}
         "#
     );
-    let rows = crate::profile::time_stage(timers, StageSlot::Sql, || {
-        client.query(
-            &sql,
-            &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
-        )
-    })?;
+    let rows = query_prep(
+        client,
+        prep_cache,
+        timers,
+        &sql,
+        &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
+    )?;
     // QGIS: flat `#ffe9e9` @ symbol α 0.7 + dropShadow (no ShapeburstFill).
     let mut color = fill_building();
     color.set_alpha(0.78);
@@ -692,6 +814,7 @@ fn paint_building_parts(
 
 fn paint_tree(
     client: &mut Client,
+    prep_cache: &mut PreparedCache,
     pixmap: &mut Pixmap,
     bounds: TileBounds,
     _z: u32,
@@ -726,12 +849,13 @@ fn paint_tree(
         ORDER BY osm_id
         "#
     );
-    let rows = crate::profile::time_stage(timers, StageSlot::Sql, || {
-        client.query(
-            &sql,
-            &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
-        )
-    })?;
+    let rows = query_prep(
+        client,
+        prep_cache,
+        timers,
+        &sql,
+        &[&bounds.minx, &bounds.miny, &bounds.maxx, &bounds.maxy],
+    )?;
     let mscale = mercator_scale(bounds);
     crate::profile::time_stage(timers, StageSlot::Paint, || {
         for row in &rows {

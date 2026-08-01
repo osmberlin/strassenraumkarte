@@ -12,6 +12,7 @@ mod layers;
 mod paint;
 mod palette;
 mod profile;
+mod sql_cache;
 mod textures;
 mod tile;
 mod tree_markers;
@@ -31,6 +32,7 @@ use serde::Serialize;
 
 use layers::{render_full_approx, render_highway_area, LayerPreset, TableCache};
 use profile::{StageProfile, StageTimers};
+use sql_cache::PreparedCache;
 use textures::TextureCatalog;
 use tree_markers::TreeMarkerCatalog;
 use tile::{enumerate_bbox_tiles, parse_bbox, parse_tile_spec};
@@ -227,6 +229,7 @@ fn normalize_format(raw: &str) -> Result<&'static str> {
 
 fn render_one_tile(
     client: &mut Client,
+    prep_cache: &mut PreparedCache,
     shared: &SharedState,
     z: u32,
     x: u32,
@@ -238,6 +241,7 @@ fn render_one_tile(
     match shared.preset {
         LayerPreset::HighwayArea => render_highway_area(
             client,
+            prep_cache,
             z,
             x,
             y,
@@ -254,6 +258,7 @@ fn render_one_tile(
                 .expect("table cache for full-approx");
             render_full_approx(
                 client,
+                prep_cache,
                 z,
                 x,
                 y,
@@ -283,6 +288,7 @@ fn worker_loop(
             return;
         }
     };
+    let mut prep_cache = PreparedCache::default();
     loop {
         let job = {
             let guard = rx.lock().expect("job queue mutex");
@@ -300,6 +306,7 @@ fn worker_loop(
         };
         let render_result = render_one_tile(
             &mut client,
+            &mut prep_cache,
             shared.as_ref(),
             job.z,
             job.x,
@@ -331,6 +338,7 @@ fn run_sequential(
     tile_count: usize,
 ) -> Result<(usize, BTreeMap<u32, u64>, BTreeMap<u32, usize>, StageTimers)> {
     let mut client = connect(cli)?;
+    let mut prep_cache = PreparedCache::default();
     let started = Instant::now();
     let mut tiles_written = 0usize;
     let mut zoom_wall_ms: BTreeMap<u32, u64> = BTreeMap::new();
@@ -348,6 +356,7 @@ fn run_sequential(
         };
         render_one_tile(
             &mut client,
+            &mut prep_cache,
             shared,
             *z,
             *x,

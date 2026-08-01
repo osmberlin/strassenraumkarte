@@ -78,7 +78,13 @@ Those starter numbers used a smaller area and (for the 332 ms/tile bench) a cold
 
 ## Speed iterations (2026-08-01)
 
-After `--workers 8` + SQL WHERE lightening + profile tooling: **z18–z20 wall 223 s** vs QGIS **1568 s** → **~7.0×** (was ~1.8× at 1 thread). Full write-up: [`SPEED_ITERATIONS.md`](SPEED_ITERATIONS.md).
+| Milestone | z18–z20 wall | vs QGIS (1568 s) |
+| --- | ---: | ---: |
+| 1 thread (baseline) | ~891 s | ~1.8× |
+| `--workers 8` | 223 s | ~7× |
+| **+ prepared stmts + empty early-out** | **65.8 s** | **~24×** |
+
+Full write-up: [`SPEED_ITERATIONS.md`](SPEED_ITERATIONS.md).
 
 ## Preview / clean compare
 
@@ -104,6 +110,4 @@ and zoom 15–20 — both raster panes resolve tiles across the large bbox (incl
 
 ## Verdict (performance only)
 
-**Updated 2026-08-01 (speed iterations):** with `--workers 8`, Rust full-approx z18–z20 finishes in **~3.7 minutes** vs QGIS **~26 minutes** on the same bbox → **~7×**. See [`SPEED_ITERATIONS.md`](SPEED_ITERATIONS.md).
-
-Earlier single-thread full z15–z20 (~15 min, ~1.8× vs QGIS on z18–z20) remains a useful baseline for “one core” comparisons.
+**Updated 2026-08-01 (speed iterations):** with `--workers 8` + prepared statements + empty-tile early-out, Rust full-approx z18–z20 finishes in **~66 s** vs QGIS **~26 min** → **~24×**. See [`SPEED_ITERATIONS.md`](SPEED_ITERATIONS.md).
