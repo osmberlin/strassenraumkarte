@@ -9,6 +9,7 @@ import { OSM_LAYER_BUCKETS, styleLayerId, type OsmLayerBucketId } from '../order
 import { base, withOsmBucket } from '../expr'
 import { metresToPixels, metresToPixelsFromProp } from '../metres'
 import { furnitureLayersForBucket } from './furniture'
+import { patternLayers } from './patterns'
 
 /**
  * Distinct `dasharray` metre pairs from PostGIS (`params.sql` + live sample).
@@ -547,6 +548,9 @@ export function detailLayers(): LayerSpecification[] {
     // G6 furniture & barriers (QGIS: above separation within each OSM bucket)
     layers.push(...furnitureLayersForBucket(b))
   }
+
+  // G8 symbol patterns (QGIS: above highway stack, below trees)
+  layers.push(...patternLayers())
 
   // Trees — circle crowns (graphics optional later). Shadow then crown then trunk.
   const treeBase = base('tree', 17)

@@ -83,92 +83,106 @@
     "height": 300,
     "pixelRatio": 2
   },
+  "patterns/dog-park-paw": {
+    "x": 0,
+    "y": 5606,
+    "width": 192,
+    "height": 192,
+    "pixelRatio": 2
+  },
   "pitches/soccer": {
-    "x": 1920,
-    "y": 5170,
+    "x": 192,
+    "y": 5606,
     "width": 128,
     "height": 128,
     "pixelRatio": 2
   },
   "pitches/tennis": {
-    "x": 0,
+    "x": 320,
     "y": 5606,
     "width": 128,
     "height": 128,
     "pixelRatio": 2
   },
   "pitches/handball": {
-    "x": 128,
+    "x": 448,
     "y": 5606,
     "width": 128,
     "height": 128,
     "pixelRatio": 2
   },
   "pitches/rugby_union": {
-    "x": 256,
+    "x": 576,
     "y": 5606,
     "width": 128,
     "height": 128,
     "pixelRatio": 2
   },
   "pitches/badminton": {
-    "x": 384,
+    "x": 704,
     "y": 5606,
     "width": 128,
     "height": 128,
     "pixelRatio": 2
   },
   "pitches/chess": {
-    "x": 512,
+    "x": 832,
     "y": 5606,
     "width": 128,
     "height": 128,
     "pixelRatio": 2
   },
   "pitches/multi": {
-    "x": 640,
+    "x": 960,
     "y": 5606,
     "width": 128,
     "height": 128,
     "pixelRatio": 2
   },
   "pitches/soccer_small": {
-    "x": 768,
+    "x": 1088,
     "y": 5606,
     "width": 128,
     "height": 128,
     "pixelRatio": 2
   },
   "pitches/volleyball": {
-    "x": 896,
+    "x": 1216,
     "y": 5606,
     "width": 128,
     "height": 128,
     "pixelRatio": 2
   },
   "pitches/rugby_league": {
-    "x": 1024,
+    "x": 1344,
     "y": 5606,
     "width": 128,
     "height": 128,
     "pixelRatio": 2
   },
   "pitches/basketball_1": {
-    "x": 1152,
+    "x": 1472,
     "y": 5606,
     "width": 128,
     "height": 128,
     "pixelRatio": 2
   },
   "pitches/basketball_2": {
-    "x": 1280,
+    "x": 1600,
     "y": 5606,
     "width": 128,
     "height": 128,
     "pixelRatio": 2
   },
   "pitches/field_hockey": {
-    "x": 1408,
+    "x": 1728,
+    "y": 5606,
+    "width": 128,
+    "height": 128,
+    "pixelRatio": 2
+  },
+  "patterns/construction-hatch": {
+    "x": 1856,
     "y": 5606,
     "width": 128,
     "height": 128,

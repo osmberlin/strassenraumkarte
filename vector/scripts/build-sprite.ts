@@ -16,6 +16,7 @@ const ROOT = path.resolve(import.meta.dir, '..')
 const REPO = path.resolve(ROOT, '..')
 const TEXTURES = path.join(REPO, 'style', 'textures')
 const PITCHES = path.join(TEXTURES, 'pitches')
+const PAW_SVG = path.join(REPO, 'style', 'symbols', 'leisure', 'paw.svg')
 const OUT = path.join(ROOT, 'public', 'sprites')
 
 type SpriteEntry = {
@@ -85,6 +86,65 @@ async function collectPitchSvgs(pixelRatio: number): Promise<SpriteEntry[]> {
     })
   }
   return entries
+}
+
+/**
+ * G8 construction LinePatternFill stand-in: diagonal orange hatch @ ~67°.
+ * Tile size chosen so fill-pattern reads as medium-density stripes (not ground-metre exact).
+ */
+async function buildConstructionHatch(pixelRatio: number): Promise<SpriteEntry> {
+  const size = Math.round(64 * pixelRatio)
+  // Stripe width ≈ 1/5 of tile, spacing ≈ tile (QGIS: 1 m line / 2.2 m gap at fixed pixel scale).
+  const stroke = Math.max(2, Math.round(8 * pixelRatio))
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+  <g transform="rotate(67 ${size / 2} ${size / 2})" stroke="rgba(255,83,0,0.35)" stroke-width="${stroke}" stroke-linecap="square">
+    <line x1="${-size}" y1="${size * 0.15}" x2="${size * 2}" y2="${size * 0.15}"/>
+    <line x1="${-size}" y1="${size * 0.5}" x2="${size * 2}" y2="${size * 0.5}"/>
+    <line x1="${-size}" y1="${size * 0.85}" x2="${size * 2}" y2="${size * 0.85}"/>
+  </g>
+</svg>`
+  const buffer = await sharp(Buffer.from(svg)).ensureAlpha().png().toBuffer()
+  const meta = await sharp(buffer).metadata()
+  return {
+    id: 'patterns/construction-hatch',
+    buffer,
+    width: meta.width ?? size,
+    height: meta.height ?? size,
+  }
+}
+
+/**
+ * G8 dog-park PointPatternFill stand-in: transparent tile with centred paw.
+ * Displacement / 10 m grid dropped (G0.4 fixed sprite pixel scale).
+ */
+async function buildDogParkPaw(pixelRatio: number): Promise<SpriteEntry> {
+  const tile = Math.round(96 * pixelRatio)
+  const pawSize = Math.round(36 * pixelRatio)
+  const paw = await sharp(PAW_SVG, { density: 96 * pixelRatio })
+    .resize(pawSize, pawSize, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .ensureAlpha()
+    .png()
+    .toBuffer()
+  const left = Math.round((tile - pawSize) / 2)
+  const top = Math.round((tile - pawSize) / 2)
+  const buffer = await sharp({
+    create: {
+      width: tile,
+      height: tile,
+      channels: 4,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    },
+  })
+    .composite([{ input: paw, left, top }])
+    .png()
+    .toBuffer()
+  return {
+    id: 'patterns/dog-park-paw',
+    buffer,
+    width: tile,
+    height: tile,
+  }
 }
 
 /** Simple shelf packer (row-based). */
@@ -173,6 +233,10 @@ async function main() {
   for (const ratio of [1, 2] as const) {
     const suffix = ratio === 2 ? '@2x' : ''
     const pitches = await collectPitchSvgs(ratio)
+    const patterns = await Promise.all([
+      buildConstructionHatch(ratio),
+      buildDogParkPaw(ratio),
+    ])
     // Scale 1x textures for @2x by resizing
     const textures =
       ratio === 1
@@ -186,7 +250,7 @@ async function main() {
               return { ...e, buffer, width: e.width * 2, height: e.height * 2 }
             }),
           )
-    await writeSprite([...textures, ...pitches], ratio, suffix)
+    await writeSprite([...textures, ...pitches, ...patterns], ratio, suffix)
   }
 }
 

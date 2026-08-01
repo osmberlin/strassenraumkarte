@@ -468,8 +468,13 @@ Both are pattern fills, so both hit the G0.4 constraint. Hatching at a fixed 67�
 candidate for a baked sprite pattern; the paw grid is a good candidate for
 `fill-pattern` with a transparent tile.
 
-- [ ] `construction` hatch
-- [ ] `dog park` paw grid
+**Known deviations:** construction hatch and dog-park paw grid use baked sprite
+`fill-pattern`s (`patterns/construction-hatch`, `patterns/dog-park-paw`) at fixed
+pixel scale — ground-metre spacing (2.2 m / 10 m) and paw displacement (5/2.5 m)
+dropped. Dog park `minScale` 6000 → `minzoom` 17.
+
+- [x] `construction` hatch
+- [x] `dog park` paw grid
 
 ---
 

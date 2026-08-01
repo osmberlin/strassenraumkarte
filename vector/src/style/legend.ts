@@ -322,6 +322,16 @@ export function legendEntries(): LegendEntry[] {
       layerIds: ['feature_node-fg-', 'entrance-'],
     },
     {
+      id: 'symbol-patterns',
+      label: 'construction / dog park patterns',
+      group: 'detail',
+      kind: 'fill',
+      color: '#ff5300',
+      minzoom: 15,
+      maxzoom: 18,
+      layerIds: ['construction-', 'dog_park-'],
+    },
+    {
       id: 'tree',
       label: 'tree crown',
       group: 'detail',
