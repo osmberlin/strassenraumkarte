@@ -6,6 +6,30 @@
       "sourceType": "github",
       "skillPath": "skills/agent-orchestration/SKILL.md",
       "computedHash": "4d0009a5962dc4231e7692ec3b564aca9c710f133bf20e547772b2ca98f4f2df"
+    },
+    "finish-work": {
+      "source": "FixMyBerlin/fixmyskills",
+      "sourceType": "github",
+      "skillPath": "skills/finish-work/SKILL.md",
+      "computedHash": "419f84e162143071a05c30598b18e36194e64eab790b23e2af4a497e6e2f871e"
+    },
+    "react-dev": {
+      "source": "FixMyBerlin/fixmyskills",
+      "sourceType": "github",
+      "skillPath": "skills/react-dev/SKILL.md",
+      "computedHash": "0d560e4665ee0beafc84d70be14006091fef423be5458d2dda1dcd28a41a1492"
+    },
+    "react-map-gl": {
+      "source": "FixMyBerlin/fixmyskills",
+      "sourceType": "github",
+      "skillPath": "skills/react-map-gl/SKILL.md",
+      "computedHash": "0afe143792d27388e555433ecf3d8de65aa562b9ad2087d358d3d73b3f9e25a9"
+    },
+    "tanstack-router-conventions": {
+      "source": "FixMyBerlin/fixmyskills",
+      "sourceType": "github",
+      "skillPath": "skills/tanstack-router-conventions/SKILL.md",
+      "computedHash": "22da9e27a683b4038be4ed2661a1cb4122bd3dfa3ab9489e94479680a0f67149"
     }
   }
 }
