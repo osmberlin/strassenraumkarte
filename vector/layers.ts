@@ -84,7 +84,22 @@ export const LAYERS: LayerDef[] = [
   {
     id: 'water_body_dissolved',
     table: 'water_body_dissolved',
-    columns: [],
+    // Area (m², EPSG:3857) + QGIS shoreline max distance:
+    // clamp(10 * log10($area) - 25, 1.5, 20) — drives Shapeburst band widths.
+    columns: [
+      'ST_Area(geom) AS area',
+      'GREATEST(1.5, LEAST(20.0, 10.0 * LOG(ST_Area(geom)) / LOG(10.0) - 25.0)) AS shore_m',
+    ],
+    minzoom: 15,
+    maxzoom: 16,
+    paint: 'fill',
+    group: 'ground',
+  },
+  {
+    id: 'wetland',
+    table: 'water_body',
+    filter: "\"natural\" = 'wetland'",
+    columns: ['osm_id', '"natural"'],
     minzoom: 15,
     maxzoom: 16,
     paint: 'fill',

@@ -58,7 +58,7 @@ QGIS MapUnit sizes use `@mercator_scale`. MapLibre paints CSS px on 512 tiles:
 | dropShadow | translated fill + blurred outline | softer / weaker on large offsets |
 | innerShadow | negative `line-offset` + `line-blur` | banded vs continuous |
 | outerGlow | two stacked blurred outlines | join artefacts if too wide |
-| Shapeburst / gradients | deferred / flat fills | roofs, water depth not 1:1 |
+| Shapeburst / gradients | 2–3 inward blurred `line` bands (`shore_m`) | roofs still flat; water depth green ramp omitted; shoreline banded |
 | RasterFill textures | `fill-pattern` from sprite | no per-feature rotation / ground-metre scale (G1 surface table) |
 | pitch_markings SvgMarker | `symbol` + packed `pitches/*` | uniform `icon-size` from `dist_long`; no independent aspect-fit |
 | SvgMarker traffic signs | `setMissingStyleImageResolver` | icons only when style requests them |

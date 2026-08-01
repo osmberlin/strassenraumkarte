@@ -216,12 +216,17 @@ Tables: `water_body_dissolved`, `water_body`, `waterway_clipped`.
 - The pass-100 `#0000ff` fill and pass-101 texture form a compositing trick whose intent is not
   documented in the XML. Inspect the raster output before copying it.
 
-**Known deviations:** shoreline fade is banded rather than continuous.
+**Known deviations:** shoreline fade is banded rather than continuous (3 inward
+blurred `line` rings scaled by exported `shore_m`); water.png RasterFill and the
+green `water body (depth effect)` Shapeburst are not ported; wetland texture
+ground-metre scale dropped (`fill-pattern` sprite pixels); waterway open vs
+tunnel/covered are split layers with class-based width fallbacks when `"width"`
+is null.
 
 - [x] base fill + inner shadow
-- [ ] shoreline fade approximation (needs `$area` exported)
+- [x] shoreline fade approximation (needs `$area` exported)
 - [x] `waterway_clipped` 4 rules incl. dotted tunnel variants
-- [ ] `wetland`
+- [x] `wetland`
 
 ---
 

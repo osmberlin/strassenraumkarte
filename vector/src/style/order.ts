@@ -96,6 +96,7 @@ export const CORE_PAINT_ORDER = [
   'pitch_markings',
   'sandpit',
   'water_body_dissolved',
+  'wetland',
   'waterway_clipped',
   // Within each OSM bucket these are expanded in this relative order:
   'highway_path',

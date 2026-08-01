@@ -99,7 +99,17 @@ export function legendEntries(): LegendEntry[] {
       color: WATER_FILL,
       minzoom: 15,
       maxzoom: 16,
-      layerIds: ['water-fill', 'water-inner'],
+      layerIds: ['water-fill', 'water-shore', 'water-inner'],
+    },
+    {
+      id: 'wetland',
+      label: 'wetland',
+      group: 'ground',
+      kind: 'fill',
+      color: '#9bb88a',
+      minzoom: 15,
+      maxzoom: 16,
+      layerIds: ['wetland-'],
     },
     {
       id: 'waterway',

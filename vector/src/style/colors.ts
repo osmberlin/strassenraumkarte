@@ -119,6 +119,8 @@ export const SANDPIT_FILL = '#e3e6c0'
 
 export const WATER_FILL = "#cac7ed"
 export const WATER_INNER = "#a396d9"
+/** Shapeburst shoreline band colour (inward fade approximation). */
+export const WATER_SHORE = "#a396d9"
 export const WATERWAY_LINE = "#b2abe0"
 export const BUILDING_PARTS_FILL = "#ffe9e9"
 export const BUILDING_SHADE_FILL = "#232323"

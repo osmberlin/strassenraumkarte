@@ -10,6 +10,7 @@ import {
   SURFACE_PATTERNS,
   WATER_FILL,
   WATER_INNER,
+  WATER_SHORE,
   WATERWAY_LINE,
 } from '../colors'
 import { dropShadow, innerShadow, outerGlow } from '../effects'
@@ -19,7 +20,7 @@ import {
   pitchFillCase,
   pitchMarkingIcon,
 } from '../expr'
-import { metresToPixels, metresToPixelsFromProp } from '../metres'
+import { metresToPixels } from '../metres'
 
 /** Sprite pixel size for packed `pitches/*` icons (`build-sprite.ts`). */
 const PITCH_ICON_PIXELS = 64
@@ -59,17 +60,53 @@ function pitchIconSizeFromMetres(metres: ExpressionSpecification): ExpressionSpe
 }
 
 /**
+ * QGIS shoreline max distance (metres): clamp(10·log10($area)−25, 1.5, 20).
+ * Exported as `shore_m`; fraction scales each concentric band.
+ */
+function shoreMetres(fraction: number): ExpressionSpecification {
+  return [
+    '*',
+    ['coalesce', ['get', 'shore_m'], 5],
+    fraction,
+  ] as ExpressionSpecification
+}
+
+/** Inward blurred ring — Shapeburst stand-in (matched width + blur). */
+function shoreBand(
+  id: string,
+  waterBase: ReturnType<typeof base>,
+  fraction: number,
+  opacity: number,
+): LayerSpecification {
+  const widthM = shoreMetres(fraction)
+  return {
+    id,
+    type: 'line',
+    ...waterBase,
+    layout: { 'line-cap': 'butt', 'line-join': 'round' },
+    paint: {
+      'line-color': WATER_SHORE,
+      'line-opacity': opacity,
+      'line-width': metresToPixels(widthM),
+      'line-blur': metresToPixels(widthM),
+      'line-offset': metresToPixels(['*', widthM, -0.5] as ExpressionSpecification),
+    },
+  }
+}
+
+/**
  * Ground: landuse (+ forest effects, surface textures), pitch (+ markings),
- * sandpit, water body, waterway.
+ * sandpit, water body (+ shoreline bands), wetland, waterway.
  *
  * Paint order matches QGIS landuse/landcover (bottom → top): landuse → surface →
- * pitch → pitch surface → pitch_markings → sandpit → water.
+ * pitch → pitch surface → pitch_markings → sandpit → water → wetland → waterway.
  */
 export function groundLayers(): LayerSpecification[] {
   const landuseBase = base('landuse', 15)
   const pitchBase = base('pitch', 15)
   const sandpitBase = base('sandpit', 15)
   const waterBase = base('water_body_dissolved', 15)
+  const wetlandBase = base('wetland', 15)
   const forestFilter = [
     'in',
     ['get', 'class'],
@@ -183,6 +220,13 @@ export function groundLayers(): LayerSpecification[] {
     },
   })
 
+  // Shapeburst shoreline — 3 inward blurred bands scaled by exported shore_m.
+  layers.push(
+    shoreBand('water-shore-outer', waterBase, 1, 0.14),
+    shoreBand('water-shore-mid', waterBase, 0.55, 0.22),
+    shoreBand('water-shore-inner', waterBase, 0.28, 0.32),
+  )
+
   layers.push(
     ...innerShadow('water', waterBase, {
       blurM: 4,
@@ -191,12 +235,54 @@ export function groundLayers(): LayerSpecification[] {
     }),
   )
 
-  const waterwayWidth = metresToPixelsFromProp('width', 1.5)
+  // wetland — RasterFill wetland.png α 0.3 (no base fill in QGIS).
+  layers.push({
+    id: 'wetland-pattern',
+    type: 'fill',
+    ...wetlandBase,
+    paint: {
+      'fill-pattern': 'wetland',
+      'fill-opacity': 0.3,
+    },
+  })
+
+  // Width from "width", else river/canal 12 m, stream/ditch/drain 1.5 m.
+  const waterwayWidthM = [
+    'coalesce',
+    ['get', 'width'],
+    [
+      'match',
+      ['get', 'waterway'],
+      'river',
+      12,
+      'canal',
+      12,
+      'stream',
+      1.5,
+      'ditch',
+      1.5,
+      'drain',
+      1.5,
+      1.5,
+    ],
+  ] as ExpressionSpecification
+  const waterwayWidth = metresToPixels(waterwayWidthM)
+
+  const waterwayTunnel = f([
+    'any',
+    ['==', ['get', 'tunnel'], 'yes'],
+    ['==', ['get', 'covered'], 'yes'],
+  ])
+  const waterwayOpen = f([
+    'all',
+    ['!', ['==', ['get', 'tunnel'], 'yes']],
+    ['!', ['==', ['get', 'covered'], 'yes']],
+  ])
 
   layers.push({
     id: 'waterway-line',
     type: 'line',
-    ...base('waterway_clipped', 15),
+    ...base('waterway_clipped', 15, waterwayOpen),
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
       'line-color': WATERWAY_LINE,
@@ -207,11 +293,7 @@ export function groundLayers(): LayerSpecification[] {
   layers.push({
     id: 'waterway-tunnel',
     type: 'line',
-    ...base('waterway_clipped', 15, [
-      'any',
-      ['==', ['get', 'tunnel'], 'yes'],
-      ['==', ['get', 'covered'], 'yes'],
-    ]),
+    ...base('waterway_clipped', 15, waterwayTunnel),
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
       'line-color': WATERWAY_LINE,
