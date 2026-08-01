@@ -7,6 +7,12 @@ render/tiles/**
 !render/tiles/.gitkeep
 !render/tiles/preview.html
 
+# Local caches (osmium bbox extracts, etc.)
+tmp/**
+!tmp/.gitkeep
+!tmp/osm-extracts/
+!tmp/osm-extracts/.gitkeep
+
 # Python
 __pycache__/
 *.py[cod]
@@ -37,3 +43,12 @@ audit/runs/**
 TODO.txt
 todo_from_post_processing.py
 style/lanes.qgz
+
+# Vector output channel (GeoJSONSeq / PMTiles / build)
+vector/out/**
+!vector/out/.gitkeep
+vector/public/tiles/**
+!vector/public/tiles/.gitkeep
+vector/dist/
+vector/node_modules/
+vector/.tsbuildinfo-*

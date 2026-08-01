@@ -40,7 +40,7 @@ Runs do not touch git — `audit/runs/` is gitignored.
 
 | Phase | Steps |
 | --- | --- |
-| `ingest` | PBF download (if URL), `osmium extract`, input/extract byte sizes (notes) |
+| `ingest` | PBF download (if URL); input/extract byte sizes as notes. Bbox `osmium extract` is cached under `tmp/osm-extracts/` and is **not** timed |
 | `import` | DB refresh / PostGIS ensure, `osm2pgsql`, lanes snapshot |
 | `processing` | Every SQL script in `data/data_preparation.sh` (`sql:<file>`) |
 | `render` | Full `xyz_tiles.py` wall time; plus `render_metatiles.jsonl` + `render_summary.json` when rendering under audit |

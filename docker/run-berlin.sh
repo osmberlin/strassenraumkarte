@@ -28,10 +28,22 @@ if [[ ! -f "$ENV_FILE" ]]; then
   log INFO "Created $ENV_FILE from .env.example"
 fi
 
+# Prefer BBOX/DATA from the caller environment over docker/.env.
+_CLI_BBOX="${BBOX-}"
+_CLI_DATA="${DATA-}"
+
 set -a
 # shellcheck disable=SC1090
 source "$ENV_FILE"
 set +a
+
+if [[ -n "${_CLI_BBOX}" ]]; then
+  BBOX="$_CLI_BBOX"
+fi
+if [[ -n "${_CLI_DATA}" ]]; then
+  DATA="$_CLI_DATA"
+fi
+unset _CLI_BBOX _CLI_DATA
 
 BBOX="${BBOX:-13.4132,52.4715,13.4312,52.4821}"
 DATA="${DATA:-data/osm/berlin-latest.osm.pbf}"

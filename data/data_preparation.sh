@@ -6,6 +6,8 @@
 #
 #   --data              OSM PBF source (URL or local path). If omitted, only SQL processing runs on the existing DB.
 #   --bbox              Optional WGS84 extract before import (requires --data). Without --bbox the full PBF is imported.
+#                       Extracts are cached under tmp/osm-extracts/ (override OSM_EXTRACT_CACHE_DIR; force with OSM_EXTRACT_FORCE=1).
+#                       Cache hits/misses are not performance-audit timed.
 #   --crs               Project CRS as EPSG code (default: from env CRS / 3857). Used by osm2pgsql Lua import.
 #   --refresh           Drop and recreate the public schema before import/processing.
 #   --skip-processing   Skip SQL processing steps (import only, if --data is set).
@@ -20,6 +22,9 @@ source "$DIR/../audit/lib.sh"
 
 # directories
 OSM_DATA_DIR="$DIR/osm"
+REPO_ROOT=$(cd "$DIR/.." && pwd)
+# Cached osmium extracts (gitignored). Override with OSM_EXTRACT_CACHE_DIR.
+EXTRACT_CACHE_DIR="${OSM_EXTRACT_CACHE_DIR:-$REPO_ROOT/tmp/osm-extracts}"
 CALLER_PWD=$(pwd)
 
 # lua file for osm2pgsql import
@@ -145,16 +150,34 @@ if ! [ "$DATA_SOURCE" = "false" ]; then
     exit 1
   fi
 
-  # if required, extract area of interest from data source
+  # if required, extract area of interest from data source (cached under tmp/; not audit-timed)
   if ! [ "$DATA_EXTRACT" = "false" ]; then
-    echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO] Create osm data extract..."
-    EXTRACT_FILE="$OSM_DATA_DIR/extract_$OSM_FILENAME"
-    # shellcheck disable=SC2086
-    perf_step "osmium_extract" "ingest" --detail "{\"bbox\":\"$DATA_EXTRACT\"}" -- \
+    mkdir -p "$EXTRACT_CACHE_DIR"
+    # Cache key: real source path + size + mtime + bbox (invalidate when PBF changes).
+    SOURCE_REAL=$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$OSM_FILE")
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+      SOURCE_STAT=$(stat -f '%z %m' "$SOURCE_REAL")
+    else
+      SOURCE_STAT=$(stat -c '%s %Y' "$SOURCE_REAL")
+    fi
+    CACHE_ID=$(
+      printf '%s\n%s\n%s' "$SOURCE_REAL" "$SOURCE_STAT" "$DATA_EXTRACT" |
+        python3 -c 'import hashlib,sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest()[:16])'
+    )
+    EXTRACT_FILE="$EXTRACT_CACHE_DIR/${CACHE_ID}.osm.pbf"
+
+    if [[ "${OSM_EXTRACT_FORCE:-}" != "1" && -f "$EXTRACT_FILE" && -s "$EXTRACT_FILE" ]]; then
+      echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO] Reusing cached osmium extract: $EXTRACT_FILE"
+      EXTRACT_CACHE="hit"
+    else
+      echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO] Create osm data extract (cache → $EXTRACT_FILE)..."
+      # shellcheck disable=SC2086
       osmium extract -b $DATA_EXTRACT "$OSM_FILE" -o "$EXTRACT_FILE" -O -s smart
+      EXTRACT_CACHE="miss"
+    fi
     IMPORT_FILE=$EXTRACT_FILE
     if [[ -f "$IMPORT_FILE" ]]; then
-      perf_note "extract_pbf" "ingest" "{\"path\":\"$IMPORT_FILE\",\"bytes\":$(wc -c <"$IMPORT_FILE" | tr -d ' ')}"
+      perf_note "extract_pbf" "ingest" "{\"path\":\"$IMPORT_FILE\",\"bytes\":$(wc -c <"$IMPORT_FILE" | tr -d ' '),\"bbox\":\"$DATA_EXTRACT\",\"cache\":\"$EXTRACT_CACHE\"}"
     fi
   else
     IMPORT_FILE=$OSM_FILE
