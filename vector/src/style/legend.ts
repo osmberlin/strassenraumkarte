@@ -312,6 +312,16 @@ export function legendEntries(): LegendEntry[] {
       layerIds: ['playground_node-', 'playground_way-', 'playground_polygon-'],
     },
     {
+      id: 'foreground-poi',
+      label: 'foreground POI / entrance',
+      group: 'detail',
+      kind: 'circle',
+      color: '#dad1d1',
+      minzoom: 17,
+      maxzoom: 20,
+      layerIds: ['feature_node-fg-', 'entrance-'],
+    },
+    {
       id: 'tree',
       label: 'tree crown',
       group: 'detail',

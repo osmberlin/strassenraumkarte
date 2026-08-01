@@ -540,8 +540,19 @@ at ~10 px from tippecanoe z17 overzoom (style `minzoom` 18 ≈ QGIS 1:1000).
 | `feature_node (foreground) Kopie` | 8 rules: guard_stone, information, mast, memorial, public_bookcase, stolperstein, toilets, viewpoint; SvgMarkers 1.2–3 m. The layer name suggests it is a duplicate ("Kopie") — confirm it is intentional |
 | `entrance` | 4 rules; subway / s-train SvgMarkers at 2–2.2 m with ±1.2 m offsets, generic entrance a 0.6 m circle; visible above ~z17.5 (`minScale` 3000) |
 
-- [ ] confirm the "Kopie" layer is wanted
-- [ ] both layers
+**Decision — `feature_node (foreground) Kopie`:** **port deliberately.** Not a stray
+duplicate of middleground — these eight classes are absent from
+`feature_node (middleground)` (only `information`+`guidepost` lives there). The
+"Kopie" suffix is a QGIS naming artefact; the layer is the intentional foreground
+stack above buildings.
+
+**Known deviations:** entrance subway/s-train ±1.2 m icon offsets omitted (centred
+on the node). `guard_stone` filled_arrowhead → ▶ text; `public_bookcase` octagon →
+circle; stolperstein FontMarker ´ omitted (gold circle only). Entrance
+`minScale` 3000 → `minzoom` 18.
+
+- [x] confirm the "Kopie" layer is wanted
+- [x] both layers
 
 ---
 
@@ -599,5 +610,6 @@ Place ranks for town/city (QGIS z12–14) are styled but sit below the PMTiles a
 2. ~~**G10** — is `roof shape` (magma gradients on `#990003`) shipped cartography or an experiment?~~ **Resolved:** experiment → skip (see G10 decision).
 3. **G7** — is street parking in scope for the vector output at all?
 4. **G1** — is `landuse` → `outdoor_seating` (`#0000ff` base fill) a debugging leftover?
-5. **G11** — is `feature_node (foreground) Kopie` intentional or a stray duplicate?
+5. ~~**G11** — is `feature_node (foreground) Kopie` intentional or a stray duplicate?~~
+   **Resolved:** intentional foreground set → port (see G11 decision).
 6. **G0.4** — bake pre-scaled/rotated texture variants, or accept fixed-pixel patterns?

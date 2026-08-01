@@ -6,6 +6,7 @@ import type { LayerSpecification } from '@maplibre/maplibre-gl-style-spec'
 
 import { buildingLayers } from './layers/buildings'
 import { detailLayers } from './layers/detail'
+import { foregroundLayers } from './layers/foreground'
 import { groundLayers } from './layers/ground'
 import { labelLayers } from './layers/labels'
 import { streetLayers } from './layers/streets'
@@ -16,6 +17,8 @@ export function qgisLayerSpecs(): LayerSpecification[] {
     ...streetLayers(),
     ...buildingLayers(),
     ...detailLayers(),
+    // G11 — above buildings / trees (QGIS: entrance + feature foreground)
+    ...foregroundLayers(),
     ...labelLayers(),
   ]
 }
