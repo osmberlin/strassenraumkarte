@@ -6,7 +6,7 @@
 **Style rules:** [`HIGHWAY_AREA_RULES.md`](HIGHWAY_AREA_RULES.md)  
 **Canonical mode:** [`RENDER_MODE.md`](RENDER_MODE.md) — `--metatile 1 --gutter 1 --workers 1 --format png`
 
-This is an interim parity note for the Rust vertical slice. The full go/no-go lives in Phase 4 (`docs/rust-renderer-evaluation.md`); that file is stubbed and points here until more layers land.
+This is an interim parity note for the Rust `highway_area` vertical slice. Phase 4 go/no-go (speed + full-approx + recommendation): [`docs/rust-renderer-evaluation.md`](../../docs/rust-renderer-evaluation.md).
 
 ## Method
 

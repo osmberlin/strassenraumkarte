@@ -14,6 +14,7 @@ mod palette;
 mod pitch_markings;
 mod profile;
 mod sql_cache;
+mod svg_stamps;
 mod textures;
 mod tile;
 mod tree_markers;
@@ -35,6 +36,7 @@ use layers::{render_full_approx, render_highway_area, LayerPreset, TableCache};
 use pitch_markings::PitchMarkingCatalog;
 use profile::{StageProfile, StageTimers};
 use sql_cache::PreparedCache;
+use svg_stamps::SvgStampCatalog;
 use textures::TextureCatalog;
 use tile::{
     enumerate_bbox_metatiles, meta_tile_core_count, metatile_for_single_tile, parse_bbox,
@@ -168,6 +170,7 @@ struct SharedState {
     texture_catalog: Arc<TextureCatalog>,
     tree_markers: Arc<TreeMarkerCatalog>,
     pitch_markings: Arc<PitchMarkingCatalog>,
+    svg_stamps: Arc<SvgStampCatalog>,
     webp_quality: f32,
     profile: bool,
     format_ext: String,
@@ -287,6 +290,7 @@ fn render_one_metatile(
                 shared.texture_catalog.as_ref(),
                 shared.tree_markers.as_ref(),
                 shared.pitch_markings.as_ref(),
+                shared.svg_stamps.as_ref(),
                 shared.webp_quality,
                 timers,
             )
@@ -542,6 +546,12 @@ fn main() -> Result<()> {
             PitchMarkingCatalog::fallback()
         }),
     );
+    let svg_stamps = Arc::new(
+        SvgStampCatalog::load().unwrap_or_else(|e| {
+            eprintln!("warn: {e:#}; traffic-sign stamps disabled");
+            SvgStampCatalog::fallback()
+        }),
+    );
 
     let shared = Arc::new(SharedState {
         preset,
@@ -549,6 +559,7 @@ fn main() -> Result<()> {
         texture_catalog,
         tree_markers,
         pitch_markings,
+        svg_stamps,
         webp_quality: cli.quality,
         profile: cli.profile,
         format_ext: format.to_string(),

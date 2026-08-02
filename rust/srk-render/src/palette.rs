@@ -161,6 +161,27 @@ pub fn fill_water() -> Color {
     hex("#cac7ed")
 }
 
+pub fn fill_sandpit() -> Color {
+    hex("#e3e6c0")
+}
+
+/// Playground equipment fills (`vector/.../furniture.ts`).
+pub fn fill_playground() -> Color {
+    hex("#d2c8a0")
+}
+
+pub fn stroke_playground() -> Color {
+    hex("#b7916e")
+}
+
+pub fn fill_playground_climbingframe() -> Color {
+    hex("#e77148")
+}
+
+pub fn stroke_playground_climbingframe() -> Color {
+    hex("#232323")
+}
+
 pub fn stroke_waterway() -> Color {
     hex("#b2abe0")
 }
@@ -168,6 +189,21 @@ pub fn stroke_waterway() -> Color {
 pub fn fill_building() -> Color {
     // QGIS building_parts_dissolved_height SimpleFill `#ffe9e9` (no shapeburst).
     hex("#ffe9e9")
+}
+
+/// Road marking line colour (CSS names from PostGIS).
+pub fn road_marking_colour(name: Option<&str>) -> Color {
+    let n = name.unwrap_or("white").trim().to_ascii_lowercase();
+    let h = match n.as_str() {
+        "yellow" => "#ffd52b",
+        "red" => "#e31a1c",
+        "blue" => "#1f78b4",
+        "orange" => "#ff7f00",
+        "black" => "#232323",
+        "green" => "#00c503",
+        _ => "#ffffff", // white / default
+    };
+    hex(h)
 }
 
 /// CSS / QGIS named colours for `road_marking_polygon.colour` (surface_colour / crossing).
@@ -209,7 +245,16 @@ pub fn stroke_service() -> Color {
     hex("#cccccc")
 }
 
-pub fn stroke_path(highway: Option<&str>) -> Color {
+pub fn stroke_landscape() -> Color {
+    hex("#965220")
+}
+
+pub fn stroke_path(highway: Option<&str>, class: Option<&str>) -> Color {
+    let class = class.unwrap_or("");
+    // QGIS sidewalk / crossing / link → slightly lighter beige.
+    if matches!(class, "sidewalk" | "crossing" | "link") {
+        return hex("#ebedd6");
+    }
     let h = match highway.unwrap_or("") {
         "cycleway" => "#d2d1d2",
         "steps" => "#979c90",

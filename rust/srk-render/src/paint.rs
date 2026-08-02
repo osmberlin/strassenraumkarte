@@ -4,7 +4,7 @@ use anyhow::Result;
 use geo_types::{Coord, Geometry, LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon};
 use tiny_skia::{
     BlendMode, Color, FillRule, FilterQuality, Paint, PathBuilder, Pattern, Pixmap, PixmapPaint,
-    SpreadMode, Stroke, Transform,
+    SpreadMode, Stroke, StrokeDash, Transform,
 };
 use wkb::WKBReadExt;
 
@@ -771,6 +771,137 @@ pub fn stroke_lines(
     color: Color,
     width_m: f64,
 ) {
+    stroke_lines_dashed(pixmap, extent, geom, color, width_m, None);
+}
+
+/// Stroke lines with optional dasharray in map metres (`"1;1"` → 1 m on / 1 m off).
+pub fn stroke_lines_dashed(
+    pixmap: &mut Pixmap,
+    extent: RenderExtent,
+    geom: Geometry<f64>,
+    color: Color,
+    width_m: f64,
+    dasharray_m: Option<&str>,
+) {
+    let width_px = extent.metres_to_px(width_m).max(0.5);
+    let mut paint = Paint::default();
+    paint.set_color(color);
+    paint.anti_alias = true;
+    let dash = dasharray_m.and_then(|spec| parse_dasharray_px(extent, spec));
+    let stroke = Stroke {
+        width: width_px,
+        dash,
+        ..Stroke::default()
+    };
+    for line in geometry_lines(geom) {
+        let Some(path) = linestring_to_path(extent, &line) else {
+            continue;
+        };
+        pixmap.stroke_path(&path, &paint, &stroke, Transform::identity(), None);
+    }
+}
+
+fn parse_dasharray_px(extent: RenderExtent, spec: &str) -> Option<StrokeDash> {
+    let parts: Vec<f32> = spec
+        .split([';', ' ', ','])
+        .filter_map(|p| {
+            let t = p.trim();
+            if t.is_empty() {
+                return None;
+            }
+            let metres: f64 = t.parse().ok()?;
+            Some(extent.metres_to_px(metres).max(0.5) as f32)
+        })
+        .collect();
+    if parts.is_empty() {
+        return None;
+    }
+    // StrokeDash requires an even-length array.
+    let mut arr = parts;
+    if arr.len() % 2 == 1 {
+        arr.push(arr[0]);
+    }
+    StrokeDash::new(arr, 0.0)
+}
+
+/// Böschung / cliff / embankment: brown spine + one-sided tick “comb” (QGIS MarkerLine triangles).
+pub fn stroke_embankment(
+    pixmap: &mut Pixmap,
+    extent: RenderExtent,
+    geom: Geometry<f64>,
+    color: Color,
+    spine_width_m: f64,
+    tick_spacing_m: f64,
+    tick_length_m: f64,
+) {
+    stroke_lines(pixmap, extent, geom.clone(), color, spine_width_m);
+    let tick_w_px = extent.metres_to_px(spine_width_m * 0.85).max(0.6);
+    let tick_len = tick_length_m.max(0.4);
+    let spacing = tick_spacing_m.max(0.5);
+    let mut paint = Paint::default();
+    paint.set_color(color);
+    paint.anti_alias = true;
+    let stroke = Stroke {
+        width: tick_w_px,
+        line_cap: tiny_skia::LineCap::Butt,
+        ..Stroke::default()
+    };
+    for line in geometry_lines(geom) {
+        for (x, y, dx, dy) in sample_line_tangents(&line, spacing) {
+            let len = (dx * dx + dy * dy).sqrt();
+            if len < 1e-9 {
+                continue;
+            }
+            // Perpendicular (right-hand side of travel direction).
+            let px = -dy / len * tick_len;
+            let py = dx / len * tick_len;
+            let mut pb = PathBuilder::new();
+            let (x0, y0) = map_to_px(extent, Coord { x, y });
+            let (x1, y1) = map_to_px(extent, Coord { x: x + px, y: y + py });
+            pb.move_to(x0, y0);
+            pb.line_to(x1, y1);
+            if let Some(path) = pb.finish() {
+                pixmap.stroke_path(&path, &paint, &stroke, Transform::identity(), None);
+            }
+        }
+    }
+}
+
+/// Sample (x,y) along a linestring every `spacing_m`, with segment tangent (dx,dy) in map metres.
+fn sample_line_tangents(line: &LineString<f64>, spacing_m: f64) -> Vec<(f64, f64, f64, f64)> {
+    let mut out = Vec::new();
+    let coords = &line.0;
+    if coords.len() < 2 {
+        return out;
+    }
+    let mut dist_along = 0.0;
+    let mut next_tick = 0.0;
+    for w in coords.windows(2) {
+        let (a, b) = (w[0], w[1]);
+        let dx = b.x - a.x;
+        let dy = b.y - a.y;
+        let seg_len = (dx * dx + dy * dy).sqrt();
+        if seg_len < 1e-9 {
+            continue;
+        }
+        while next_tick <= dist_along + seg_len {
+            let t = ((next_tick - dist_along) / seg_len).clamp(0.0, 1.0);
+            out.push((a.x + dx * t, a.y + dy * t, dx, dy));
+            next_tick += spacing_m;
+        }
+        dist_along += seg_len;
+    }
+    out
+}
+
+/// Stroke polygon exterior (+ hole) rings at a map-metre width.
+pub fn stroke_polygons(
+    pixmap: &mut Pixmap,
+    extent: RenderExtent,
+    geom: Geometry<f64>,
+    color: Color,
+    width_m: f64,
+) {
     let width_px = extent.metres_to_px(width_m).max(0.5);
     let mut paint = Paint::default();
     paint.set_color(color);
@@ -779,8 +910,8 @@ pub fn stroke_lines(
         width: width_px,
         ..Stroke::default()
     };
-    for line in geometry_lines(geom) {
-        let Some(path) = linestring_to_path(extent, &line) else {
+    for poly in geometry_polygons(geom) {
+        let Some(path) = polygon_to_path(extent, &poly) else {
             continue;
         };
         pixmap.stroke_path(&path, &paint, &stroke, Transform::identity(), None);
