@@ -824,25 +824,93 @@ fn parse_dasharray_px(extent: RenderExtent, spec: &str) -> Option<StrokeDash> {
     StrokeDash::new(arr, 0.0)
 }
 
-/// Böschung / cliff / embankment: brown spine + one-sided tick “comb” (QGIS MarkerLine triangles).
+/// Böschung / cliff / embankment: brown spine + one-sided filled triangles (QGIS MarkerLine).
 pub fn stroke_embankment(
     pixmap: &mut Pixmap,
     extent: RenderExtent,
     geom: Geometry<f64>,
     color: Color,
     spine_width_m: f64,
-    tick_spacing_m: f64,
-    tick_length_m: f64,
+    marker_spacing_m: f64,
+    triangle_size_m: f64,
+    perp_offset_m: f64,
 ) {
     stroke_lines(pixmap, extent, geom.clone(), color, spine_width_m);
-    let tick_w_px = extent.metres_to_px(spine_width_m * 0.85).max(0.6);
-    let tick_len = tick_length_m.max(0.4);
-    let spacing = tick_spacing_m.max(0.5);
+    let spacing = marker_spacing_m.max(0.5);
+    let tri_side = triangle_size_m.max(0.4);
+    let perp_off = perp_offset_m.max(0.2);
+    let tri_h = tri_side * 3.0_f64.sqrt() / 2.0;
+    let mut paint = Paint::default();
+    paint.set_color(color);
+    paint.anti_alias = true;
+    for line in geometry_lines(geom) {
+        for (x, y, dx, dy) in sample_line_tangents(&line, spacing) {
+            let len = (dx * dx + dy * dy).sqrt();
+            if len < 1e-9 {
+                continue;
+            }
+            let tx = dx / len;
+            let ty = dy / len;
+            // Flipped vs earlier tick side: right-hand `(dy, -dx)` (QGIS + = left of travel).
+            let px = ty;
+            let py = -tx;
+            let apex_x = x + px * perp_off;
+            let apex_y = y + py * perp_off;
+            // QGIS angle=180°: apex points backward along the line.
+            let base_cx = apex_x + tx * tri_h;
+            let base_cy = apex_y + ty * tri_h;
+            let half = tri_side / 2.0;
+            let mut pb = PathBuilder::new();
+            let (ax, ay) = map_to_px(extent, Coord { x: apex_x, y: apex_y });
+            let (b1x, b1y) = map_to_px(
+                extent,
+                Coord {
+                    x: base_cx + px * half,
+                    y: base_cy + py * half,
+                },
+            );
+            let (b2x, b2y) = map_to_px(
+                extent,
+                Coord {
+                    x: base_cx - px * half,
+                    y: base_cy - py * half,
+                },
+            );
+            pb.move_to(ax, ay);
+            pb.line_to(b1x, b1y);
+            pb.line_to(b2x, b2y);
+            pb.close();
+            if let Some(path) = pb.finish() {
+                pixmap.fill_path(
+                    &path,
+                    &paint,
+                    FillRule::Winding,
+                    Transform::identity(),
+                    None,
+                );
+            }
+        }
+    }
+}
+
+/// `highway=steps` HashLine: perpendicular hash segments every `interval_m`.
+pub fn stroke_steps_hash(
+    pixmap: &mut Pixmap,
+    extent: RenderExtent,
+    geom: Geometry<f64>,
+    color: Color,
+    width_m: f64,
+    interval_m: f64,
+    hash_stroke_m: f64,
+) {
+    let hash_len = width_m.max(0.5);
+    let spacing = interval_m.max(0.3);
+    let stroke_w = hash_stroke_m.max(extent.metres_per_px());
     let mut paint = Paint::default();
     paint.set_color(color);
     paint.anti_alias = true;
     let stroke = Stroke {
-        width: tick_w_px,
+        width: extent.metres_to_px(stroke_w).max(1.0),
         line_cap: tiny_skia::LineCap::Butt,
         ..Stroke::default()
     };
@@ -852,11 +920,10 @@ pub fn stroke_embankment(
             if len < 1e-9 {
                 continue;
             }
-            // Perpendicular (right-hand side of travel direction).
-            let px = -dy / len * tick_len;
-            let py = dx / len * tick_len;
+            let px = -dy / len * hash_len / 2.0;
+            let py = dx / len * hash_len / 2.0;
             let mut pb = PathBuilder::new();
-            let (x0, y0) = map_to_px(extent, Coord { x, y });
+            let (x0, y0) = map_to_px(extent, Coord { x: x - px, y: y - py });
             let (x1, y1) = map_to_px(extent, Coord { x: x + px, y: y + py });
             pb.move_to(x0, y0);
             pb.line_to(x1, y1);
@@ -864,6 +931,98 @@ pub fn stroke_embankment(
                 pixmap.stroke_path(&path, &paint, &stroke, Transform::identity(), None);
             }
         }
+    }
+}
+
+/// Stroke lines offset perpendicular to travel (negative = right-hand side, MapLibre convention).
+pub fn stroke_lines_offset(
+    pixmap: &mut Pixmap,
+    extent: RenderExtent,
+    geom: Geometry<f64>,
+    color: Color,
+    width_m: f64,
+    offset_m: f64,
+) {
+    if offset_m.abs() < 1e-6 {
+        stroke_lines(pixmap, extent, geom, color, width_m);
+        return;
+    }
+    stroke_lines(pixmap, extent, offset_geometry(geom, offset_m), color, width_m);
+}
+
+/// Offset dashed lines (used for path casing).
+pub fn stroke_lines_offset_dashed(
+    pixmap: &mut Pixmap,
+    extent: RenderExtent,
+    geom: Geometry<f64>,
+    color: Color,
+    width_m: f64,
+    offset_m: f64,
+    dasharray_m: Option<&str>,
+) {
+    if offset_m.abs() < 1e-6 {
+        stroke_lines_dashed(pixmap, extent, geom, color, width_m, dasharray_m);
+        return;
+    }
+    stroke_lines_dashed(
+        pixmap,
+        extent,
+        offset_geometry(geom, offset_m),
+        color,
+        width_m,
+        dasharray_m,
+    );
+}
+
+fn offset_geometry(geom: Geometry<f64>, offset_m: f64) -> Geometry<f64> {
+    match geom {
+        Geometry::LineString(ls) => Geometry::LineString(offset_linestring(&ls, offset_m)),
+        Geometry::MultiLineString(mls) => Geometry::MultiLineString(
+            mls.0
+                .into_iter()
+                .map(|ls| offset_linestring(&ls, offset_m))
+                .collect(),
+        ),
+        other => other,
+    }
+}
+
+fn offset_linestring(line: &LineString<f64>, offset_m: f64) -> LineString<f64> {
+    let coords = &line.0;
+    if coords.len() < 2 {
+        return line.clone();
+    }
+    let mut out = Vec::with_capacity(coords.len());
+    for i in 0..coords.len() {
+        let (dx, dy) = tangent_at_index(coords, i);
+        let len = (dx * dx + dy * dy).sqrt();
+        if len < 1e-9 {
+            out.push(coords[i]);
+            continue;
+        }
+        let ox = dy / len * offset_m;
+        let oy = -dx / len * offset_m;
+        out.push(Coord {
+            x: coords[i].x + ox,
+            y: coords[i].y + oy,
+        });
+    }
+    LineString(out)
+}
+
+fn tangent_at_index(coords: &[Coord<f64>], i: usize) -> (f64, f64) {
+    if i == 0 {
+        let a = coords[0];
+        let b = coords[1];
+        (b.x - a.x, b.y - a.y)
+    } else if i + 1 == coords.len() {
+        let a = coords[i - 1];
+        let b = coords[i];
+        (b.x - a.x, b.y - a.y)
+    } else {
+        let a = coords[i - 1];
+        let b = coords[i + 1];
+        (b.x - a.x, b.y - a.y)
     }
 }
 
@@ -918,6 +1077,108 @@ pub fn stroke_polygons(
     }
 }
 
+/// Filled circles with stroke outline (map-metre radii).
+pub fn fill_stroke_circles_m(
+    pixmap: &mut Pixmap,
+    extent: RenderExtent,
+    geom: Geometry<f64>,
+    fill: Color,
+    stroke_color: Color,
+    radius_m: f64,
+    stroke_width_m: f64,
+) {
+    let radius_px = extent.metres_to_px(radius_m).max(0.5);
+    let width_px = extent.metres_to_px(stroke_width_m).max(0.4);
+    let mut fill_paint = Paint::default();
+    fill_paint.set_color(fill);
+    fill_paint.anti_alias = true;
+    let mut stroke_paint = Paint::default();
+    stroke_paint.set_color(stroke_color);
+    stroke_paint.anti_alias = true;
+    let stroke = Stroke {
+        width: width_px,
+        ..Stroke::default()
+    };
+    for pt in geometry_points(geom) {
+        let (cx, cy) = map_to_px(extent, Coord { x: pt.x(), y: pt.y() });
+        let mut pb = PathBuilder::new();
+        pb.push_circle(cx, cy, radius_px);
+        let Some(path) = pb.finish() else {
+            continue;
+        };
+        pixmap.fill_path(
+            &path,
+            &fill_paint,
+            FillRule::Winding,
+            Transform::identity(),
+            None,
+        );
+        pixmap.stroke_path(&path, &stroke_paint, &stroke, Transform::identity(), None);
+    }
+}
+
+/// Hollow circles (stroke only).
+pub fn stroke_circles_m(
+    pixmap: &mut Pixmap,
+    extent: RenderExtent,
+    geom: Geometry<f64>,
+    stroke_color: Color,
+    radius_m: f64,
+    stroke_width_m: f64,
+) {
+    let radius_px = extent.metres_to_px(radius_m).max(0.5);
+    let width_px = extent.metres_to_px(stroke_width_m).max(0.4);
+    let mut paint = Paint::default();
+    paint.set_color(stroke_color);
+    paint.anti_alias = true;
+    let stroke = Stroke {
+        width: width_px,
+        ..Stroke::default()
+    };
+    for pt in geometry_points(geom) {
+        let (cx, cy) = map_to_px(extent, Coord { x: pt.x(), y: pt.y() });
+        let mut pb = PathBuilder::new();
+        pb.push_circle(cx, cy, radius_px);
+        let Some(path) = pb.finish() else {
+            continue;
+        };
+        pixmap.stroke_path(&path, &paint, &stroke, Transform::identity(), None);
+    }
+}
+
+/// MarkerLine: filled circles along linestrings (bollard / palisade).
+pub fn marker_line_circles_m(
+    pixmap: &mut Pixmap,
+    extent: RenderExtent,
+    geom: Geometry<f64>,
+    color: Color,
+    diameter_m: f64,
+    spacing_m: f64,
+) {
+    let radius_m = diameter_m / 2.0;
+    let radius_px = extent.metres_to_px(radius_m).max(0.5);
+    let mut paint = Paint::default();
+    paint.set_color(color);
+    paint.anti_alias = true;
+    for line in geometry_lines(geom) {
+        for (x, y, _, _) in sample_line_tangents(&line, spacing_m) {
+            let (cx, cy) = map_to_px(extent, Coord { x, y });
+            let mut pb = PathBuilder::new();
+            pb.push_circle(cx, cy, radius_px);
+            let Some(path) = pb.finish() else {
+                continue;
+            };
+            pixmap.fill_path(
+                &path,
+                &paint,
+                FillRule::Winding,
+                Transform::identity(),
+                None,
+            );
+        }
+    }
+}
+
 pub fn fill_circles_m(
     pixmap: &mut Pixmap,
     extent: RenderExtent,
@@ -948,26 +1209,36 @@ pub fn fill_circles_m(
 
 /// Tree crown ≈ QGIS RasterMarker @ layerOpacity 0.25.
 ///
-/// Soft radial light-green disk (watercolor canopy). The leaf PNG is not stamped
-/// at z15–18 — downscaling it produces speckles. Shadow uses the same soft disk.
+/// Stamps the catalog PNG (pre-blurred on load) with bilinear downscale. When
+/// `use_png` is false, falls back to a soft radial disk.
 pub fn draw_tree_crown_marker(
     pixmap: &mut Pixmap,
     extent: RenderExtent,
     cx: f32,
     cy: f32,
     marker: &Pixmap,
+    use_png: bool,
     diameter_map_m: f64,
     rotation_deg: f32,
     shadow: DropShadow,
     opacity: f32,
 ) {
-    let _ = (marker, rotation_deg);
     let size_px = extent.metres_to_px(diameter_map_m).max(1.0);
     let radius_px = size_px * 0.5;
     let op = opacity.clamp(0.0, 1.0);
 
-    // Soft canopy only — dropShadow under translucent disks created near-black
-    // centre "Blitzer" where the offset shadow sat under the soft fill.
+    if !use_png {
+        draw_tree_crown_soft_disk(pixmap, cx, cy, radius_px, op);
+        return;
+    }
+
+    draw_tree_crown_shadow_local(pixmap, extent, cx, cy, radius_px, shadow);
+
+    let mw = marker.width() as f32;
+    let mh = marker.height() as f32;
+    let native_max = mw.max(mh);
+    let scale = size_px / native_max;
+
     let pad = 2u32;
     let local = ((size_px + pad as f32 * 2.0).ceil() as u32).max(8);
     let Some(mut buf) = Pixmap::new(local, local) else {
@@ -976,21 +1247,61 @@ pub fn draw_tree_crown_marker(
     let lcx = local as f32 * 0.5;
     let lcy = local as f32 * 0.5;
 
-    let crown = Color::from_rgba8(0xa4, 0xc4, 0x7a, 255);
-    paint_soft_disk_premul(&mut buf, lcx, lcy, radius_px, crown, op);
+    let marker_transform = Transform::from_translate(lcx, lcy)
+        .post_rotate(rotation_deg)
+        .post_scale(scale, scale)
+        .post_translate(-mw / 2.0, -mh / 2.0);
+
+    let mut crown_paint = PixmapPaint::default();
+    crown_paint.opacity = op;
+    crown_paint.quality = FilterQuality::Bilinear;
+    buf.draw_pixmap(0, 0, marker.as_ref(), &crown_paint, marker_transform, None);
 
     let ox = (cx - lcx).round() as i32;
     let oy = (cy - lcy).round() as i32;
-    pixmap.draw_pixmap(
-        ox,
-        oy,
-        buf.as_ref(),
-        &PixmapPaint::default(),
-        Transform::identity(),
-        None,
-    );
-    let _ = (shadow, extent);
+    pixmap.draw_pixmap(ox, oy, buf.as_ref(), &PixmapPaint::default(), Transform::identity(), None);
 }
+
+fn draw_tree_crown_soft_disk(pixmap: &mut Pixmap, cx: f32, cy: f32, radius_px: f32, opacity: f32) {
+    let size_px = radius_px * 2.0;
+    let pad = 2u32;
+    let local = ((size_px + pad as f32 * 2.0).ceil() as u32).max(8);
+    let Some(mut buf) = Pixmap::new(local, local) else { return; };
+    let lcx = local as f32 * 0.5;
+    let lcy = local as f32 * 0.5;
+    let crown = Color::from_rgba8(0xa4, 0xc4, 0x7a, 255);
+    paint_soft_disk_premul(&mut buf, lcx, lcy, radius_px, crown, opacity);
+    pixmap.draw_pixmap((cx - lcx).round() as i32, (cy - lcy).round() as i32, buf.as_ref(), &PixmapPaint::default(), Transform::identity(), None);
+}
+
+fn draw_tree_crown_shadow_local(pixmap: &mut Pixmap, extent: RenderExtent, cx: f32, cy: f32, radius_px: f32, shadow: DropShadow) {
+    let (sdx, sdy) = shadow.offset_px(extent);
+    let blur_px = extent.metres_to_px(shadow.blur_m).round().max(1.0) as u32;
+    let local = (blur_px as f32 + sdx.abs() + sdy.abs() + radius_px * 2.0).ceil() as u32 + 6;
+    let local = local.max(16);
+    let Some(mut shadow_layer) = Pixmap::new(local, local) else { return; };
+    let lcx = local as f32 * 0.5;
+    let lcy = local as f32 * 0.5;
+    let mut pb = PathBuilder::new();
+    pb.push_circle(lcx + sdx, lcy + sdy, radius_px * 1.05);
+    let Some(path) = pb.finish() else { return; };
+    let mut paint = Paint::default();
+    paint.set_color(Color::from_rgba8(255, 255, 255, 255));
+    paint.anti_alias = true;
+    shadow_layer.fill_path(&path, &paint, FillRule::Winding, Transform::identity(), None);
+    tint_pixmap_rgb(&mut shadow_layer, shadow.color, shadow.opacity);
+    box_blur_approx(&mut shadow_layer, blur_px);
+    let Some(mut crown_knockout) = Pixmap::new(local, local) else { return; };
+    let mut pb2 = PathBuilder::new();
+    pb2.push_circle(lcx, lcy, radius_px * 1.02);
+    if let Some(crown_path) = pb2.finish() {
+        crown_knockout.fill_path(&crown_path, &paint, FillRule::Winding, Transform::identity(), None);
+        dilate_alpha_1px(&mut crown_knockout);
+        knockout_premul_by_mask(&mut shadow_layer, &crown_knockout);
+    }
+    pixmap.draw_pixmap((cx - lcx).round() as i32, (cy - lcy).round() as i32, shadow_layer.as_ref(), &PixmapPaint::default(), Transform::identity(), None);
+}
+
 
 /// Soft-edged disk written as **premultiplied** RGBA (avoids white fringes on blit).
 fn paint_soft_disk_premul(
@@ -1093,6 +1404,158 @@ pub fn clip_polygon_wkb_sql_fast(geom_col: &str, _z: u32) -> String {
           )"#
     )
 }
+
+
+/// QGIS LinePatternFill stand-in: parallel hatch lines clipped to polygon interior.
+pub fn fill_polygons_hatch(
+    pixmap: &mut Pixmap,
+    extent: RenderExtent,
+    geom: Geometry<f64>,
+    color: Color,
+    opacity: f32,
+    direction_deg: Option<f64>,
+    pattern: Option<&str>,
+) {
+    let direction = direction_deg.unwrap_or(0.0);
+    let mut hatch_color = color;
+    hatch_color.set_alpha(opacity);
+    let stripes_angle = -direction + 90.0;
+    let cross_angle = -direction;
+    let is_crosshatch = pattern == Some("crosshatch") || pattern == Some("chessboard");
+    if is_crosshatch {
+        hatch_pass(pixmap, extent, geom.clone(), hatch_color, cross_angle, 0.25, 1.25);
+        hatch_pass(pixmap, extent, geom, hatch_color, stripes_angle, 0.25, 1.25);
+    } else {
+        hatch_pass(pixmap, extent, geom, hatch_color, stripes_angle, 0.25, 0.75);
+    }
+}
+
+fn hatch_pass(
+    pixmap: &mut Pixmap,
+    extent: RenderExtent,
+    geom: Geometry<f64>,
+    color: Color,
+    angle_deg: f64,
+    line_width_m: f64,
+    spacing_m: f64,
+) {
+    let width_px = extent.metres_to_px(line_width_m).max(0.5);
+    let mut paint = Paint::default();
+    paint.set_color(color);
+    paint.anti_alias = true;
+    let stroke = Stroke { width: width_px, ..Stroke::default() };
+    let angle_rad = angle_deg.to_radians();
+    let dir_x = angle_rad.cos();
+    let dir_y = angle_rad.sin();
+    let perp_x = -dir_y;
+    let perp_y = dir_x;
+    for poly in geometry_polygons(geom) {
+        let (min_x, min_y, max_x, max_y) = polygon_bbox(&poly);
+        let diagonal = ((max_x - min_x).powi(2) + (max_y - min_y).powi(2)).sqrt().max(spacing_m);
+        let mid_x = (min_x + max_x) * 0.5;
+        let mid_y = (min_y + max_y) * 0.5;
+        let half_len = diagonal * 0.75;
+        let num_lines = (diagonal / spacing_m).ceil() as i32 + 2;
+        for i in -num_lines / 2..=num_lines / 2 {
+            let offset = f64::from(i) * spacing_m;
+            let origin_x = mid_x + perp_x * offset;
+            let origin_y = mid_y + perp_y * offset;
+            let ax = origin_x - dir_x * half_len;
+            let ay = origin_y - dir_y * half_len;
+            let bx = origin_x + dir_x * half_len;
+            let by = origin_y + dir_y * half_len;
+            for (p0, p1) in clip_segment_to_polygon(ax, ay, bx, by, &poly) {
+                let mut pb = PathBuilder::new();
+                let (x0, y0) = map_to_px(extent, p0);
+                let (x1, y1) = map_to_px(extent, p1);
+                pb.move_to(x0, y0);
+                pb.line_to(x1, y1);
+                if let Some(path) = pb.finish() {
+                    pixmap.stroke_path(&path, &paint, &stroke, Transform::identity(), None);
+                }
+            }
+        }
+    }
+}
+
+fn polygon_bbox(poly: &Polygon<f64>) -> (f64, f64, f64, f64) {
+    let mut min_x = f64::INFINITY;
+    let mut min_y = f64::INFINITY;
+    let mut max_x = f64::NEG_INFINITY;
+    let mut max_y = f64::NEG_INFINITY;
+    for c in poly.exterior().coords() {
+        min_x = min_x.min(c.x);
+        min_y = min_y.min(c.y);
+        max_x = max_x.max(c.x);
+        max_y = max_y.max(c.y);
+    }
+    (min_x, min_y, max_x, max_y)
+}
+
+fn clip_segment_to_polygon(ax: f64, ay: f64, bx: f64, by: f64, poly: &Polygon<f64>) -> Vec<(Coord<f64>, Coord<f64>)> {
+    let mut ts = vec![0.0, 1.0];
+    collect_edge_hits(ax, ay, bx, by, poly.exterior(), &mut ts);
+    for hole in poly.interiors() {
+        collect_edge_hits(ax, ay, bx, by, hole, &mut ts);
+    }
+    ts.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    ts.dedup_by(|a, b| (*a - *b).abs() < 1e-9);
+    let dx = bx - ax;
+    let dy = by - ay;
+    let mut out = Vec::new();
+    for w in ts.windows(2) {
+        let (t0, t1) = (w[0], w[1]);
+        if t1 - t0 < 1e-9 { continue; }
+        let mx = ax + dx * (t0 + t1) * 0.5;
+        let my = ay + dy * (t0 + t1) * 0.5;
+        if point_in_polygon(mx, my, poly) {
+            out.push((Coord { x: ax + dx * t0, y: ay + dy * t0 }, Coord { x: ax + dx * t1, y: ay + dy * t1 }));
+        }
+    }
+    out
+}
+
+fn collect_edge_hits(ax: f64, ay: f64, bx: f64, by: f64, ring: &LineString<f64>, ts: &mut Vec<f64>) {
+    for w in ring.0.windows(2) {
+        if let Some(t) = segment_intersection_t(ax, ay, bx, by, w[0].x, w[0].y, w[1].x, w[1].y) {
+            ts.push(t);
+        }
+    }
+}
+
+fn segment_intersection_t(ax: f64, ay: f64, bx: f64, by: f64, cx: f64, cy: f64, dx: f64, dy: f64) -> Option<f64> {
+    let (r_x, r_y) = (bx - ax, by - ay);
+    let (s_x, s_y) = (dx - cx, dy - cy);
+    let denom = r_x * s_y - r_y * s_x;
+    if denom.abs() < 1e-12 { return None; }
+    let t = ((cx - ax) * s_y - (cy - ay) * s_x) / denom;
+    let u = ((cx - ax) * r_y - (cy - ay) * r_x) / denom;
+    if (0.0..=1.0).contains(&t) && (0.0..=1.0).contains(&u) { Some(t) } else { None }
+}
+
+fn point_in_polygon(x: f64, y: f64, poly: &Polygon<f64>) -> bool {
+    if !point_in_ring(x, y, poly.exterior()) { return false; }
+    for hole in poly.interiors() {
+        if point_in_ring(x, y, hole) { return false; }
+    }
+    true
+}
+
+fn point_in_ring(x: f64, y: f64, ring: &LineString<f64>) -> bool {
+    let coords = &ring.0;
+    if coords.len() < 3 { return false; }
+    let mut inside = false;
+    let mut j = coords.len() - 1;
+    for i in 0..coords.len() {
+        let (xi, yi, xj, yj) = (coords[i].x, coords[i].y, coords[j].x, coords[j].y);
+        if (yi > y) != (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi + f64::EPSILON) + xi {
+            inside = !inside;
+        }
+        j = i;
+    }
+    inside
+}
+
 
 pub fn clip_line_wkb_sql(geom_col: &str) -> String {
     clip_line_wkb_sql_fast(geom_col, 0)

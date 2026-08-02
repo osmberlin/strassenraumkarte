@@ -8,6 +8,8 @@
 //! `--format png` only for regression harness pixelmatch. Tile math matches
 //! `render/xyz_tiles.py` (ORIGIN_SHIFT, 256 px, EPSG:3857, background `#ededed`).
 
+mod furniture_a;
+mod furniture_batch_b;
 mod layers;
 mod paint;
 mod palette;

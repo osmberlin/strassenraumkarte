@@ -182,6 +182,69 @@ pub fn stroke_playground_climbingframe() -> Color {
     hex("#232323")
 }
 
+pub fn fill_furniture_pad() -> Color {
+    hex("#bfbecf")
+}
+
+pub fn stroke_fire_hydrant() -> Color {
+    hex("#ff0000")
+}
+
+pub fn stroke_jelbi_ring() -> Color {
+    hex("#f0d722")
+}
+
+pub fn stroke_barrier_fence() -> Color {
+    hex("#505050")
+}
+
+pub fn stroke_barrier_hedge() -> Color {
+    hex("#a7cd9d")
+}
+
+pub fn stroke_barrier_kerb() -> Color {
+    hex("#7e7e7e")
+}
+
+pub fn stroke_barrier_palisade() -> Color {
+    hex("#656565")
+}
+
+pub fn fill_barrier_polygon_hedge() -> Color {
+    hex("#c7d6b8")
+}
+
+pub fn fill_barrier_polygon_planter() -> Color {
+    hex("#c7d6b8")
+}
+
+pub fn fill_barrier_polygon_wall() -> Color {
+    hex("#c0c0c0")
+}
+
+pub fn gate_access_fill(foot: Option<&str>) -> Color {
+    match foot.unwrap_or("").trim() {
+        "no" | "private" => hex("#ff0000"),
+        "yes" => hex("#90ee90"),
+        "permissive" | "destination" | "customers" => hex("#ffff00"),
+        _ => hex("#ffffff"),
+    }
+}
+
+pub fn fill_entrance_parking() -> Color {
+    hex("#20ecdb")
+}
+
+pub fn stroke_entrance_parking() -> Color {
+    let mut c = Color::from_rgba8(35, 0, 119, 128);
+    c.set_alpha(0.5);
+    c
+}
+
+pub fn fill_entrance_generic() -> Color {
+    hex("#dad1d1")
+}
+
 pub fn stroke_waterway() -> Color {
     hex("#b2abe0")
 }
@@ -247,6 +310,19 @@ pub fn stroke_service() -> Color {
 
 pub fn stroke_landscape() -> Color {
     hex("#965220")
+}
+
+pub fn stroke_tactile() -> Color {
+    hex("#d3d3d3")
+}
+
+/// Path casing: sidewalk/sidepath `#d3d3d3`, footway/informal `#979c90`.
+pub fn stroke_path_casing(class: Option<&str>) -> Color {
+    if matches!(class, Some("sidewalk" | "crossing" | "link")) {
+        hex("#d3d3d3")
+    } else {
+        hex("#979c90")
+    }
 }
 
 pub fn stroke_path(highway: Option<&str>, class: Option<&str>) -> Color {

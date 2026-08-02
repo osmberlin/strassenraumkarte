@@ -1,5 +1,7 @@
 //! Layer paint passes for `highway_area` isolate and `full-approx`.
 
+use crate::furniture_a;
+use crate::furniture_batch_b;
 use anyhow::{Context, Result};
 use postgres::Client;
 use tiny_skia::Pixmap;
@@ -8,15 +10,15 @@ use crate::paint::{
     clip_line_wkb_sql_fast, clip_point_wkb_sql, clip_polygon_wkb_sql_fast, decode_wkb,
     draw_tree_crown_marker, envelope_sql, fill_circles_m, fill_polygons,
     fill_polygons_batch_with_shadow, fill_polygons_shadow_only, fill_polygons_textured,
-    geometry_points, map_to_px, stroke_embankment, stroke_lines, stroke_lines_dashed,
-    stroke_polygons, DropShadow,
+    fill_polygons_hatch, geometry_points, map_to_px, stroke_embankment, stroke_lines, stroke_lines_dashed,
+    stroke_lines_offset, stroke_lines_offset_dashed, stroke_polygons, stroke_steps_hash, DropShadow,
 };
 use crate::palette::{
     fill_building, fill_for_area_highway, fill_for_landuse, fill_for_pitch, fill_playground,
     fill_playground_climbingframe, fill_sandpit, fill_tree_trunk, fill_water,
     highway_surface_texture, landuse_class_texture, landuse_surface_texture, pitch_surface_texture,
-    road_marking_colour, stroke_landscape, stroke_path, stroke_playground,
-    stroke_playground_climbingframe, stroke_service, stroke_waterway, surface_colour,
+    road_marking_colour, stroke_landscape, stroke_path, stroke_path_casing, stroke_playground,
+    stroke_playground_climbingframe, stroke_service, stroke_tactile, stroke_waterway, surface_colour,
     AREA_HIGHWAY_PAINTED,
 };
 use crate::pitch_markings::{stamp_at_map_point, stem_for_feature, PitchMarkingCatalog};
@@ -366,6 +368,9 @@ pub fn render_full_approx(
     if cache.highway {
         paint_highway_path(client, prep_cache, &mut pixmap, extent, z, timers)?;
     }
+    if cache.tactile_paving && z >= 17 {
+        paint_tactile_paving(client, prep_cache, &mut pixmap, extent, z, timers)?;
+    }
     // Böschungen after paths so the comb stays visible on park / path edges.
     if cache.landscape_way && z >= 15 {
         paint_landscape_way(client, prep_cache, &mut pixmap, extent, z, timers)?;
@@ -395,6 +400,17 @@ pub fn render_full_approx(
         paint_road_marking_node(client, prep_cache, &mut pixmap, extent, svg_stamps, timers)?;
     }
 
+    furniture_batch_b::paint(
+        client,
+        prep_cache,
+        &mut pixmap,
+        extent,
+        z,
+        cache,
+        svg_stamps,
+        timers,
+    )?;
+
     if cache.feature_node && z >= 16 {
         paint_viewpoint(client, prep_cache, &mut pixmap, extent, svg_stamps, timers)?;
     }
@@ -411,6 +427,17 @@ pub fn render_full_approx(
             paint_playground_node(client, prep_cache, &mut pixmap, extent, timers)?;
         }
     }
+
+    furniture_a::paint(
+        client,
+        prep_cache,
+        &mut pixmap,
+        extent,
+        z,
+        cache,
+        svg_stamps,
+        timers,
+    )?;
 
     if cache.tree && z >= 17 {
         paint_tree(
@@ -488,6 +515,11 @@ fn tile_has_any_data_sql(cache: &TableCache, z: u32) -> String {
             "EXISTS (SELECT 1 FROM highway WHERE type = 'path' AND geom && {env})"
         ));
     }
+    if cache.tactile_paving && z >= 17 {
+        parts.push(format!(
+            "EXISTS (SELECT 1 FROM tactile_paving WHERE geom && {env})"
+        ));
+    }
     if cache.highway_service {
         parts.push(format!(
             "EXISTS (SELECT 1 FROM highway_service WHERE geom && {env})"
@@ -496,9 +528,15 @@ fn tile_has_any_data_sql(cache: &TableCache, z: u32) -> String {
     if cache.road_marking_polygon {
         parts.push(format!(
             r#"EXISTS (SELECT 1 FROM road_marking_polygon WHERE geom && {env}
-              AND road_marking IN ('surface_colour', 'crossing')
-              AND colour IS NOT NULL
-              AND colour NOT IN ('', 'no', 'none'))"#
+              AND (
+                road_marking = 'zebra_stripe'
+                OR road_marking IN ('restriction', 'barred_area')
+                OR (
+                  road_marking IN ('surface_colour', 'crossing')
+                  AND colour IS NOT NULL
+                  AND colour NOT IN ('', 'no', 'none')
+                )
+              ))"#
         ));
     }
     if cache.road_marking_way {
@@ -509,6 +547,27 @@ fn tile_has_any_data_sql(cache: &TableCache, z: u32) -> String {
     if cache.road_marking_node {
         parts.push(format!(
             "EXISTS (SELECT 1 FROM road_marking_node WHERE geom && {env})"
+        ));
+    }
+    if cache.barrier_way && z >= 17 {
+        parts.push(format!("EXISTS (SELECT 1 FROM barrier_way WHERE geom && {env})"));
+    }
+    if cache.barrier_node && z >= 17 {
+        parts.push(format!("EXISTS (SELECT 1 FROM barrier_node WHERE geom && {env})"));
+    }
+    if cache.barrier_polygon && z >= 17 {
+        parts.push(format!(
+            "EXISTS (SELECT 1 FROM barrier_polygon WHERE geom && {env})"
+        ));
+    }
+    if cache.feature_node && z >= 18 {
+        parts.push(format!(
+            r#"EXISTS (SELECT 1 FROM feature_node WHERE geom && {env} AND class = 'entrance')"#
+        ));
+    }
+    if cache.stop_positions && z >= 17 {
+        parts.push(format!(
+            r#"EXISTS (SELECT 1 FROM stop_positions WHERE geom && {env} AND highway = 'traffic_signals')"#
         ));
     }
     if cache.building_shade {
@@ -523,6 +582,18 @@ fn tile_has_any_data_sql(cache: &TableCache, z: u32) -> String {
     }
     if cache.tree && z >= 17 {
         parts.push(format!("EXISTS (SELECT 1 FROM tree WHERE geom && {env})"));
+    }
+    if z >= 17 && cache.feature_node {
+        parts.push(format!(
+            r#"EXISTS (SELECT 1 FROM feature_node WHERE geom && {env}
+              AND class IN ('fire_hydrant','bicycle_parking','bicycle_rental','small_electric_vehicle_parking'))"#
+        ));
+    }
+    if z >= 17 && cache.feature_polygon {
+        parts.push(format!(
+            r#"EXISTS (SELECT 1 FROM feature_polygon WHERE geom && {env}
+              AND class IN ('mobility_hub','bicycle_parking','bicycle_rental','small_electric_vehicle_parking'))"#
+        ));
     }
     format!("SELECT ({}) AS any_hit", parts.join(" OR "))
 }
@@ -957,7 +1028,7 @@ fn paint_highway_path(
     let wkb_sql = clip_line_wkb_sql_fast("geom", z);
     let sql = format!(
         r#"
-        SELECT highway, class, width, {wkb_sql} AS wkb
+        SELECT highway, class, width, informal, tunnel, {wkb_sql} AS wkb
         FROM highway
         WHERE type = 'path'
           AND geom && {env}
@@ -975,6 +1046,13 @@ fn paint_highway_path(
         for row in &rows {
             let highway: Option<String> = row.try_get("highway").ok().flatten();
             let class: Option<String> = row.try_get("class").ok().flatten();
+            let informal = row
+                .try_get::<_, Option<String>>("informal")
+                .ok()
+                .flatten()
+                .as_deref()
+                == Some("yes");
+            let tunnel: Option<String> = row.try_get("tunnel").ok().flatten();
             let width_m = opt_f32(row, "width")
                 .filter(|w| *w > 0.0)
                 .map(f64::from)
@@ -989,19 +1067,94 @@ fn paint_highway_path(
             let Some(wkb) = wkb_from_row(row, "wkb") else {
                 continue;
             };
+            let Ok(geom) = decode_wkb(&wkb) else {
+                continue;
+            };
+
+            if highway.as_deref() == Some("steps") && tunnel.as_deref() != Some("yes") {
+                let hash_color = stroke_path(Some("steps"), class.as_deref());
+                stroke_steps_hash(pixmap, extent, geom, hash_color, width_m, 0.6, 0.06);
+                continue;
+            }
+
+            if path_needs_casing(highway.as_deref(), class.as_deref(), informal) {
+                let casing_width = if informal { width_m.max(1.0) } else { width_m };
+                let half = casing_width * 0.5;
+                let dash = if informal { "0.6;2.4" } else { "0.6;0.6" };
+                let casing = stroke_path_casing(class.as_deref());
+                stroke_lines_offset_dashed(pixmap, extent, geom.clone(), casing, 0.2, half, Some(dash));
+                stroke_lines_offset_dashed(pixmap, extent, geom.clone(), casing, 0.2, -half, Some(dash));
+            }
+
+            let fill_width_m = if informal {
+                width_m.max(1.0)
+            } else if path_needs_casing(highway.as_deref(), class.as_deref(), informal) {
+                (width_m - 0.2).max(0.1)
+            } else {
+                width_m
+            };
+            let mut fill_color = stroke_path(highway.as_deref(), class.as_deref());
+            if informal {
+                fill_color.set_alpha(0.67);
+            }
+            let width_map = fill_width_m * mercator_scale(extent.bounds);
+            stroke_lines(pixmap, extent, geom, fill_color, width_map);
+        }
+    });
+    Ok(())
+}
+
+/// Tactile paving along kerbs / footways (`#d3d3d3`, 1 m; kerb offset −0.5 m).
+fn paint_tactile_paving(
+    client: &mut Client,
+    prep_cache: &mut PreparedCache,
+    pixmap: &mut Pixmap,
+    extent: RenderExtent,
+    z: u32,
+    timers: &mut Option<&mut StageTimers>,
+) -> Result<()> {
+    let env = envelope_sql();
+    let wkb_sql = clip_line_wkb_sql_fast("geom", z);
+    let sql = format!(
+        r#"
+        SELECT class, {wkb_sql} AS wkb
+        FROM tactile_paving
+        WHERE geom && {env}
+        ORDER BY COALESCE(layer, 0)
+        "#
+    );
+    let rows = query_prep(
+        client,
+        prep_cache,
+        timers,
+        &sql,
+        &[
+            &extent.bounds.minx,
+            &extent.bounds.miny,
+            &extent.bounds.maxx,
+            &extent.bounds.maxy,
+        ],
+    )?;
+    let color = stroke_tactile();
+    crate::profile::time_stage(timers, StageSlot::Paint, || {
+        for row in &rows {
+            let class: Option<String> = row.try_get("class").ok().flatten();
+            let offset_m = if class.as_deref() == Some("kerb") { -0.5 } else { 0.0 };
+            let Some(wkb) = wkb_from_row(row, "wkb") else {
+                continue;
+            };
             if let Ok(geom) = decode_wkb(&wkb) {
-                let width_map = width_m * mercator_scale(extent.bounds);
-                stroke_lines(
-                    pixmap,
-                    extent,
-                    geom,
-                    stroke_path(highway.as_deref(), class.as_deref()),
-                    width_map,
-                );
+                stroke_lines_offset(pixmap, extent, geom, color, 1.0, offset_m);
             }
         }
     });
     Ok(())
+}
+
+fn path_needs_casing(highway: Option<&str>, class: Option<&str>, informal: bool) -> bool {
+    if informal { return true; }
+    if matches!(class, Some("sidewalk" | "crossing" | "link")) { return true; }
+    matches!(highway, Some("footway" | "path" | "bridleway" | "pedestrian"))
 }
 
 /// G3 landscape: cliff / embankment / earth_bank (Böschungen).
@@ -1040,11 +1193,11 @@ fn paint_landscape_way(
     crate::profile::time_stage(timers, StageSlot::Paint, || {
         for row in &rows {
             let len = opt_f32(row, "len_m").unwrap_or(0.0);
-            // QGIS: <20 m → thinner / denser ticks; ≥20 m → wider / sparser.
-            let (mut spine, spacing, tick): (f64, f64, f64) = if len < 20.0 {
-                (0.45, 1.2, 1.0)
+            // QGIS cliff/earth_bank: spine 0.3/0.6 m, markers 1.2/2.4 m, triangles 0.8/1.6 m.
+            let (mut spine, spacing, tri, perp): (f64, f64, f64, f64) = if len < 20.0 {
+                (0.3, 1.2, 0.8, 0.3)
             } else {
-                (0.75, 2.0, 2.0)
+                (0.6, 2.4, 1.6, 0.6)
             };
             let Some(wkb) = wkb_from_row(row, "wkb") else {
                 continue;
@@ -1052,7 +1205,7 @@ fn paint_landscape_way(
             if let Ok(geom) = decode_wkb(&wkb) {
                 // Keep comb readable at z17–18 (QGIS MapUnit strokes soften less than our AA).
                 spine = spine.max(extent.metres_per_px() * 1.25);
-                stroke_embankment(pixmap, extent, geom, color, spine, spacing, tick);
+                stroke_embankment(pixmap, extent, geom, color, spine, spacing, tri, perp);
             }
         }
     });
@@ -1144,12 +1297,18 @@ fn paint_road_marking_polygon(
     let wkb_sql = clip_polygon_wkb_sql_fast("geom", z);
     let sql = format!(
         r#"
-        SELECT road_marking, colour, {wkb_sql} AS wkb
+        SELECT road_marking, colour, pattern, direction::real AS direction, {wkb_sql} AS wkb
         FROM road_marking_polygon
         WHERE geom && {env}
-          AND road_marking IN ('surface_colour', 'crossing')
-          AND colour IS NOT NULL
-          AND colour NOT IN ('', 'no', 'none')
+          AND (
+            road_marking = 'zebra_stripe'
+            OR (
+              road_marking IN ('surface_colour', 'crossing')
+              AND colour IS NOT NULL
+              AND colour NOT IN ('', 'no', 'none')
+            )
+            OR road_marking IN ('restriction', 'barred_area')
+          )
         ORDER BY osm_id
         "#
     );
@@ -1162,23 +1321,59 @@ fn paint_road_marking_polygon(
     )?;
     crate::profile::time_stage(timers, StageSlot::Paint, || {
         for row in &rows {
+            let road_marking: Option<String> = row.try_get("road_marking").ok().flatten();
+            let marking = road_marking.as_deref().unwrap_or("");
+            let pattern: Option<String> = row.try_get("pattern").ok().flatten();
+            let pattern_s = pattern.as_deref();
+            let direction = opt_f32(row, "direction").map(f64::from);
+            let Some(wkb) = wkb_from_row(row, "wkb") else {
+                continue;
+            };
+            let Ok(geom) = decode_wkb(&wkb) else {
+                continue;
+            };
+
+            if matches!(marking, "restriction" | "barred_area") {
+                if matches!(pattern_s, Some("zigzag" | "x")) {
+                    continue;
+                }
+                let colour: Option<String> = row.try_get("colour").ok().flatten();
+                let outline = road_marking_colour(colour.as_deref());
+                if pattern_s != Some("none") {
+                    fill_polygons_hatch(
+                        pixmap,
+                        extent,
+                        geom.clone(),
+                        outline,
+                        0.67,
+                        direction,
+                        pattern_s,
+                    );
+                }
+                stroke_polygons(pixmap, extent, geom, outline, 0.12);
+                continue;
+            }
+
+            if marking == "zebra_stripe" {
+                let colour: Option<String> = row.try_get("colour").ok().flatten();
+                let mut fill = road_marking_colour(colour.as_deref());
+                fill.set_alpha(1.0);
+                fill_polygons(pixmap, extent, geom, fill);
+                continue;
+            }
+
             let colour: Option<String> = row.try_get("colour").ok().flatten();
             let Some(mut fill) = surface_colour(colour.as_deref()) else {
                 continue;
             };
             fill.set_alpha(0.45);
-            let Some(wkb) = wkb_from_row(row, "wkb") else {
-                continue;
-            };
-            if let Ok(geom) = decode_wkb(&wkb) {
-                fill_polygons(pixmap, extent, geom, fill);
-            }
+            fill_polygons(pixmap, extent, geom, fill);
         }
     });
     Ok(())
 }
 
-/// G5 road marking lines: parking_edge, edge_line, centre lines, etc.
+/// G5 road marking lines/// G5 road marking lines: parking_edge, edge_line, centre lines, etc.
 fn paint_road_marking_way(
     client: &mut Client,
     prep_cache: &mut PreparedCache,
@@ -1432,7 +1627,15 @@ pub struct TableCache {
     pub highway_service: bool,
     pub highway: bool,
     pub landscape_way: bool,
+    pub tactile_paving: bool,
     pub feature_node: bool,
+    pub feature_polygon: bool,
+    pub barrier_way: bool,
+    pub barrier_node: bool,
+    pub barrier_polygon: bool,
+    pub barrier_node_has_foot: bool,
+    pub stop_positions: bool,
+    pub stop_positions_has_road_azimuth: bool,
     pub road_marking_polygon: bool,
     pub road_marking_way: bool,
     pub road_marking_node: bool,
@@ -1457,7 +1660,15 @@ impl TableCache {
             highway_service: table_exists(client, "highway_service")?,
             highway: table_exists(client, "highway")?,
             landscape_way: table_exists(client, "landscape_way")?,
+            tactile_paving: table_exists(client, "tactile_paving")?,
             feature_node: table_exists(client, "feature_node")?,
+            feature_polygon: table_exists(client, "feature_polygon")?,
+            barrier_way: table_exists(client, "barrier_way")?,
+            barrier_node: table_exists(client, "barrier_node")?,
+            barrier_polygon: table_exists(client, "barrier_polygon")?,
+            barrier_node_has_foot: column_exists(client, "barrier_node", "foot")?,
+            stop_positions: table_exists(client, "stop_positions")?,
+            stop_positions_has_road_azimuth: column_exists(client, "stop_positions", "road_azimuth")?,
             road_marking_polygon: table_exists(client, "road_marking_polygon")?,
             road_marking_way: table_exists(client, "road_marking_way")?,
             road_marking_node: table_exists(client, "road_marking_node")?,
@@ -1652,10 +1863,11 @@ fn paint_tree(
                     cx,
                     cy,
                     marker,
+                    tree_markers.from_file,
                     crown_map_m,
                     rotation_deg,
                     shadow,
-                    TREE_LAYER_OPACITY,
+                    0.38,
                 );
             }
         }
