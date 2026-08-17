@@ -72,7 +72,7 @@ Documented prep optimizations for [`building.sql`](data/processing/sql/building.
 
 - **`srk-render` CLI** — WebP default; presets `full-approx` / `highway_area` ([README](rust/srk-render/README.md))
 - **`audit/tile-regression/`** — render-suite, compare, benches ([README](audit/tile-regression/README.md))
-- **3-pane compare UI** in [`vector/`](vector/) — `?compare=1&panes=qgis,rust,vector` ([vector README](vector/README.md))
+- **3-pane compare UI** in [`vector/`](vector/) — `?compare=1&panes=qgis,rust,vector` ([vector README](vector/README.md); walkthrough in [§7](#7-try-it-yourself--nord-neukölln-starter-area))
 - **Style IR dump** — [`style/scripts/dump-style.py`](style/scripts/dump-style.py)
 - **sql-compare** — freeze PostGIS so diffs are renderer-only ([sql-compare README](audit/sql-compare/README.md))
 
@@ -106,6 +106,72 @@ Documented prep optimizations for [`building.sql`](data/processing/sql/building.
 - **Pipeline performance strategy** — [pipeline performance plan](.cursor/plans/pipeline_performance_optimization.plan.md)
 
 **Scope note:** no dedicated Germany-national research yet. All evidence is Berlin-scoped (starter and large-bbox extracts). National-scale capacity remains an open question, informed by the **~20×** Rust farm speedup and the PMTiles interactive path.
+
+---
+
+## 7. Try it yourself — Nord-Neukölln starter area
+
+Most experiments in this summary use a small **starter bbox** in Nord-Neukölln (~2×2 km, ~278 tiles at z15–18). You can reproduce data prep, raster tiles, vector tiles, and the interactive compare UI locally.
+
+**Prerequisites:** PostgreSQL + PostGIS, osm2pgsql, QGIS (for raster), `ogr2ogr` + tippecanoe + `bun` (for vector). See [main README](README.md) for setup (`./run.sh --setup-db`, `~/.pgpass`). With Docker: [docker/README.md](docker/README.md).
+
+**Starter bbox (WGS84):** `13.4132,52.4715,13.4312,52.4821`
+
+### 1. Prepare data + QGIS raster tiles
+
+From the repo root, with a Berlin PBF (local file or Geofabrik URL):
+
+```bash
+./run.sh \
+  --data data/osm/berlin-latest.osm.pbf \
+  --bbox 13.4132,52.4715,13.4312,52.4821 \
+  --zmin 15 --zmax 18
+```
+
+Tiles land in `render/tiles/{z}/{x}/{y}.jpg`. Expect a few minutes for SQL + render on this extent.
+
+**Raster-only preview** (no vector):
+
+```bash
+./render/preview_server.py
+# → http://127.0.0.1:8000/preview.html
+```
+
+### 2. Build vector tiles
+
+```bash
+cd vector
+bun install
+PGPASSWORD=… bun run pipeline   # export PostGIS → PMTiles
+bun run sprite                  # pack textures into public/sprites/
+```
+
+### 3. Start the compare UI
+
+```bash
+cd vector
+bun run dev
+# → http://127.0.0.1:5177
+```
+
+| View | URL |
+|------|-----|
+| Map preview | http://127.0.0.1:5177/#16/52.4768/13.4222 |
+| QGIS · Rust · Vector compare | http://127.0.0.1:5177/?compare=1&location=intersection&mode=side-by-side&panes=qgis,rust,vector |
+| Debug geometry style | add `?style=debug` or toggle **Debug tile style** in the header |
+
+Vite serves QGIS tiles from `render/tiles/` at `/raster/…`. Toggle panes in the header or via `?panes=`. Modes: side-by-side, swipe, blend.
+
+**Optional — Rust raster pane:** render a reference set first, then point the dev server at it:
+
+```bash
+./audit/tile-regression/scripts/render-suite-full.sh
+RUST_TILES_ROOT=audit/tile-regression/runs/latest-rust bun run --cwd vector dev
+```
+
+Named compare spots (intersection, dense trees, parking street, …) are listed in the header dropdown — see [`vector/locations.ts`](vector/locations.ts).
+
+**Further reading:** [vector README](vector/README.md), [tile-regression README](audit/tile-regression/README.md)
 
 ---
 
