@@ -11,14 +11,14 @@ import type {
 } from '@maplibre/maplibre-gl-style-spec'
 
 import { base } from '../expr'
-import { metresToPixels } from '../metres'
+import { metresToPixels, scaleToZoom } from '../metres'
 
 function f(expr: ExpressionSpecification): FilterSpecification {
   return expr as FilterSpecification
 }
 
-/** QGIS dog park minScale 6000 ≈ z16.5 */
-const DOG_PARK_MINZ = 17
+/** QGIS dog park minScale 6000 */
+const DOG_PARK_MINZ = scaleToZoom(6000)
 
 export function patternLayers(): LayerSpecification[] {
   const layers: LayerSpecification[] = []
@@ -54,7 +54,7 @@ export function patternLayers(): LayerSpecification[] {
     },
   })
 
-  // dog park — paw fill-pattern above ~z16.5
+  // dog park — paw fill-pattern below 1:6000
   layers.push({
     id: 'dog_park-paws',
     type: 'fill',

@@ -6,6 +6,7 @@ import type {
 } from '@maplibre/maplibre-gl-style-spec'
 
 import { base } from '../expr'
+import { scaleToZoom } from '../metres'
 
 /** Demotiles / OpenMapTiles stack — QGIS uses DejaVu Sans Condensed. */
 const LABEL_FONT = ['Open Sans Regular', 'Arial Unicode MS Regular'] as const
@@ -22,16 +23,11 @@ const HAS_NAME = [
 
 /** QGIS place rank filters (same on place_node + place_polygon). */
 const PLACE_RANKS = {
-  /** 1:1000–8000 → z16–19 */
+  /** 1:1000–8000 */
   local: ['city_block', 'farm', 'isolated_dwelling', 'square'],
-  /** 1:4000–16000 → z15–17 */
+  /** 1:4000–16000 (archive starts at z15) */
   neighbourhood: ['allotments', 'hamlet', 'islet', 'neighbourhood', 'quarter'],
-  /** 1:16000–64000 → z13–15 (archive clips below z15) */
-  suburb: ['island', 'suburb', 'village'],
-  /** 1:32000–64000 → z13–14 (below archive minzoom — kept for completeness) */
-  town: ['borough', 'town'],
-  /** 1:64000–128000 → z12–13 (below archive minzoom) */
-  city: ['city'],
+  // suburb / town / city rules (1:16000 and smaller) lie below the archive minzoom 15.
 } as const
 
 function placeFilter(places: readonly string[]): FilterSpecification {
@@ -73,6 +69,13 @@ function landusePrimaryFilter(minArea?: number): FilterSpecification {
   ] as unknown as FilterSpecification
 }
 
+/** QGIS label_highway: #dddddd, buffer 2 pt #a8a8a7 α 0.75 — deliberately quiet on the carriageway. */
+const HIGHWAY_LABEL_PAINT = {
+  'text-color': '#dddddd',
+  'text-halo-color': 'rgba(168,168,167,0.75)',
+  'text-halo-width': 2,
+} as const
+
 const PLACE_PAINT = {
   'text-color': '#d7d8c5',
   'text-halo-color': 'rgba(168,168,167,0.75)',
@@ -113,8 +116,8 @@ function placeSymbolLayers(
     {
       id: `${sourceLayer}-local`,
       type: 'symbol',
-      ...base(sourceLayer, 16, localFilter),
-      maxzoom: 19,
+      ...base(sourceLayer, scaleToZoom(8000), localFilter),
+      maxzoom: scaleToZoom(1000),
       layout: layoutBase,
       paint: PLACE_PAINT,
     },
@@ -122,31 +125,7 @@ function placeSymbolLayers(
       id: `${sourceLayer}-neighbourhood`,
       type: 'symbol',
       ...base(sourceLayer, 15, placeFilter(PLACE_RANKS.neighbourhood)),
-      maxzoom: 17,
-      layout: layoutBase,
-      paint: PLACE_PAINT,
-    },
-    {
-      id: `${sourceLayer}-suburb`,
-      type: 'symbol',
-      ...base(sourceLayer, 15, placeFilter(PLACE_RANKS.suburb)),
-      maxzoom: 15.5,
-      layout: layoutBase,
-      paint: PLACE_PAINT,
-    },
-    {
-      id: `${sourceLayer}-town`,
-      type: 'symbol',
-      ...base(sourceLayer, 13, placeFilter(PLACE_RANKS.town)),
-      maxzoom: 14.5,
-      layout: layoutBase,
-      paint: PLACE_PAINT,
-    },
-    {
-      id: `${sourceLayer}-city`,
-      type: 'symbol',
-      ...base(sourceLayer, 12, placeFilter(PLACE_RANKS.city)),
-      maxzoom: 13.5,
+      maxzoom: scaleToZoom(4000),
       layout: layoutBase,
       paint: PLACE_PAINT,
     },
@@ -158,11 +137,11 @@ export function labelLayers(): LayerSpecification[] {
   const layers: LayerSpecification[] = []
 
   // QGIS housenumber: addr:housenumber, DejaVu 7.5 pt #b7b7b7, buffer #d8d5d5 α 0.75,
-  // visible above ~1:1000 → MapLibre minzoom 18 (overzoom from tippecanoe z17).
+  // visible below 1:1000.
   layers.push({
     id: 'label-housenumber',
     type: 'symbol',
-    ...base('housenumber', 18),
+    ...base('housenumber', scaleToZoom(1000)),
     layout: {
       'text-field': ['coalesce', ['get', 'addr:housenumber'], ''],
       'text-font': [...LABEL_FONT],
@@ -197,15 +176,15 @@ export function labelLayers(): LayerSpecification[] {
     id: 'label-landuse-primary-far',
     type: 'symbol',
     ...base('landuse', 15, landusePrimaryFilter(150_000)),
-    maxzoom: 16.5,
+    maxzoom: scaleToZoom(6000),
     layout: landusePrimaryLayout,
     paint: landusePrimaryPaint,
   })
   layers.push({
     id: 'label-landuse-primary-near',
     type: 'symbol',
-    ...base('landuse', 16.5, landusePrimaryFilter()),
-    maxzoom: 18,
+    ...base('landuse', scaleToZoom(6000), landusePrimaryFilter()),
+    maxzoom: scaleToZoom(2000),
     layout: landusePrimaryLayout,
     paint: landusePrimaryPaint,
   })
@@ -216,10 +195,10 @@ export function labelLayers(): LayerSpecification[] {
     type: 'symbol',
     ...base(
       'landuse',
-      17,
+      scaleToZoom(4000),
       namedInClasses(['cemetery', 'dog_park', 'farmland', 'garden', 'playground']),
     ),
-    maxzoom: 18,
+    maxzoom: scaleToZoom(2000),
     layout: {
       'symbol-placement': 'point',
       'text-field': ['coalesce', ['get', 'name'], ''],
@@ -241,7 +220,7 @@ export function labelLayers(): LayerSpecification[] {
     id: 'label-water-body',
     type: 'symbol',
     ...base('label_water_body', 15, HAS_NAME),
-    maxzoom: 18,
+    maxzoom: scaleToZoom(2000),
     layout: {
       'symbol-placement': 'point',
       'text-field': ['coalesce', ['get', 'name'], ''],
@@ -262,7 +241,7 @@ export function labelLayers(): LayerSpecification[] {
     id: 'label-waterway',
     type: 'symbol',
     ...base('label_waterway', 15, HAS_NAME),
-    maxzoom: 18,
+    maxzoom: scaleToZoom(2000),
     layout: {
       'symbol-placement': 'line',
       'text-field': ['coalesce', ['get', 'name'], ''],
@@ -291,12 +270,12 @@ export function labelLayers(): LayerSpecification[] {
     },
   })
 
-  // Street labels: zoom='high' 1:1000–4000 → z17–19; zoom='low' 1:4000–8000 → z16–17.
+  // Street labels: zoom='high' 1:1000–4000, zoom='low' 1:4000–8000.
   layers.push({
     id: 'label-highway-high',
     type: 'symbol',
-    ...base('label_highway', 17, zoomField('high')),
-    maxzoom: 19,
+    ...base('label_highway', scaleToZoom(4000), zoomField('high')),
+    maxzoom: scaleToZoom(1000),
     layout: {
       'symbol-placement': 'line',
       'text-field': ['coalesce', ['get', 'name'], ''],
@@ -306,30 +285,17 @@ export function labelLayers(): LayerSpecification[] {
       'text-keep-upright': true,
     },
     paint: {
-      // QGIS street names read as near-white on carriageway / coloured lanes.
-      'text-color': '#f7f7f7',
-      'text-halo-color': 'rgba(80,80,80,0.85)',
-      'text-halo-width': 1.4,
-      // QGIS FontOpacity: scale < 2000 → 50%, else 100% (≈ z > 18).
-      'text-opacity': [
-        'interpolate',
-        ['linear'],
-        ['zoom'],
-        17,
-        1,
-        18,
-        1,
-        18.1,
-        0.5,
-      ] as ExpressionSpecification,
+      ...HIGHWAY_LABEL_PAINT,
+      // QGIS FontOpacity: scale < 2000 → 50 %, else 100 %.
+      'text-opacity': ['step', ['zoom'], 1, scaleToZoom(2000), 0.5] as ExpressionSpecification,
     },
   })
 
   layers.push({
     id: 'label-highway-low',
     type: 'symbol',
-    ...base('label_highway', 16, zoomField('low')),
-    maxzoom: 17,
+    ...base('label_highway', scaleToZoom(8000), zoomField('low')),
+    maxzoom: scaleToZoom(4000),
     layout: {
       'symbol-placement': 'line',
       'text-field': ['coalesce', ['get', 'name'], ''],
@@ -339,10 +305,7 @@ export function labelLayers(): LayerSpecification[] {
       'text-keep-upright': true,
     },
     paint: {
-      'text-color': '#f7f7f7',
-      'text-halo-color': 'rgba(80,80,80,0.85)',
-      'text-halo-width': 1.4,
-      'text-opacity': 1,
+      ...HIGHWAY_LABEL_PAINT,
     },
   })
 

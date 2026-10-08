@@ -60,6 +60,13 @@ When bumping `maplibre-gl`, the patch has to be re-applied by hand against the n
   can move it by 0.1 %. Use the montages in `docs/maplibre-progress/`.
 - **Compare locations must lie inside the tile extent** (`bun run scripts/inspect-pmtiles.ts`
   prints the bounds). Outside it both panes are blank and the diff looks perfect.
+- **QGIS scale → MapLibre zoom is `log2(591657528 / scale) − 1`.** QGIS tiles are 256 px,
+  MapLibre zooms count 512 px tiles. Use `scaleToZoom()` from `src/style/metres.ts`; without the
+  −1 every scale-gated layer shows up one zoom level late.
+- **Read the QGIS project before trusting the port.** Several "MapLibre can't do this"
+  differences were port mistakes: a building footprint layer QGIS does not have, dash arrays
+  scaled by line width, an inverted shadow angle, swimming pools styled as plain landuse. The
+  unzipped `.qgs` XML answers these in minutes.
 - **`*-layer-*` properties cost a full-screen pass per layer.** Merge features into one layer
   with `match` expressions instead of one layer per class.
 

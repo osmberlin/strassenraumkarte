@@ -15,8 +15,8 @@ import { base } from '../expr'
 import { metresToPixels } from '../metres'
 import { iconSizeFromMetres } from '../sprite-icons'
 
-/** QGIS entrance minScale 3000 ≈ z17.5 */
-const ENTRANCE_MINZ = 18
+/** QGIS entrance minScale 3000 (≈ z16.6) — clamped to the detail tiles' minzoom 17. */
+const ENTRANCE_MINZ = 17
 const FG_MINZ = 17
 
 function f(expr: ExpressionSpecification): FilterSpecification {
@@ -189,7 +189,7 @@ export function foregroundLayers(): LayerSpecification[] {
     },
   })
 
-  // --- entrance (minzoom ≈ z18 / QGIS scale 3000) ---
+  // --- entrance (QGIS scale 3000) ---
 
   // parking_entrance
   layers.push({

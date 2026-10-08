@@ -8,7 +8,7 @@ import { MARKING_DEFAULT, TREE_SHADOW, TREE_TRUNK } from '../colors'
 import { metreOffsetTranslate } from '../effects'
 import { OSM_LAYER_BUCKETS, styleLayerId, type OsmLayerBucketId } from '../order'
 import { base, withOsmBucket } from '../expr'
-import { metresToPixels, metresToPixelsFromProp } from '../metres'
+import { metresToPixels, metresToPixelsFromProp, scaleToZoom } from '../metres'
 import { TREE_ICON, iconSizeFromMetres, markingIconSuffix } from '../sprite-icons'
 import { furnitureLayersForBucket } from './furniture'
 import { patternLayers } from './patterns'
@@ -24,7 +24,7 @@ const ROAD_MARKING_DASHARRAYS = ['0.5;0.25', '1;1', '3;3', '5;1'] as const
 /** Marking widths (m) present in the data; anything else falls back to the reference width. */
 const ROAD_MARKING_WIDTHS_M = [0.1, 0.12, 0.15, 0.2, 0.25, 0.3, 0.5] as const
 
-/** QGIS layer opacity of `road_marking_way` (lines of one layer barely overlap → per feature). */
+/** QGIS layer opacity of `road_marking_way` / `road_marking_polygon` (features of one layer barely overlap → per feature). */
 const ROAD_MARKING_WAY_OPACITY = 0.67
 
 const MARKING_REF_WIDTH_M = 0.12
@@ -125,24 +125,13 @@ function markingColor(): ExpressionSpecification {
 }
 
 function surfaceColourFill(): ExpressionSpecification {
-  // QGIS: CASE WHEN colour = 'green' THEN '#00c503' ELSE colour END.
-  // Map named CSS colours to hex so red bike lanes stay vivid in MapLibre.
+  // QGIS: CASE WHEN colour = 'green' THEN '#00c503' ELSE colour END — other values are
+  // CSS/SVG colour names, which Qt and MapLibre resolve identically ('red' = #ff0000).
   return [
-    'match',
-    ['downcase', ['to-string', ['coalesce', ['get', 'colour'], '']]],
-    'green',
+    'case',
+    ['==', ['downcase', ['to-string', ['coalesce', ['get', 'colour'], '']]], 'green'],
     '#00c503',
-    'red',
-    '#e31a1c',
-    'yellow',
-    '#ffd52b',
-    'blue',
-    '#1f78b4',
-    'orange',
-    '#ff7f00',
-    'white',
-    '#ffffff',
-    ['get', 'colour'],
+    ['to-color', ['get', 'colour'], MARKING_DEFAULT],
   ] as ExpressionSpecification
 }
 
@@ -362,7 +351,7 @@ export function markingFurnitureLayers(): LayerSpecification[] {
       ),
       paint: {
         'fill-color': markingColor(),
-        'fill-opacity': 1,
+        'fill-opacity': ROAD_MARKING_WAY_OPACITY,
       },
     })
 
@@ -383,8 +372,8 @@ export function markingFurnitureLayers(): LayerSpecification[] {
       ),
       paint: {
         'fill-color': surfaceColourFill(),
-        // QGIS surface-colour symbol alpha is 0.45 for all colours.
-        'fill-opacity': 0.45,
+        // QGIS symbol alpha 0.45 × layer opacity 0.67.
+        'fill-opacity': 0.45 * ROAD_MARKING_WAY_OPACITY,
       },
     })
 
@@ -689,11 +678,12 @@ export function treeLayers(): LayerSpecification[] {
     } as never,
   })
 
-  // QGIS trunk labeling: `ref` at 7 pt (only when present).
+  // QGIS trunk labeling: `ref`, 7 pt #502d16 α 0.75, buffer #bddbbd α 0.75, below 1:750 only.
   layers.push({
     id: 'tree-ref',
     type: 'symbol',
     ...treeBase,
+    minzoom: scaleToZoom(750),
     filter: f([
       'all',
       ['has', 'ref'],
@@ -702,16 +692,18 @@ export function treeLayers(): LayerSpecification[] {
     layout: {
       'text-field': ['to-string', ['get', 'ref']],
       'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
-      'text-size': 10,
+      // 7 pt @ 96 DPI
+      'text-size': 9.3,
       'text-offset': [0, 1.1],
       'text-anchor': 'top',
       'text-optional': true,
       'text-allow-overlap': false,
     },
     paint: {
-      'text-color': '#5a5740',
-      'text-halo-color': 'rgba(237,237,237,0.9)',
-      'text-halo-width': 1,
+      'text-color': '#502d16',
+      'text-opacity': 0.75,
+      'text-halo-color': 'rgba(189,219,189,0.75)',
+      'text-halo-width': 1.5,
     },
   })
 

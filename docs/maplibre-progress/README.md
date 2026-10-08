@@ -12,6 +12,7 @@ The QGIS raster tiles are the reference.
 | [03-inner-shadows-and-assets](./03-inner-shadows-and-assets/README.md) | Inner shadows (`fill-layer-blur-mode`), tree crown textures, correct icons |
 | [04-flattened-trees-and-water](./04-flattened-trees-and-water/README.md) | `symbol-layer-opacity` for tree crowns, baked crown shadows, pool and water edges |
 | [05-road-marking-dashes](./05-road-marking-dashes/README.md) | Dash lengths in ground metres, marking opacity; notes on MapLibre vs QGIS dashes |
+| [06-scale-gates-labels-playground](./06-scale-gates-labels-playground/README.md) | Scale→zoom off-by-one, QGIS label colours, playground and marking colour fixes |
 
 ## Adding a step
 

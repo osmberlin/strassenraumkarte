@@ -88,6 +88,7 @@ patch. Tracked here until fixed.
 - [ ] Effect helpers (glows only — shadows are patched): blurred lines peak at half the stated opacity and inner effects peak
       inside the polygon instead of at its edge.
 - [x] Dash lengths scale with the data-driven line width (`detail.ts`).
+- [x] QGIS scale gates were converted to zoom without the 512 px tile offset (one zoom late).
 - [ ] Dash phase restarts at tile edges (MapLibre limitation, see progress step 05).
 - [x] `/symbols/*` is only served by the dev server, not by `vite preview` or a build.
 - [ ] Unused sprites (`forest`, `gravel`, `flowerbed`). (`water` is used now.)

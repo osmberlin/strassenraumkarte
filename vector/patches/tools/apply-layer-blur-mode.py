@@ -36,8 +36,10 @@ sub(p, 'uniform sampler2D u_image;uniform float u_opacity;uniform vec2 u_step;in
        'uniform sampler2D u_image;uniform sampler2D u_source;uniform float u_opacity;uniform float u_mode;uniform vec2 u_step;in vec2 v_pos;const int TAPS=16;')
 sub(p, 'fragColor=sum/total*u_opacity;',
        'vec4 blurred=sum/total;'
-       'if (u_mode>1.5) {blurred=texture(u_source,v_pos)*clamp(2.0*blurred.a-1.0,0.0,1.0);}'
-       'else if (u_mode>0.5) {blurred=texture(u_source,v_pos)*(1.0-blurred.a);}'
+       # b is the blurred alpha relative to the source alpha, so a per-feature
+       # fill-opacity < 1 still reads as "fully inside" (b = 1) away from the edge.
+       'if (u_mode>0.5) {vec4 source=texture(u_source,v_pos);float b=clamp(blurred.a/max(source.a,0.001),0.0,1.0);'
+       'blurred=source*(u_mode>1.5 ? clamp(2.0*b-1.0,0.0,1.0) : 1.0-b);}'
        'fragColor=blurred*u_opacity;')
 sub(p, '''	"u_opacity": new Uniform1f(context, locations.u_opacity),
 	"u_step": new Uniform2f(context, locations.u_step)

@@ -83,3 +83,14 @@ export function metresToPixelsAtZoom(m: number, zoom: number, lat: number = DEFA
 export function mmToPixels(mm: number): number {
   return (mm / 25.4) * 96
 }
+
+/**
+ * QGIS map scale denominator → MapLibre zoom.
+ *
+ * QGIS renders 256 px tiles at 96 DPI in EPSG:3857, so tile zoom t has scale
+ * 591 657 528 / 2^t (no latitude term). MapLibre counts 512 px tiles: its zoom is t − 1.
+ * Forgetting the −1 shows every scale-gated layer one zoom level too late.
+ */
+export function scaleToZoom(scaleDenominator: number): number {
+  return Math.round((Math.log2(591_657_528 / scaleDenominator) - 1) * 100) / 100
+}

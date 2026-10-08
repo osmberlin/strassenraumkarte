@@ -22,7 +22,8 @@ const PLAYGROUND_MINZ = 15
 
 const PLAYGROUND_FILL = '#d2c8a0'
 const PLAYGROUND_OUTLINE = '#b7916e'
-const PLAYGROUND_CLIMB = '#e77148'
+/** #d2c8a0 with the QGIS cross-hatch (#b7916e, ~19 % coverage) mixed in. */
+const PLAYGROUND_CLIMB = '#cdbe96'
 
 function f(expr: ExpressionSpecification): FilterSpecification {
   return expr as FilterSpecification
@@ -523,7 +524,9 @@ export function furnitureLayersForBucket(bucketId: OsmLayerBucketId): LayerSpeci
     'climbingframe',
     b,
     f(['==', ['get', 'playground'], 'climbingframe']),
-    { color: PLAYGROUND_CLIMB, outline: '#232323', outlineWidthM: 0.26, minzoom: PLAYGROUND_MINZ },
+    // QGIS: the default fill plus a 45°/135° cross-hatch (#b7916e α 0.2, 0.24 m lines every
+    // 0.48 m). That is ~2.6 px per period at z18 — drawn as the resulting flat tint.
+    { color: PLAYGROUND_CLIMB, outline: PLAYGROUND_OUTLINE, outlineWidthM: 0.12, minzoom: PLAYGROUND_MINZ },
   )
   pushFill(
     layers,
