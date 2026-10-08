@@ -64,7 +64,7 @@ QGIS MapUnit sizes use `@mercator_scale`. MapLibre paints CSS px on 512 tiles:
 | QGIS | MapLibre approximation | Known deviation |
 | --- | --- | --- |
 | dropShadow | buildings: `layerShadow` (blur + multiply patch); elsewhere translated fill + blurred outline | buildings close to QGIS; others softer / weaker |
-| innerShadow | negative `line-offset` + `line-blur` | banded vs continuous |
+| innerShadow | `fill-layer-blur-mode: inner-edge` (patch), multiplied | close to QGIS |
 | outerGlow | two stacked blurred outlines | join artefacts if too wide |
 | Shapeburst / gradients | 2–3 inward blurred `line` bands (`shore_m`) | roof shape skipped (experimental magma/#990003); water depth green ramp omitted; shoreline banded |
 | RasterFill textures (Multiply) | `fill-pattern` from sprite + `fill-layer-blend: multiply` (patch) | no per-feature rotation / ground-metre scale (G1 surface table) |
@@ -79,6 +79,7 @@ MapLibre is patched locally (`patches/`, applied by `bun install`) — see [docs
 | --- | --- |
 | layer blend modes | `fill-layer-blend`, `line-layer-blend`: `multiply` / `screen` / `plus` |
 | layer blur | `fill-layer-blur`, `line-layer-blur`: Gaussian blur radius in px (drop shadows via `layerShadow`) |
+| layer blur mode | `fill-layer-blur-mode`: `inner-edge` (inner shadow) / `inner-core` |
 
 ## Style modules
 

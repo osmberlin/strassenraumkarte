@@ -5,7 +5,11 @@
  */
 import { describe, expect, test } from 'bun:test'
 import { validateStyleMin } from '@maplibre/maplibre-gl-style-spec'
-import type { CircleLayerSpecification, LineLayerSpecification } from '@maplibre/maplibre-gl-style-spec'
+import type {
+  CircleLayerSpecification,
+  FillLayerSpecification,
+  LineLayerSpecification,
+} from '@maplibre/maplibre-gl-style-spec'
 
 import { buildStyle } from './build-style'
 import {
@@ -119,14 +123,15 @@ describe('effects', () => {
     expect(fill.paint?.['fill-translate']).toBe(line.paint?.['line-translate'])
   })
 
-  test('innerShadow: line-offset negative at stops; width equals blur when widthM omitted', () => {
-    const [line] = innerShadow('is', base, { blurM: 4, color: '#000' }) as LineLayerSpecification[]
-    expect(line.paint?.['line-width']).toEqual(line.paint?.['line-blur'])
-    const offset = line.paint?.['line-offset'] as unknown[]
-    expect(offset[0]).toBe('interpolate')
-    // stops: z15 value at [4], z20 at [6]
-    expect(offset[4] as number).toBeLessThan(0)
-    expect(offset[6] as number).toBeLessThan(0)
+  test('innerShadow: one multiplied inner-edge fill, blur in MapUnits', () => {
+    const [fill] = innerShadow('is', base, { blurM: 4, color: '#000' }) as FillLayerSpecification[]
+    expect(fill.type).toBe('fill')
+    expect(fill.paint?.['fill-layer-blur-mode']).toBe('inner-edge')
+    expect(fill.paint?.['fill-layer-blend']).toBe('multiply')
+    const blur = fill.paint?.['fill-layer-blur'] as unknown[]
+    // MapUnits convert at the equator: stops are z15 at [4], z20 at [6].
+    expect(blur[4] as number).toBeCloseTo(metresToPixelsAtZoom(4, 15, 0))
+    expect(blur[6] as number).toBeCloseTo(metresToPixelsAtZoom(4, 20, 0))
   })
 
   test('outerGlow: dual layers; outer width stop > inner; each matched blur', () => {
@@ -143,14 +148,13 @@ describe('effects', () => {
     expect(outerW[4] as number).toBeGreaterThan(innerW[4] as number)
   })
 
-  test('highwayInnerBlur: line-offset present and width === blur (same ref)', () => {
-    const [line] = highwayInnerBlur('hw', base) as LineLayerSpecification[]
-    expect(line.paint?.['line-width']).toBe(line.paint?.['line-blur'])
-    expect(line.paint?.['line-offset']).toBeDefined()
-    const offset = line.paint?.['line-offset'] as unknown[]
-    expect(offset[0]).toBe('interpolate')
-    expect(offset[4] as number).toBeLessThan(0)
-    expect(line.paint?.['line-opacity']).toBe(0.67)
+  test('highwayInnerBlur: MM blur ramp, source colour multiplied at 0.67', () => {
+    const [fill] = highwayInnerBlur('hw', base) as FillLayerSpecification[]
+    const blur = fill.paint?.['fill-layer-blur'] as unknown[]
+    expect(blur[0]).toBe('interpolate')
+    expect(blur).toContain(mmToPixels(0.8))
+    expect(fill.paint?.['fill-layer-opacity']).toBe(0.67)
+    expect(fill.paint?.['fill-layer-blend']).toBe('multiply')
   })
 
   test('innerGlow: dual layers with negative offsets and matched blur', () => {
@@ -176,19 +180,19 @@ describe('buildStyle', () => {
     expect(errors).toEqual([])
   })
 
-  test('highway blur layers have line-offset and width===blur', () => {
+  test('highway blur layers: inner-edge fill per OSM bucket at layer opacity 0.67', () => {
     const style = buildStyle({
       url: 'pmtiles://http://127.0.0.1:5177/tiles/strassenraumkarte.pmtiles',
     })
     const blurLayers = style.layers.filter(
-      (l): l is LineLayerSpecification =>
-        l.type === 'line' && l.id.startsWith('highway_area-blur-'),
+      (l): l is FillLayerSpecification =>
+        l.type === 'fill' && l.id.startsWith('highway_area-blur-'),
     )
     expect(blurLayers.length).toBe(OSM_LAYER_BUCKETS.length)
     for (const layer of blurLayers) {
-      expect(layer.paint?.['line-width']).toBe(layer.paint?.['line-blur'])
-      expect(layer.paint?.['line-offset']).toBeDefined()
-      expect(layer.paint?.['line-opacity']).toBe(0.67)
+      expect(layer.paint?.['fill-layer-blur-mode']).toBe('inner-edge')
+      expect(layer.paint?.['fill-layer-blur']).toBeDefined()
+      expect(layer.paint?.['fill-layer-opacity']).toBe(0.67)
     }
   })
 

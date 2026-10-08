@@ -236,34 +236,49 @@ export function dropShadow(
 }
 
 /**
- * Inward soft edge on a polygon: negative line-offset (~ half width) + line-blur.
+ * QGIS innerShadow (offset 0): the shadow colour inside the polygon, strongest at
+ * its edge and gone one blur radius further in, multiplied onto the fill.
+ * `fill-layer-blur-mode: inner-edge` (local MapLibre patch) — see docs/maplibre-patches.md.
+ * `blurM` is the QGIS `blur_level` in MapUnits. Insert *after* the fill it shades.
  */
 export function innerShadow(
   idPrefix: string,
   base: LayerBase,
   options: InnerShadowOptions,
 ): LayerSpecification[] {
-  const lat = options.lat ?? DEFAULT_LAT
-  const widthM = options.widthM ?? options.blurM
-  const width = metresInterpolate(widthM, 1, lat)
-  const blur = metresInterpolate(options.blurM, 1, lat)
-  const offset = metresInterpolate(widthM, -0.5, lat)
+  return [
+    innerEdgeLayer(`${idPrefix}-inner`, base, {
+      color: options.color,
+      opacity: options.opacity ?? 1,
+      blur: metresInterpolate(options.blurM, 1, MAP_UNIT_LAT),
+    }),
+  ]
+}
 
-  const line: LineLayerSpecification = {
-    id: `${idPrefix}-inner`,
-    type: 'line',
+function innerEdgeLayer(
+  id: string,
+  base: LayerBase,
+  options: {
+    color: EffectColor
+    opacity: number | ExpressionSpecification
+    blur: ExpressionSpecification
+    layerOpacity?: number
+  },
+): FillLayerSpecification {
+  return {
+    id,
+    type: 'fill',
     ...base,
-    layout: { 'line-cap': 'butt', 'line-join': 'round' },
     paint: {
-      'line-color': options.color,
-      'line-opacity': options.opacity ?? 1,
-      'line-width': width,
-      'line-blur': blur,
-      'line-offset': offset,
+      'fill-color': options.color,
+      'fill-opacity': options.opacity,
+      'fill-antialias': false,
+      'fill-layer-opacity': options.layerOpacity ?? 1,
+      'fill-layer-blur': options.blur,
+      'fill-layer-blur-mode': 'inner-edge',
+      'fill-layer-blend': 'multiply',
     },
   }
-
-  return [line]
 }
 
 /**
@@ -374,31 +389,20 @@ export const HIGHWAY_INNER_BLUR_MM: ReadonlyArray<{ zoom: number; mm: number }> 
 ]
 
 /**
- * Inward soft carriageway edge: matched line-width/line-blur from HIGHWAY_INNER_BLUR_MM
- * plus negative line-offset (half width). Default colour/opacity match QGIS.
+ * Soft darkening along the inside of the carriageway edge: QGIS `z14`…`z20`
+ * layers (innerShadow in paper MM per zoom, source hidden, layer opacity 0.67).
  */
 export function highwayInnerBlur(
   idPrefix: string,
   base: LayerBase,
   options: HighwayInnerBlurOptions = {},
 ): LayerSpecification[] {
-  const width = highwayBlurRamp(1)
-  const blur = width
-  const offset = highwayBlurRamp(-0.5)
-
-  const line: LineLayerSpecification = {
-    id: idPrefix,
-    type: 'line',
-    ...base,
-    layout: { 'line-cap': 'round', 'line-join': 'round' },
-    paint: {
-      'line-color': options.color ?? '#232323',
-      'line-opacity': options.opacity ?? 0.67,
-      'line-width': width,
-      'line-blur': blur,
-      'line-offset': offset,
-    },
-  }
-
-  return [line]
+  return [
+    innerEdgeLayer(idPrefix, base, {
+      color: options.color ?? '#232323',
+      opacity: 1,
+      layerOpacity: typeof options.opacity === 'number' ? options.opacity : 0.67,
+      blur: highwayBlurRamp(1),
+    }),
+  ]
 }

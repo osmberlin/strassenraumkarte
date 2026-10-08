@@ -247,7 +247,7 @@ export function groundLayers(): LayerSpecification[] {
     ...innerShadow('water', waterBase, {
       blurM: 4,
       color: WATER_INNER,
-      opacity: 0.85,
+      opacity: 1,
     }),
   )
 

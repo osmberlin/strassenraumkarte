@@ -1,6 +1,9 @@
 diff --git a/node_modules/@maplibre/maplibre-gl-style-spec/.bun-tag-20ea4fc8bf769a4d b/.bun-tag-20ea4fc8bf769a4d
 new file mode 100644
 index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/@maplibre/maplibre-gl-style-spec/.bun-tag-75bcce83d8d87b38 b/.bun-tag-75bcce83d8d87b38
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
 diff --git a/node_modules/@maplibre/maplibre-gl-style-spec/.bun-tag-a7da24cba4556759 b/.bun-tag-a7da24cba4556759
 new file mode 100644
 index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
@@ -14,10 +17,10 @@ diff --git a/dist/gl-style-validate.mjs b/dist/gl-style-validate.mjs
 old mode 100644
 new mode 100755
 diff --git a/dist/index.cjs b/dist/index.cjs
-index 4fd5a0897723ae5af1b1264fdbc1e6d33b08d2a8..56528592d1f5e9a8a5d5b538bca0b095853f7730 100644
+index 4fd5a0897723ae5af1b1264fdbc1e6d33b08d2a8..07816f9fa17a754c0af7d5e6a3b90ef077ec3ddb 100644
 --- a/dist/index.cjs
 +++ b/dist/index.cjs
-@@ -1451,7 +1451,29 @@
+@@ -1451,7 +1451,39 @@
  				},
  				"property-type": "data-driven"
  			},
@@ -44,11 +47,21 @@ index 4fd5a0897723ae5af1b1264fdbc1e6d33b08d2a8..56528592d1f5e9a8a5d5b538bca0b095
 +			},
 +			"property-type": "data-constant"
 +		},
++		"fill-layer-blur-mode": {
++			"type": "enum",
++			"values": {
++				"normal": {},
++				"inner-edge": {},
++				"inner-core": {}
++			},
++			"default": "normal",
++			"property-type": "data-constant"
++		},
 +		"fill-layer-opacity": {
  				"type": "number",
  				"default": 1,
  				"minimum": 0,
-@@ -1653,7 +1675,29 @@
+@@ -1653,7 +1685,39 @@
  				},
  				"property-type": "data-driven"
  			},
@@ -75,63 +88,83 @@ index 4fd5a0897723ae5af1b1264fdbc1e6d33b08d2a8..56528592d1f5e9a8a5d5b538bca0b095
 +			},
 +			"property-type": "data-constant"
 +		},
++		"line-layer-blur-mode": {
++			"type": "enum",
++			"values": {
++				"normal": {},
++				"inner-edge": {},
++				"inner-core": {}
++			},
++			"default": "normal",
++			"property-type": "data-constant"
++		},
 +		"line-layer-opacity": {
  				"type": "number",
  				"default": 1,
  				"minimum": 0,
 diff --git a/dist/index.d.ts b/dist/index.d.ts
-index ab4425f6be05adb0b331af6f8fe15455bbbd4a62..7906e4ca805fda793001eb4d0bd329b213d45ebd 100644
+index ab4425f6be05adb0b331af6f8fe15455bbbd4a62..a0e8e8cff5dc4438146d7c387e5a094a3577ff5a 100644
 --- a/dist/index.d.ts
 +++ b/dist/index.d.ts
-@@ -8946,6 +8946,10 @@ type FillLayerSpecification = {
+@@ -8946,6 +8946,14 @@ type FillLayerSpecification = {
       * ```
       */
      "fill-layer-opacity"?: PropertyValueSpecification<number>;
 +    /** [strassenraumkarte patch] Gaussian blur radius (px) applied to the whole layer. */
 +    "fill-layer-blur"?: PropertyValueSpecification<number>;
++    /** [strassenraumkarte patch] How the blurred layer is combined with the unblurred one. */
++    "fill-layer-blur-mode"?: "normal" | "inner-edge" | "inner-core";
++    /** [strassenraumkarte patch] How the blurred layer is combined with the unblurred one. */
++    "fill-layer-blur-mode"?: "normal" | "inner-edge" | "inner-core";
 +    /** [strassenraumkarte patch] Layer compositing mode, see maplibre-style-spec#1661. */
 +    "fill-layer-blend"?: "normal" | "multiply" | "screen" | "plus";
      "fill-layer-opacity-transition"?: TransitionSpecification;
      /**
       * The color of the filled part of this layer. This color can be specified as `rgba` with an alpha component and the color's opacity will not affect the opacity of the 1px stroke, if it is used. When used with an SDF fill pattern, this serves as the foreground color of the pattern.
-@@ -9102,6 +9106,10 @@ type LineLayerSpecification = {
+@@ -9102,6 +9110,12 @@ type LineLayerSpecification = {
       * ```
       */
      "line-layer-opacity"?: PropertyValueSpecification<number>;
 +    /** [strassenraumkarte patch] Gaussian blur radius (px) applied to the whole layer. */
 +    "line-layer-blur"?: PropertyValueSpecification<number>;
++    /** [strassenraumkarte patch] How the blurred layer is combined with the unblurred one. */
++    "line-layer-blur-mode"?: "normal" | "inner-edge" | "inner-core";
 +    /** [strassenraumkarte patch] Layer compositing mode, see maplibre-style-spec#1661. */
 +    "line-layer-blend"?: "normal" | "multiply" | "screen" | "plus";
      "line-layer-opacity-transition"?: TransitionSpecification;
      /**
       * The color with which the line will be drawn.
-@@ -10525,6 +10533,10 @@ type AllPaintProperties = {
+@@ -10525,6 +10539,12 @@ type AllPaintProperties = {
     * ```
     */
    "fill-layer-opacity"?: PropertyValueSpecification<number>;
 +  /** [strassenraumkarte patch] Gaussian blur radius (px) applied to the whole layer. */
 +  "fill-layer-blur"?: PropertyValueSpecification<number>;
++  /** [strassenraumkarte patch] How the blurred layer is combined with the unblurred one. */
++  "fill-layer-blur-mode"?: "normal" | "inner-edge" | "inner-core";
 +  /** [strassenraumkarte patch] Layer compositing mode, see maplibre-style-spec#1661. */
 +  "fill-layer-blend"?: "normal" | "multiply" | "screen" | "plus";
    "fill-layer-opacity-transition"?: TransitionSpecification;
    /**
     * The color of the filled part of this layer. This color can be specified as `rgba` with an alpha component and the color's opacity will not affect the opacity of the 1px stroke, if it is used. When used with an SDF fill pattern, this serves as the foreground color of the pattern.
-@@ -10586,6 +10598,10 @@ type AllPaintProperties = {
+@@ -10586,6 +10606,12 @@ type AllPaintProperties = {
     * ```
     */
    "line-layer-opacity"?: PropertyValueSpecification<number>;
 +  /** [strassenraumkarte patch] Gaussian blur radius (px) applied to the whole layer. */
 +  "line-layer-blur"?: PropertyValueSpecification<number>;
++  /** [strassenraumkarte patch] How the blurred layer is combined with the unblurred one. */
++  "line-layer-blur-mode"?: "normal" | "inner-edge" | "inner-core";
 +  /** [strassenraumkarte patch] Layer compositing mode, see maplibre-style-spec#1661. */
 +  "line-layer-blend"?: "normal" | "multiply" | "screen" | "plus";
    "line-layer-opacity-transition"?: TransitionSpecification;
    /**
     * The color with which the line will be drawn.
 diff --git a/dist/index.mjs b/dist/index.mjs
-index 1f8cb92016301a415b6ff3474af9d123c654427c..203fe4d99e7b2e28cd814ef3dfd1fa13b420c322 100644
+index 1f8cb92016301a415b6ff3474af9d123c654427c..11ef3f5af2d6b21ed2cf1fe493cb49c88bcb663d 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
-@@ -1447,6 +1447,28 @@ var v8_default = {
+@@ -1447,6 +1447,38 @@ var v8_default = {
  			},
  			"property-type": "data-driven"
  		},
@@ -157,10 +190,20 @@ index 1f8cb92016301a415b6ff3474af9d123c654427c..203fe4d99e7b2e28cd814ef3dfd1fa13
 +			},
 +			"property-type": "data-constant"
 +		},
++		"fill-layer-blur-mode": {
++			"type": "enum",
++			"values": {
++				"normal": {},
++				"inner-edge": {},
++				"inner-core": {}
++			},
++			"default": "normal",
++			"property-type": "data-constant"
++		},
  		"fill-layer-opacity": {
  			"type": "number",
  			"default": 1,
-@@ -1649,6 +1671,28 @@ var v8_default = {
+@@ -1649,6 +1681,38 @@ var v8_default = {
  			},
  			"property-type": "data-driven"
  		},
@@ -184,6 +227,16 @@ index 1f8cb92016301a415b6ff3474af9d123c654427c..203fe4d99e7b2e28cd814ef3dfd1fa13
 +				"interpolated": true,
 +				"parameters": ["zoom", "global-state"]
 +			},
++			"property-type": "data-constant"
++		},
++		"line-layer-blur-mode": {
++			"type": "enum",
++			"values": {
++				"normal": {},
++				"inner-edge": {},
++				"inner-core": {}
++			},
++			"default": "normal",
 +			"property-type": "data-constant"
 +		},
  		"line-layer-opacity": {

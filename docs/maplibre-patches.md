@@ -136,5 +136,19 @@ Things to know:
   approximated by edge clamping.
 - Cost: two extra full-screen passes per blurred layer.
 
-`patches/tools/apply-layer-blur.py` is the script that made the edits; it documents every
-anchor and is the starting point when re-applying to a new MapLibre version.
+#### `{fill,line}-layer-blur-mode` — inner shadows and edge fades
+
+Combines the blurred layer alpha `b` with the unblurred layer `S` in the final pass:
+
+| Mode | Output | Use |
+|---|---|---|
+| `normal` | blurred layer | drop shadow, outer glow |
+| `inner-edge` | `S·(1 − b)` | QGIS innerShadow / innerGlow: strongest at the polygon edge, gone one radius inside, nothing outside |
+| `inner-core` | `S·(2b − 1)` | zero at the edge, full one radius inside — a cheap stand-in for a Shapeburst fade |
+
+`innerShadow()` and `highwayInnerBlur()` in `src/style/effects.ts` use `inner-edge`. Before the
+patch these were offset blurred lines, which peaked *inside* the polygon and read as a hard
+kerb line along every carriageway.
+
+`patches/tools/apply-layer-blur.py` and `apply-layer-blur-mode.py` are the scripts that made the edits; the first documents every
+anchor and both are the starting point when re-applying to a new MapLibre version.
