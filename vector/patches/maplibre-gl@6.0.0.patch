@@ -19,11 +19,14 @@ index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2
 diff --git a/node_modules/maplibre-gl/.bun-tag-9febd1f7b1cf349d b/.bun-tag-9febd1f7b1cf349d
 new file mode 100644
 index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/maplibre-gl/.bun-tag-ac8ae9ebb61d086c b/.bun-tag-ac8ae9ebb61d086c
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
 diff --git a/node_modules/maplibre-gl/.bun-tag-d004cb1c35cd6aff b/.bun-tag-d004cb1c35cd6aff
 new file mode 100644
 index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
 diff --git a/dist/maplibre-gl-dev.mjs b/dist/maplibre-gl-dev.mjs
-index 978bcadd8e5ff1cef5c65e1973313ada4f3d584b..75e1d70bff2fe0743e79240cc6d826b7314b4909 100644
+index 978bcadd8e5ff1cef5c65e1973313ada4f3d584b..ecc3c7cac4b44da09ba425d4229595a2b1c613f7 100644
 --- a/dist/maplibre-gl-dev.mjs
 +++ b/dist/maplibre-gl-dev.mjs
 @@ -8288,11 +8288,12 @@ const shaders = {
@@ -40,7 +43,7 @@ index 978bcadd8e5ff1cef5c65e1973313ada4f3d584b..75e1d70bff2fe0743e79240cc6d826b7
 +	linePattern: prepare("#ifdef GL_ES\nprecision highp float;\n#endif\nuniform lowp float u_device_pixel_ratio;uniform vec2 u_texsize;uniform float u_fade;uniform mediump vec3 u_scale;uniform sampler2D u_image;in vec2 v_normal;flat in vec2 v_width2;in float v_linesofar;in float v_gamma_scale;flat in float v_width;\n#ifdef GLOBE\nin float v_depth;\n#endif\n#pragma maplibre: define lowp vec4 pattern_from\n#pragma maplibre: define lowp vec4 pattern_to\n#pragma maplibre: define lowp float pixel_ratio_from\n#pragma maplibre: define lowp float pixel_ratio_to\n#pragma maplibre: define lowp float blur\n#pragma maplibre: define lowp float opacity\nvoid main() {\n#pragma maplibre: initialize mediump vec4 pattern_from\n#pragma maplibre: initialize mediump vec4 pattern_to\n#pragma maplibre: initialize lowp float pixel_ratio_from\n#pragma maplibre: initialize lowp float pixel_ratio_to\n#pragma maplibre: initialize lowp float blur\n#pragma maplibre: initialize lowp float opacity\nvec2 pattern_tl_a=pattern_from.xy;vec2 pattern_br_a=pattern_from.zw;vec2 pattern_tl_b=pattern_to.xy;vec2 pattern_br_b=pattern_to.zw;float tileZoomRatio=u_scale.x;float fromScale=u_scale.y;float toScale=u_scale.z;vec2 display_size_a=(pattern_br_a-pattern_tl_a)/pixel_ratio_from;vec2 display_size_b=(pattern_br_b-pattern_tl_b)/pixel_ratio_to;vec2 pattern_size_a=vec2(display_size_a.x*fromScale/tileZoomRatio,display_size_a.y);vec2 pattern_size_b=vec2(display_size_b.x*toScale/tileZoomRatio,display_size_b.y);float aspect_a=display_size_a.y/v_width;float aspect_b=display_size_b.y/v_width;float dist=length(v_normal)*v_width2.s;float blur2=(blur+1.0/u_device_pixel_ratio)*v_gamma_scale;float alpha=clamp(min(dist-(v_width2.t-blur2),v_width2.s-dist)/blur2,0.0,1.0);if (blur==0.0 && v_width2.t==0.0) {float hairline_o=v_width2.s*u_device_pixel_ratio;float hairline_w=max(2.0*hairline_o-1.0,0.0);if (hairline_w<1.0) {alpha=min(alpha*hairline_w*(2.0-hairline_w)/(hairline_o*hairline_o),1.0);}}float x_a=mod(v_linesofar/pattern_size_a.x*aspect_a,1.0);float x_b=mod(v_linesofar/pattern_size_b.x*aspect_b,1.0);float y=0.5*v_normal.y+0.5;vec2 texel_size=1.0/u_texsize;vec2 pos_a=mix(pattern_tl_a*texel_size-texel_size,pattern_br_a*texel_size+texel_size,vec2(x_a,y));vec2 pos_b=mix(pattern_tl_b*texel_size-texel_size,pattern_br_b*texel_size+texel_size,vec2(x_b,y));vec4 color=mix(texture(u_image,pos_a),texture(u_image,pos_b),u_fade);fragColor=color*alpha*opacity;\n#ifdef GLOBE\nif (v_depth > 1.0) {discard;}\n#endif\n#ifdef OVERDRAW_INSPECTOR\nfragColor=vec4(1.0);\n#endif\n}", "\n#define scale 0.015873016\n#define LINE_DISTANCE_SCALE 2.0\nlayout(location=0) in vec2 a_pos_normal;layout(location=1) in vec4 a_data;uniform vec2 u_translation;uniform vec2 u_units_to_pixels;uniform mediump float u_ratio;uniform lowp float u_device_pixel_ratio;out vec2 v_normal;flat out vec2 v_width2;out float v_linesofar;out float v_gamma_scale;flat out float v_width;\n#ifdef GLOBE\nout float v_depth;\n#endif\n#pragma maplibre: define lowp float blur\n#pragma maplibre: define lowp float opacity\n#pragma maplibre: define lowp float offset\n#pragma maplibre: define mediump float gapwidth\n#pragma maplibre: define mediump float width\n#pragma maplibre: define lowp float floorwidth\n#pragma maplibre: define lowp vec4 pattern_from\n#pragma maplibre: define lowp vec4 pattern_to\n#pragma maplibre: define lowp float pixel_ratio_from\n#pragma maplibre: define lowp float pixel_ratio_to\nvoid main() {\n#pragma maplibre: initialize lowp float blur\n#pragma maplibre: initialize lowp float opacity\n#pragma maplibre: initialize lowp float offset\n#pragma maplibre: initialize mediump float gapwidth\n#pragma maplibre: initialize mediump float width\n#pragma maplibre: initialize lowp float floorwidth\n#pragma maplibre: initialize mediump vec4 pattern_from\n#pragma maplibre: initialize mediump vec4 pattern_to\n#pragma maplibre: initialize lowp float pixel_ratio_from\n#pragma maplibre: initialize lowp float pixel_ratio_to\nif (opacity < 0.01) {gl_Position=vec4(-2.0,-2.0,-2.0,1.0);return;}float ANTIALIASING=1.0/u_device_pixel_ratio/2.0;vec2 a_extrude=a_data.xy-128.0;float a_direction=mod(a_data.z,4.0)-1.0;float a_linesofar=(floor(a_data.z/4.0)+a_data.w*64.0)*LINE_DISTANCE_SCALE;vec2 pos=floor(a_pos_normal*0.5);mediump vec2 normal=a_pos_normal-2.0*pos;normal.y=normal.y*2.0-1.0;v_normal=normal;gapwidth=gapwidth/2.0;float halfwidth=width/2.0;offset=-1.0*offset;float inset=gapwidth+(gapwidth > 0.0 ? ANTIALIASING : 0.0);float outset=gapwidth+halfwidth*(gapwidth > 0.0 ? 2.0 : 1.0)+(halfwidth==0.0 ? 0.0 : ANTIALIASING);mediump vec2 dist=outset*a_extrude*scale;mediump float u=0.5*a_direction;mediump float t=1.0-abs(u);mediump vec2 offset2=offset*a_extrude*scale*normal.y*mat2(t,-u,u,t);float adjustedThickness=projectLineThickness(pos.y);vec4 projected_no_extrude=projectTile(pos+offset2/u_ratio*adjustedThickness+u_translation);vec4 projected_with_extrude=projectTile(pos+offset2/u_ratio*adjustedThickness+u_translation+dist/u_ratio*adjustedThickness);gl_Position=projected_with_extrude;\n#ifdef GLOBE\nv_depth=gl_Position.z/gl_Position.w;\n#endif\n#ifdef TERRAIN3D\nv_gamma_scale=1.0;\n#else\nfloat extrude_length_without_perspective=length(dist);float extrude_length_with_perspective=length((projected_with_extrude.xy-projected_no_extrude.xy)/projected_with_extrude.w*u_units_to_pixels);v_gamma_scale=extrude_length_without_perspective/extrude_length_with_perspective;\n#endif\nv_linesofar=a_linesofar;v_width2=vec2(outset,inset);v_width=floorwidth;}"),
 +	lineSDF: prepare("uniform lowp float u_device_pixel_ratio;uniform lowp float u_lineatlas_width;uniform sampler2D u_image;uniform float u_mix;in vec2 v_normal;flat in vec2 v_width2;in vec2 v_tex_a;in vec2 v_tex_b;in float v_gamma_scale;\n#ifdef GLOBE\nin float v_depth;\n#endif\n#pragma maplibre: define highp vec4 color\n#pragma maplibre: define lowp float blur\n#pragma maplibre: define lowp float opacity\n#pragma maplibre: define mediump float width\n#pragma maplibre: define lowp float floorwidth\n#pragma maplibre: define mediump vec4 dasharray_from\n#pragma maplibre: define mediump vec4 dasharray_to\nvoid main() {\n#pragma maplibre: initialize highp vec4 color\n#pragma maplibre: initialize lowp float blur\n#pragma maplibre: initialize lowp float opacity\n#pragma maplibre: initialize mediump float width\n#pragma maplibre: initialize lowp float floorwidth\n#pragma maplibre: initialize mediump vec4 dasharray_from\n#pragma maplibre: initialize mediump vec4 dasharray_to\nfloat dist=length(v_normal)*v_width2.s;float blur2=(blur+1.0/u_device_pixel_ratio)*v_gamma_scale;float alpha=clamp(min(dist-(v_width2.t-blur2),v_width2.s-dist)/blur2,0.0,1.0);if (blur==0.0 && v_width2.t==0.0) {float hairline_o=v_width2.s*u_device_pixel_ratio;float hairline_w=max(2.0*hairline_o-1.0,0.0);if (hairline_w<1.0) {alpha=min(alpha*hairline_w*(2.0-hairline_w)/(hairline_o*hairline_o),1.0);}}float sdfdist_a=texture(u_image,v_tex_a).a;float sdfdist_b=texture(u_image,v_tex_b).a;float sdfdist=mix(sdfdist_a,sdfdist_b,u_mix);float sdfgamma=(u_lineatlas_width/256.0/u_device_pixel_ratio)/min(dasharray_from.w,dasharray_to.w);alpha*=smoothstep(0.5-sdfgamma/floorwidth,0.5+sdfgamma/floorwidth,sdfdist);fragColor=color*(alpha*opacity);\n#ifdef GLOBE\nif (v_depth > 1.0) {discard;}\n#endif\n#ifdef OVERDRAW_INSPECTOR\nfragColor=vec4(1.0);\n#endif\n}", "\n#define scale 0.015873016\n#define LINE_DISTANCE_SCALE 2.0\nlayout(location=0) in vec2 a_pos_normal;layout(location=1) in vec4 a_data;uniform vec2 u_translation;uniform mediump float u_ratio;uniform lowp float u_device_pixel_ratio;uniform vec2 u_units_to_pixels;uniform float u_tileratio;uniform float u_crossfade_from;uniform float u_crossfade_to;uniform float u_lineatlas_height;out vec2 v_normal;flat out vec2 v_width2;out vec2 v_tex_a;out vec2 v_tex_b;out float v_gamma_scale;\n#ifdef GLOBE\nout float v_depth;\n#endif\n#pragma maplibre: define highp vec4 color\n#pragma maplibre: define lowp float blur\n#pragma maplibre: define lowp float opacity\n#pragma maplibre: define mediump float gapwidth\n#pragma maplibre: define lowp float offset\n#pragma maplibre: define mediump float width\n#pragma maplibre: define lowp float floorwidth\n#pragma maplibre: define mediump vec4 dasharray_from\n#pragma maplibre: define mediump vec4 dasharray_to\nvoid main() {\n#pragma maplibre: initialize highp vec4 color\n#pragma maplibre: initialize lowp float blur\n#pragma maplibre: initialize lowp float opacity\n#pragma maplibre: initialize mediump float gapwidth\n#pragma maplibre: initialize lowp float offset\n#pragma maplibre: initialize mediump float width\n#pragma maplibre: initialize lowp float floorwidth\n#pragma maplibre: initialize mediump vec4 dasharray_from\n#pragma maplibre: initialize mediump vec4 dasharray_to\nif (opacity < 0.01) {gl_Position=vec4(-2.0,-2.0,-2.0,1.0);return;}float ANTIALIASING=1.0/u_device_pixel_ratio/2.0;vec2 a_extrude=a_data.xy-128.0;float a_direction=mod(a_data.z,4.0)-1.0;float a_linesofar=(floor(a_data.z/4.0)+a_data.w*64.0)*LINE_DISTANCE_SCALE;vec2 pos=floor(a_pos_normal*0.5);mediump vec2 normal=a_pos_normal-2.0*pos;normal.y=normal.y*2.0-1.0;v_normal=normal;gapwidth=gapwidth/2.0;float halfwidth=width/2.0;offset=-1.0*offset;float inset=gapwidth+(gapwidth > 0.0 ? ANTIALIASING : 0.0);float outset=gapwidth+halfwidth*(gapwidth > 0.0 ? 2.0 : 1.0)+(halfwidth==0.0 ? 0.0 : ANTIALIASING);mediump vec2 dist=outset*a_extrude*scale;mediump float u=0.5*a_direction;mediump float t=1.0-abs(u);mediump vec2 offset2=offset*a_extrude*scale*normal.y*mat2(t,-u,u,t);float adjustedThickness=projectLineThickness(pos.y);vec4 projected_no_extrude=projectTile(pos+offset2/u_ratio*adjustedThickness+u_translation);vec4 projected_with_extrude=projectTile(pos+offset2/u_ratio*adjustedThickness+u_translation+dist/u_ratio*adjustedThickness);gl_Position=projected_with_extrude;\n#ifdef GLOBE\nv_depth=gl_Position.z/gl_Position.w;\n#endif\n#ifdef TERRAIN3D\nv_gamma_scale=1.0;\n#else\nfloat extrude_length_without_perspective=length(dist);float extrude_length_with_perspective=length((projected_with_extrude.xy-projected_no_extrude.xy)/projected_with_extrude.w*u_units_to_pixels);v_gamma_scale=extrude_length_without_perspective/extrude_length_with_perspective;\n#endif\nfloat u_patternscale_a_x=u_tileratio/dasharray_from.w/u_crossfade_from;float u_patternscale_a_y=-dasharray_from.z/2.0/u_lineatlas_height;float u_patternscale_b_x=u_tileratio/dasharray_to.w/u_crossfade_to;float u_patternscale_b_y=-dasharray_to.z/2.0/u_lineatlas_height;v_tex_a=vec2(a_linesofar*u_patternscale_a_x/floorwidth,normal.y*u_patternscale_a_y+(float(dasharray_from.y)+0.5)/u_lineatlas_height);v_tex_b=vec2(a_linesofar*u_patternscale_b_x/floorwidth,normal.y*u_patternscale_b_y+(float(dasharray_to.y)+0.5)/u_lineatlas_height);v_width2=vec2(outset,inset);}"),
 +	lineGradientSDF: prepare("uniform lowp float u_device_pixel_ratio;uniform sampler2D u_image;uniform sampler2D u_image_dash;uniform float u_mix;uniform lowp float u_lineatlas_width;in vec2 v_normal;flat in vec2 v_width2;in vec2 v_tex_a;in vec2 v_tex_b;in float v_gamma_scale;in highp vec2 v_uv;\n#ifdef GLOBE\nin float v_depth;\n#endif\n#pragma maplibre: define lowp float blur\n#pragma maplibre: define lowp float opacity\n#pragma maplibre: define mediump float width\n#pragma maplibre: define lowp float floorwidth\n#pragma maplibre: define mediump vec4 dasharray_from\n#pragma maplibre: define mediump vec4 dasharray_to\nvoid main() {\n#pragma maplibre: initialize lowp float blur\n#pragma maplibre: initialize lowp float opacity\n#pragma maplibre: initialize mediump float width\n#pragma maplibre: initialize lowp float floorwidth\n#pragma maplibre: initialize mediump vec4 dasharray_from\n#pragma maplibre: initialize mediump vec4 dasharray_to\nfloat dist=length(v_normal)*v_width2.s;float blur2=(blur+1.0/u_device_pixel_ratio)*v_gamma_scale;float alpha=clamp(min(dist-(v_width2.t-blur2),v_width2.s-dist)/blur2,0.0,1.0);if (blur==0.0 && v_width2.t==0.0) {float hairline_o=v_width2.s*u_device_pixel_ratio;float hairline_w=max(2.0*hairline_o-1.0,0.0);if (hairline_w<1.0) {alpha=min(alpha*hairline_w*(2.0-hairline_w)/(hairline_o*hairline_o),1.0);}}vec4 color=texture(u_image,v_uv);float sdfdist_a=texture(u_image_dash,v_tex_a).a;float sdfdist_b=texture(u_image_dash,v_tex_b).a;float sdfdist=mix(sdfdist_a,sdfdist_b,u_mix);float sdfgamma=(u_lineatlas_width/256.0)/min(dasharray_from.w,dasharray_to.w);float dash_alpha=smoothstep(0.5-sdfgamma/floorwidth,0.5+sdfgamma/floorwidth,sdfdist);fragColor=color*(alpha*dash_alpha*opacity);\n#ifdef GLOBE\nif (v_depth > 1.0) {discard;}\n#endif\n#ifdef OVERDRAW_INSPECTOR\nfragColor=vec4(1.0);\n#endif\n}", "\n#define scale 0.015873016\n#define LINE_DISTANCE_SCALE 2.0\nlayout(location=0) in vec2 a_pos_normal;layout(location=1) in vec4 a_data;layout(location=2) in float a_uv_x;layout(location=3) in float a_split_index;uniform vec2 u_translation;uniform mediump float u_ratio;uniform lowp float u_device_pixel_ratio;uniform vec2 u_units_to_pixels;uniform float u_image_height;uniform float u_tileratio;uniform float u_crossfade_from;uniform float u_crossfade_to;uniform float u_lineatlas_height;out vec2 v_normal;flat out vec2 v_width2;out float v_gamma_scale;out highp vec2 v_uv;out vec2 v_tex_a;out vec2 v_tex_b;\n#ifdef GLOBE\nout float v_depth;\n#endif\n#pragma maplibre: define lowp float blur\n#pragma maplibre: define lowp float opacity\n#pragma maplibre: define mediump float gapwidth\n#pragma maplibre: define lowp float offset\n#pragma maplibre: define mediump float width\n#pragma maplibre: define lowp float floorwidth\n#pragma maplibre: define mediump vec4 dasharray_from\n#pragma maplibre: define mediump vec4 dasharray_to\nvoid main() {\n#pragma maplibre: initialize lowp float blur\n#pragma maplibre: initialize lowp float opacity\n#pragma maplibre: initialize mediump float gapwidth\n#pragma maplibre: initialize lowp float offset\n#pragma maplibre: initialize mediump float width\n#pragma maplibre: initialize lowp float floorwidth\n#pragma maplibre: initialize mediump vec4 dasharray_from\n#pragma maplibre: initialize mediump vec4 dasharray_to\nif (opacity < 0.01) {gl_Position=vec4(-2.0,-2.0,-2.0,1.0);return;}float ANTIALIASING=1.0/u_device_pixel_ratio/2.0;vec2 a_extrude=a_data.xy-128.0;float a_direction=mod(a_data.z,4.0)-1.0;float a_linesofar=(floor(a_data.z/4.0)+a_data.w*64.0)*LINE_DISTANCE_SCALE;float texel_height=1.0/u_image_height;float half_texel_height=0.5*texel_height;v_uv=vec2(a_uv_x,a_split_index*texel_height-half_texel_height);vec2 pos=floor(a_pos_normal*0.5);mediump vec2 normal=a_pos_normal-2.0*pos;normal.y=normal.y*2.0-1.0;v_normal=normal;gapwidth=gapwidth/2.0;float halfwidth=width/2.0;offset=-1.0*offset;float inset=gapwidth+(gapwidth > 0.0 ? ANTIALIASING : 0.0);float outset=gapwidth+halfwidth*(gapwidth > 0.0 ? 2.0 : 1.0)+(halfwidth==0.0 ? 0.0 : ANTIALIASING);mediump vec2 dist=outset*a_extrude*scale;mediump float u=0.5*a_direction;mediump float t=1.0-abs(u);mediump vec2 offset2=offset*a_extrude*scale*normal.y*mat2(t,-u,u,t);float adjustedThickness=projectLineThickness(pos.y);vec4 projected_no_extrude=projectTile(pos+offset2/u_ratio*adjustedThickness+u_translation);vec4 projected_with_extrude=projectTile(pos+offset2/u_ratio*adjustedThickness+u_translation+dist/u_ratio*adjustedThickness);gl_Position=projected_with_extrude;\n#ifdef GLOBE\nv_depth=gl_Position.z/gl_Position.w;\n#endif\n#ifdef TERRAIN3D\nv_gamma_scale=1.0;\n#else\nfloat extrude_length_without_perspective=length(dist);float extrude_length_with_perspective=length((projected_with_extrude.xy-projected_no_extrude.xy)/projected_with_extrude.w*u_units_to_pixels);v_gamma_scale=extrude_length_without_perspective/extrude_length_with_perspective;\n#endif\nfloat u_patternscale_a_x=u_tileratio/dasharray_from.w/u_crossfade_from;float u_patternscale_a_y=-dasharray_from.z/2.0/u_lineatlas_height;float u_patternscale_b_x=u_tileratio/dasharray_to.w/u_crossfade_to;float u_patternscale_b_y=-dasharray_to.z/2.0/u_lineatlas_height;v_tex_a=vec2(a_linesofar*u_patternscale_a_x/floorwidth,normal.y*u_patternscale_a_y+(float(dasharray_from.y)+0.5)/u_lineatlas_height);v_tex_b=vec2(a_linesofar*u_patternscale_b_x/floorwidth,normal.y*u_patternscale_b_y+(float(dasharray_to.y)+0.5)/u_lineatlas_height);v_width2=vec2(outset,inset);}"),
-+	layerBlur: prepare("uniform sampler2D u_image;uniform sampler2D u_source;uniform float u_opacity;uniform float u_mode;uniform vec2 u_step;in vec2 v_pos;const int TAPS=16;void main() {vec4 sum=texture(u_image,v_pos);float total=1.0;for (int i=1;i<=TAPS;i++) {float x=3.0*float(i)/float(TAPS);float w=exp(-0.5*x*x);vec2 o=u_step*float(i);sum+=(texture(u_image,v_pos+o)+texture(u_image,v_pos-o))*w;total+=2.0*w;}vec4 blurred=sum/total;if (u_mode>0.5) {vec4 source=texture(u_source,v_pos);float b=clamp(blurred.a/max(source.a,0.001),0.0,1.0);blurred=source*(u_mode>1.5 ? clamp(2.0*b-1.0,0.0,1.0) : 1.0-b);}fragColor=blurred*u_opacity;\n#ifdef OVERDRAW_INSPECTOR\nfragColor=vec4(0.0);\n#endif\n}", "layout(location=0) in vec2 a_pos;out vec2 v_pos;void main() {gl_Position=vec4(a_pos.x*2.0-1.0,1.0-a_pos.y*2.0,0.0,1.0);v_pos.x=a_pos.x;v_pos.y=1.0-a_pos.y;}"),
++	layerBlur: prepare("uniform sampler2D u_image;uniform sampler2D u_source;uniform float u_opacity;uniform float u_mode;uniform vec2 u_step;uniform vec2 u_offset;uniform vec4 u_tint;in vec2 v_pos;const int TAPS=16;void main() {vec2 p=v_pos-u_offset;vec4 sum=texture(u_image,p);float total=1.0;for (int i=1;i<=TAPS;i++) {float x=3.0*float(i)/float(TAPS);float w=exp(-0.5*x*x);vec2 o=u_step*float(i);sum+=(texture(u_image,p+o)+texture(u_image,p-o))*w;total+=2.0*w;}vec4 blurred=sum/total;if (u_mode>2.5) {blurred=u_tint*blurred.a;} else if (u_mode>0.5) {vec4 source=texture(u_source,v_pos);float b=clamp(blurred.a/max(source.a,0.001),0.0,1.0);blurred=source*(u_mode>1.5 ? clamp(2.0*b-1.0,0.0,1.0) : 1.0-b);}fragColor=blurred*u_opacity;\n#ifdef OVERDRAW_INSPECTOR\nfragColor=vec4(0.0);\n#endif\n}", "layout(location=0) in vec2 a_pos;out vec2 v_pos;void main() {gl_Position=vec4(a_pos.x*2.0-1.0,1.0-a_pos.y*2.0,0.0,1.0);v_pos.x=a_pos.x;v_pos.y=1.0-a_pos.y;}"),
  	layerOpacity: prepare("uniform sampler2D u_image;uniform float u_opacity;in vec2 v_pos;void main() {fragColor=texture(u_image,v_pos)*u_opacity;\n#ifdef OVERDRAW_INSPECTOR\nfragColor=vec4(0.0);\n#endif\n}", "layout(location=0) in vec2 a_pos;out vec2 v_pos;void main() {gl_Position=vec4(a_pos.x*2.0-1.0,1.0-a_pos.y*2.0,0.0,1.0);v_pos.x=a_pos.x;v_pos.y=1.0-a_pos.y;}"),
  	raster: prepare("uniform float u_fade_t;uniform float u_opacity;uniform sampler2D u_image0;uniform sampler2D u_image1;in vec2 v_pos0;in vec2 v_pos1;uniform float u_brightness_low;uniform float u_brightness_high;uniform float u_saturation_factor;uniform float u_contrast_factor;uniform vec3 u_spin_weights;void main() {vec4 color0=texture(u_image0,v_pos0);vec4 color1=texture(u_image1,v_pos1);if (color0.a > 0.0) {color0.rgb=color0.rgb/color0.a;}if (color1.a > 0.0) {color1.rgb=color1.rgb/color1.a;}vec4 color=mix(color0,color1,u_fade_t);color.a*=u_opacity;vec3 rgb=color.rgb;rgb=vec3(dot(rgb,u_spin_weights.xyz),dot(rgb,u_spin_weights.zxy),dot(rgb,u_spin_weights.yzx));float average=(color.r+color.g+color.b)/3.0;rgb+=(average-rgb)*u_saturation_factor;rgb=(rgb-0.5)*u_contrast_factor+0.5;vec3 u_high_vec=vec3(u_brightness_low,u_brightness_low,u_brightness_low);vec3 u_low_vec=vec3(u_brightness_high,u_brightness_high,u_brightness_high);fragColor=vec4(mix(u_high_vec,u_low_vec,rgb)*color.a,color.a);\n#ifdef OVERDRAW_INSPECTOR\nfragColor=vec4(1.0);\n#endif\n}", "uniform vec2 u_tl_parent;uniform float u_scale_parent;uniform float u_buffer_scale;uniform vec4 u_coords_top;uniform vec4 u_coords_bottom;layout(location=0) in vec2 a_pos;out vec2 v_pos0;out vec2 v_pos1;void main() {vec2 fractionalPos=a_pos/8192.0;vec2 position=mix(mix(u_coords_top.xy,u_coords_top.zw,fractionalPos.x),mix(u_coords_bottom.xy,u_coords_bottom.zw,fractionalPos.x),fractionalPos.y);gl_Position=projectTile(position,position);v_pos0=((fractionalPos-0.5)/u_buffer_scale)+0.5;\n#ifdef GLOBE\nif (a_pos.y <-32767.5) {v_pos0.y=0.0;}if (a_pos.y > 32766.5) {v_pos0.y=1.0;}\n#endif\nv_pos1=(v_pos0*u_scale_parent)+u_tl_parent;}"),
  	symbolIcon: prepare("uniform sampler2D u_texture;in vec2 v_tex;flat in float v_total_opacity;void main() {fragColor=texture(u_texture,v_tex)*v_total_opacity;\n#ifdef OVERDRAW_INSPECTOR\nfragColor=vec4(1.0);\n#endif\n}", "layout(location=0) in vec4 a_pos_offset;layout(location=1) in vec4 a_data;layout(location=2) in vec4 a_pixeloffset;layout(location=3) in vec3 a_projected_pos;layout(location=4) in float a_fade_opacity;uniform bool u_is_size_zoom_constant;uniform bool u_is_size_feature_constant;uniform highp float u_size_t;uniform highp float u_size;uniform highp float u_camera_to_center_distance;uniform highp float u_pitch;uniform bool u_rotate_symbol;uniform highp float u_aspect_ratio;uniform float u_fade_change;uniform mat4 u_label_plane_matrix;uniform mat4 u_coord_matrix;uniform bool u_is_text;uniform bool u_pitch_with_map;uniform vec2 u_texsize;uniform bool u_is_along_line;uniform bool u_is_variable_anchor;uniform vec2 u_translation;uniform float u_pitched_scale;uniform bool u_is_offset;out vec2 v_tex;flat out float v_total_opacity;\n#pragma maplibre: define lowp float opacity\nvoid main() {\n#pragma maplibre: initialize lowp float opacity\nvec2 a_pos=a_pos_offset.xy;vec2 a_offset=a_pos_offset.zw;vec2 a_tex=a_data.xy;vec2 a_size=a_data.zw;float a_size_min=floor(a_size[0]*0.5);vec2 a_pxoffset=a_pixeloffset.xy;vec2 a_minFontScale=a_pixeloffset.zw/256.0;float ele=get_elevation(a_pos);highp float segment_angle=-a_projected_pos[2];float size;if (!u_is_size_zoom_constant && !u_is_size_feature_constant) {size=mix(a_size_min,a_size[1],u_size_t)/128.0;} else if (u_is_size_zoom_constant && !u_is_size_feature_constant) {size=a_size_min/128.0;} else {size=u_size;}vec2 translated_a_pos=a_pos+u_translation;vec4 projectedPoint=projectTileWithElevation(translated_a_pos,ele);vec2 fade_opacity=unpack_opacity(a_fade_opacity);float fade_change=fade_opacity[1] > 0.5 ? u_fade_change :-u_fade_change;float visibility=calculate_visibility(projectedPoint);v_total_opacity=opacity*max(0.0,min(visibility,fade_opacity[0]+fade_change));if (v_total_opacity < 0.1){gl_Position=vec4(-2.,-2.,-2.,1.);return;}highp float camera_to_anchor_distance=projectedPoint.w;highp float distance_ratio=u_pitch_with_map ?\ncamera_to_anchor_distance/u_camera_to_center_distance :\nu_camera_to_center_distance/camera_to_anchor_distance;highp float perspective_ratio=clamp(0.5+0.5*distance_ratio,0.0,4.0);if (!u_is_offset) {size*=perspective_ratio;}float fontScale=u_is_text ? size/24.0 : size;highp float symbol_rotation=0.0;if (u_rotate_symbol) {vec4 offsetProjectedPoint=projectTileWithElevation(translated_a_pos+vec2(1,0),ele);vec2 a=projectedPoint.xy/projectedPoint.w;vec2 b=offsetProjectedPoint.xy/offsetProjectedPoint.w;symbol_rotation=atan((b.y-a.y)/u_aspect_ratio,b.x-a.x);}highp float angle_sin=sin(segment_angle+symbol_rotation);highp float angle_cos=cos(segment_angle+symbol_rotation);mat2 rotation_matrix=mat2(angle_cos,-1.0*angle_sin,angle_sin,angle_cos);vec4 projected_pos;if (u_is_along_line || u_is_variable_anchor) {projected_pos=vec4(a_projected_pos.xy,ele,1.0);} else if (u_pitch_with_map) {projected_pos=u_label_plane_matrix*vec4(a_projected_pos.xy+u_translation,ele,1.0);} else {projected_pos=u_label_plane_matrix*projectTileWithElevation(a_projected_pos.xy+u_translation,ele);}float z=float(u_pitch_with_map)*projected_pos.z/projected_pos.w;float projectionScaling=1.0;\n#ifdef GLOBE\nif(u_pitch_with_map) {float anchor_pos_tile_y=(u_coord_matrix*vec4(projected_pos.xy/projected_pos.w,z,1.0)).y;projectionScaling=mix(projectionScaling,1.0/circumferenceRatioAtTileY(anchor_pos_tile_y)*u_pitched_scale,u_projection_transition);}\n#endif\nvec4 finalPos=u_coord_matrix*vec4(projected_pos.xy/projected_pos.w+rotation_matrix*(a_offset/32.0*max(a_minFontScale,fontScale)+a_pxoffset/16.0)*projectionScaling,z,1.0);if(u_pitch_with_map) {finalPos=projectTileWithElevation(finalPos.xy,finalPos.z);}gl_Position=finalPos;v_tex=a_tex/u_texsize;}"),
@@ -71,7 +74,7 @@ index 978bcadd8e5ff1cef5c65e1973313ada4f3d584b..75e1d70bff2fe0743e79240cc6d826b7
  //#endregion
  //#region src/webgl/cull_face_mode.ts
  const FRONT = 1028;
-@@ -14888,6 +14909,29 @@ const layerOpacityUniformValues = (opacity, textureUnit) => ({
+@@ -14888,6 +14909,34 @@ const layerOpacityUniformValues = (opacity, textureUnit) => ({
  	"u_image": textureUnit,
  	"u_opacity": opacity
  });
@@ -84,24 +87,29 @@ index 978bcadd8e5ff1cef5c65e1973313ada4f3d584b..75e1d70bff2fe0743e79240cc6d826b7
 +	"u_source": new Uniform1i(context, locations.u_source),
 +	"u_opacity": new Uniform1f(context, locations.u_opacity),
 +	"u_mode": new Uniform1f(context, locations.u_mode),
-+	"u_step": new Uniform2f(context, locations.u_step)
++	"u_step": new Uniform2f(context, locations.u_step),
++	"u_offset": new Uniform2f(context, locations.u_offset),
++	"u_tint": new Uniform4f(context, locations.u_tint)
 +});
 +const layerBlurModes = {
 +	"normal": 0,
 +	"inner-edge": 1,
-+	"inner-core": 2
++	"inner-core": 2,
++	"shadow": 3
 +};
-+const layerBlurUniformValues = (opacity, textureUnit, step, mode) => ({
++const layerBlurUniformValues = (opacity, textureUnit, step, mode, offset, tint) => ({
 +	"u_image": textureUnit,
 +	"u_source": 1,
 +	"u_opacity": opacity,
 +	"u_mode": mode,
-+	"u_step": step
++	"u_step": step,
++	"u_offset": offset,
++	"u_tint": tint
 +});
  //#endregion
  //#region src/webgl/program/raster_program.ts
  const rasterUniforms = (context, locations) => ({
-@@ -15163,6 +15207,7 @@ const programUniforms = {
+@@ -15163,6 +15212,7 @@ const programUniforms = {
  	linePattern: linePatternUniforms,
  	lineSDF: lineSDFUniforms,
  	lineGradientSDF: lineGradientSDFUniforms,
@@ -109,7 +117,7 @@ index 978bcadd8e5ff1cef5c65e1973313ada4f3d584b..75e1d70bff2fe0743e79240cc6d826b7
  	layerOpacity: layerOpacityUniforms,
  	raster: rasterUniforms,
  	symbolIcon: symbolIconUniforms,
-@@ -16044,6 +16089,20 @@ function createQuadTriangles(quadCount) {
+@@ -16044,6 +16094,20 @@ function createQuadTriangles(quadCount) {
  const identityMat4 = identity(/* @__PURE__ */ new Float32Array(16));
  function drawSymbols(painter, tileManager, layer, coords, variableOffsets, renderOptions) {
  	if (painter.renderPass !== "translucent") return;
@@ -130,7 +138,7 @@ index 978bcadd8e5ff1cef5c65e1973313ada4f3d584b..75e1d70bff2fe0743e79240cc6d826b7
  	const { isRenderingToTexture } = renderOptions;
  	const stencilMode = StencilMode.disabled;
  	const colorMode = painter.colorModeForRenderPass();
-@@ -16577,14 +16636,78 @@ function bindLayerOpacity(painter, width, height) {
+@@ -16577,14 +16641,98 @@ function bindLayerOpacity(painter, width, height) {
  	fbo.height = height;
  	painter.context.bindFramebuffer.set(fbo.framebuffer);
  }
@@ -168,12 +176,12 @@ index 978bcadd8e5ff1cef5c65e1973313ada4f3d584b..75e1d70bff2fe0743e79240cc6d826b7
 +*   inner-edge: S·(1 − b)   — strongest at the shape edge, gone ~radius inside (inner shadow/glow)
 +*   inner-core: S·(2b − 1)  — zero at the edge, full ~radius inside (shapeburst-like)
 +*/
-+function drawLayerBlur(painter, opacity, blur, target, layer, colorMode, mode) {
++function drawLayerBlur(painter, opacity, blur, target, layer, colorMode, mode, offset = [0, 0], tint = [0, 0, 0, 0]) {
  	const context = painter.context;
  	const gl = context.gl;
 +	const { width, height } = painter.layerOpacityFbo;
 +	const tapSpacing = 3 * (blur * painter.pixelRatio / 2) / 16;
-+	const draw = (stepX, stepY, passOpacity, passColorMode, passMode) => painter.useProgram("layerBlur").draw(context, gl.TRIANGLES, DepthMode.disabled, StencilMode.disabled, passColorMode, CullFaceMode.disabled, layerBlurUniformValues(passOpacity, 0, [stepX, stepY], passMode), null, null, layer.id, painter.viewportBuffer, painter.quadTriangleIndexBuffer, painter.viewportSegments, layer.paint, painter.transform.zoom);
++	const draw = (stepX, stepY, passOpacity, passColorMode, passMode, passOffset = [0, 0]) => painter.useProgram("layerBlur").draw(context, gl.TRIANGLES, DepthMode.disabled, StencilMode.disabled, passColorMode, CullFaceMode.disabled, layerBlurUniformValues(passOpacity, 0, [stepX, stepY], passMode, passOffset, tint), null, null, layer.id, painter.viewportBuffer, painter.quadTriangleIndexBuffer, painter.viewportSegments, layer.paint, painter.transform.zoom);
 +	bindLayerBlur(painter, width, height);
 +	context.viewport.set([
 +		0,
@@ -191,8 +199,28 @@ index 978bcadd8e5ff1cef5c65e1973313ada4f3d584b..75e1d70bff2fe0743e79240cc6d826b7
 +	gl.bindTexture(gl.TEXTURE_2D, painter.layerOpacityFbo.colorAttachment.get());
 +	context.activeTexture.set(gl.TEXTURE0);
 +	gl.bindTexture(gl.TEXTURE_2D, painter.layerBlurFbo.colorAttachment.get());
-+	draw(0, tapSpacing / height, opacity, colorMode, layerBlurModes[mode] || 0);
++	draw(0, tapSpacing / height, opacity, colorMode, layerBlurModes[mode] || 0, offset);
 +	painter.currentStencilSource = void 0;
++}
++/**
++* [strassenraumkarte patch] `fill-shadow-*`: drop shadow cast by the layer in the scratch FBO.
++* Blurred alpha, tinted, shifted by `translate` (CSS px, map-anchored) and multiplied onto
++* the composite target. The FBO is left untouched for the following drawLayerOpacity.
++*/
++function drawLayerShadow(painter, target, layer, color, opacity, blur, translate) {
++	const { width, height } = painter.layerOpacityFbo;
++	const angle = -painter.transform.bearingInRadians;
++	const sinA = Math.sin(angle);
++	const cosA = Math.cos(angle);
++	const dx = (translate[0] * cosA - translate[1] * sinA) * painter.pixelRatio;
++	const dy = (translate[0] * sinA + translate[1] * cosA) * painter.pixelRatio;
++	const colorMode = painter._showOverdrawInspector ? painter.colorModeForRenderPass() : ColorMode.layerBlend.multiply;
++	drawLayerBlur(painter, opacity, blur, target, layer, colorMode, "shadow", [dx / width, -dy / height], [
++		color.r,
++		color.g,
++		color.b,
++		color.a
++	]);
 +}
 +function drawLayerOpacity(painter, opacity, prepareDrawLayerOpacityResult, layer, blend, blur, blurMode) {
 +	const context = painter.context;
@@ -211,7 +239,7 @@ index 978bcadd8e5ff1cef5c65e1973313ada4f3d584b..75e1d70bff2fe0743e79240cc6d826b7
  	painter.currentStencilSource = void 0;
  }
  //#endregion
-@@ -16642,12 +16765,17 @@ function drawLine(painter, tileManager, layer, coords, renderOptions) {
+@@ -16642,12 +16790,17 @@ function drawLine(painter, tileManager, layer, coords, renderOptions) {
  	const opacity = layer.paint.get("line-opacity");
  	const width = layer.paint.get("line-width");
  	const layerOpacity = layer.paint.get("line-layer-opacity");
@@ -231,27 +259,29 @@ index 978bcadd8e5ff1cef5c65e1973313ada4f3d584b..75e1d70bff2fe0743e79240cc6d826b7
  		return;
  	}
  	drawLineTiles(painter, tileManager, layer, coords, renderOptions, useTerrain);
-@@ -16755,12 +16883,17 @@ function drawFill(painter, tileManager, layer, coords, renderOptions) {
+@@ -16755,12 +16908,19 @@ function drawFill(painter, tileManager, layer, coords, renderOptions) {
  	const color = layer.paint.get("fill-color");
  	const opacity = layer.paint.get("fill-opacity");
  	const layerOpacity = layer.paint.get("fill-layer-opacity");
 +	const layerBlend = layer.paint.get("fill-layer-blend");
 +	const layerBlur = layer.paint.get("fill-layer-blur");
 +	const layerBlurMode = layer.paint.get("fill-layer-blur-mode");
++	const shadowOpacity = layer.paint.get("fill-shadow-opacity");
  	if (opacity.constantOr(1) === 0 || layerOpacity === 0) return;
 -	if (layerOpacity < 1) {
-+	if (layerOpacity < 1 || layerBlend !== "normal" || layerBlur > 0) {
++	if (layerOpacity < 1 || layerBlend !== "normal" || layerBlur > 0 || shadowOpacity > 0) {
  		if (painter.renderPass !== "translucent") return;
 +		// [strassenraumkarte patch] The offscreen pass costs full-screen draws — skip it when no visible tile has features for this layer.
 +		if (!coords.some((coord) => tileManager.getTile(coord).getBucket(layer))) return;
  		const results = prepareDrawLayerOpacity(painter, layer, coords, !!painter.style.map.terrain);
  		drawFillAndOutline(painter, tileManager, layer, coords, renderOptions);
 -		drawLayerOpacity(painter, layerOpacity, results, layer);
++		if (shadowOpacity > 0) drawLayerShadow(painter, results, layer, layer.paint.get("fill-shadow-color"), shadowOpacity, layer.paint.get("fill-shadow-blur"), layer.paint.get("fill-shadow-translate"));
 +		drawLayerOpacity(painter, layerOpacity, results, layer, layerBlend, layerBlur, layerBlurMode);
  		return;
  	}
  	const pattern = layer.paint.get("fill-pattern");
-@@ -18189,6 +18322,8 @@ var Painter = class Painter {
+@@ -18189,6 +18349,8 @@ var Painter = class Painter {
  		}
  		this.layerOpacityFbo?.destroy();
  		this.layerOpacityFbo = null;
@@ -261,10 +291,10 @@ index 978bcadd8e5ff1cef5c65e1973313ada4f3d584b..75e1d70bff2fe0743e79240cc6d826b7
  		if (this.debugBuffer) this.debugBuffer.destroy();
  		if (this.rasterBoundsBuffer) this.rasterBoundsBuffer.destroy();
 diff --git a/dist/maplibre-gl-shared-dev.mjs b/dist/maplibre-gl-shared-dev.mjs
-index ffc0e9591a62f8dfce92b6091ad8454a631a3e3e..5ea8e48f6c9a985badfb3b51bdb5e88a85262e49 100644
+index ffc0e9591a62f8dfce92b6091ad8454a631a3e3e..44512c9ca4a87faeec97aa7ac243d1149d549142 100644
 --- a/dist/maplibre-gl-shared-dev.mjs
 +++ b/dist/maplibre-gl-shared-dev.mjs
-@@ -4564,6 +4564,38 @@ const latest = {
+@@ -4564,6 +4564,81 @@ const latest = {
  			},
  			"property-type": "data-driven"
  		},
@@ -300,10 +330,53 @@ index ffc0e9591a62f8dfce92b6091ad8454a631a3e3e..5ea8e48f6c9a985badfb3b51bdb5e88a
 +			"default": "normal",
 +			"property-type": "data-constant"
 +		},
++		"fill-shadow-color": {
++			"type": "color",
++			"default": "#000000",
++			"expression": {
++				"interpolated": true,
++				"parameters": ["zoom", "global-state"]
++			},
++			"property-type": "data-constant"
++		},
++		"fill-shadow-opacity": {
++			"type": "number",
++			"default": 0,
++			"minimum": 0,
++			"maximum": 1,
++			"expression": {
++				"interpolated": true,
++				"parameters": ["zoom", "global-state"]
++			},
++			"property-type": "data-constant"
++		},
++		"fill-shadow-blur": {
++			"type": "number",
++			"default": 0,
++			"minimum": 0,
++			"units": "pixels",
++			"expression": {
++				"interpolated": true,
++				"parameters": ["zoom", "global-state"]
++			},
++			"property-type": "data-constant"
++		},
++		"fill-shadow-translate": {
++			"type": "array",
++			"value": "number",
++			"length": 2,
++			"default": [0, 0],
++			"units": "pixels",
++			"expression": {
++				"interpolated": true,
++				"parameters": ["zoom", "global-state"]
++			},
++			"property-type": "data-constant"
++		},
  		"fill-layer-opacity": {
  			"type": "number",
  			"default": 1,
-@@ -4766,6 +4798,38 @@ const latest = {
+@@ -4766,6 +4841,38 @@ const latest = {
  			},
  			"property-type": "data-driven"
  		},
@@ -342,7 +415,7 @@ index ffc0e9591a62f8dfce92b6091ad8454a631a3e3e..5ea8e48f6c9a985badfb3b51bdb5e88a
  		"line-layer-opacity": {
  			"type": "number",
  			"default": 1,
-@@ -5167,6 +5231,17 @@ const latest = {
+@@ -5167,6 +5274,17 @@ const latest = {
  		}
  	},
  	paint_symbol: {
@@ -360,17 +433,21 @@ index ffc0e9591a62f8dfce92b6091ad8454a631a3e3e..5ea8e48f6c9a985badfb3b51bdb5e88a
  		"icon-opacity": {
  			"type": "number",
  			"default": 1,
-@@ -18682,6 +18757,9 @@ const getPaint$4 = () => paint$4 = paint$4 || new Properties({
+@@ -18682,6 +18800,13 @@ const getPaint$4 = () => paint$4 = paint$4 || new Properties({
  	"fill-antialias": new DataConstantProperty(latest["paint_fill"]["fill-antialias"], "fill-antialias"),
  	"fill-opacity": new DataDrivenProperty(latest["paint_fill"]["fill-opacity"], "fill-opacity"),
  	"fill-layer-opacity": new DataConstantProperty(latest["paint_fill"]["fill-layer-opacity"], "fill-layer-opacity"),
 +	"fill-layer-blend": new DataConstantProperty(latest["paint_fill"]["fill-layer-blend"], "fill-layer-blend"),
 +	"fill-layer-blur": new DataConstantProperty(latest["paint_fill"]["fill-layer-blur"], "fill-layer-blur"),
 +	"fill-layer-blur-mode": new DataConstantProperty(latest["paint_fill"]["fill-layer-blur-mode"], "fill-layer-blur-mode"),
++	"fill-shadow-color": new DataConstantProperty(latest["paint_fill"]["fill-shadow-color"], "fill-shadow-color"),
++	"fill-shadow-opacity": new DataConstantProperty(latest["paint_fill"]["fill-shadow-opacity"], "fill-shadow-opacity"),
++	"fill-shadow-blur": new DataConstantProperty(latest["paint_fill"]["fill-shadow-blur"], "fill-shadow-blur"),
++	"fill-shadow-translate": new DataConstantProperty(latest["paint_fill"]["fill-shadow-translate"], "fill-shadow-translate"),
  	"fill-color": new DataDrivenProperty(latest["paint_fill"]["fill-color"], "fill-color"),
  	"fill-outline-color": new DataDrivenProperty(latest["paint_fill"]["fill-outline-color"], "fill-outline-color"),
  	"fill-translate": new DataConstantProperty(latest["paint_fill"]["fill-translate"], "fill-translate"),
-@@ -21613,6 +21691,9 @@ let paint$2;
+@@ -21613,6 +21738,9 @@ let paint$2;
  const getPaint$2 = () => paint$2 = paint$2 || new Properties({
  	"line-opacity": new DataDrivenProperty(latest["paint_line"]["line-opacity"], "line-opacity"),
  	"line-layer-opacity": new DataConstantProperty(latest["paint_line"]["line-layer-opacity"], "line-layer-opacity"),
@@ -380,7 +457,7 @@ index ffc0e9591a62f8dfce92b6091ad8454a631a3e3e..5ea8e48f6c9a985badfb3b51bdb5e88a
  	"line-color": new DataDrivenProperty(latest["paint_line"]["line-color"], "line-color"),
  	"line-translate": new DataConstantProperty(latest["paint_line"]["line-translate"], "line-translate"),
  	"line-translate-anchor": new DataConstantProperty(latest["paint_line"]["line-translate-anchor"], "line-translate-anchor"),
-@@ -24484,6 +24565,7 @@ const getLayout = () => layout = layout || new Properties({
+@@ -24484,6 +24612,7 @@ const getLayout = () => layout = layout || new Properties({
  });
  let paint$1;
  const getPaint$1 = () => paint$1 = paint$1 || new Properties({
@@ -389,30 +466,38 @@ index ffc0e9591a62f8dfce92b6091ad8454a631a3e3e..5ea8e48f6c9a985badfb3b51bdb5e88a
  	"icon-color": new DataDrivenProperty(latest["paint_symbol"]["icon-color"], "icon-color"),
  	"icon-halo-color": new DataDrivenProperty(latest["paint_symbol"]["icon-halo-color"], "icon-halo-color"),
 diff --git a/dist/maplibre-gl.d.ts b/dist/maplibre-gl.d.ts
-index 67834dd09c8a0814db12c930c6352561dd58cd1e..0e2e17ecb05bfea77c18e343b6aadb1bd40a1ba3 100644
+index 67834dd09c8a0814db12c930c6352561dd58cd1e..dc0b57ee545b51043227a7ed97470fc62b8cfa4a 100644
 --- a/dist/maplibre-gl.d.ts
 +++ b/dist/maplibre-gl.d.ts
-@@ -3051,6 +3051,9 @@ type FillPaintProps = {
+@@ -3051,6 +3051,13 @@ type FillPaintProps = {
    "fill-antialias": DataConstantProperty<boolean>;
    "fill-opacity": DataDrivenProperty<number>;
    "fill-layer-opacity": DataConstantProperty<number>;
 +  "fill-layer-blur": DataConstantProperty<number>;
++  "fill-shadow-color": DataConstantProperty<Color>;
++  "fill-shadow-opacity": DataConstantProperty<number>;
++  "fill-shadow-blur": DataConstantProperty<number>;
++  "fill-shadow-translate": DataConstantProperty<[number, number]>;
 +  "fill-layer-blur-mode": DataConstantProperty<"normal" | "inner-edge" | "inner-core">;
 +  "fill-layer-blend": DataConstantProperty<"normal" | "multiply" | "screen" | "plus">;
    "fill-color": DataDrivenProperty<Color>;
    "fill-outline-color": DataDrivenProperty<Color>;
    "fill-translate": DataConstantProperty<[number, number]>;
-@@ -3061,6 +3064,9 @@ type FillPaintPropsPossiblyEvaluated = {
+@@ -3061,6 +3068,13 @@ type FillPaintPropsPossiblyEvaluated = {
    "fill-antialias": boolean;
    "fill-opacity": PossiblyEvaluatedPropertyValue<number>;
    "fill-layer-opacity": number;
 +  "fill-layer-blur": number;
++  "fill-shadow-color": Color;
++  "fill-shadow-opacity": number;
++  "fill-shadow-blur": number;
++  "fill-shadow-translate": [number, number];
 +  "fill-layer-blur-mode": "normal" | "inner-edge" | "inner-core";
 +  "fill-layer-blend": "normal" | "multiply" | "screen" | "plus";
    "fill-color": PossiblyEvaluatedPropertyValue<Color>;
    "fill-outline-color": PossiblyEvaluatedPropertyValue<Color>;
    "fill-translate": [number, number];
-@@ -3343,6 +3349,9 @@ type LineLayoutPropsPossiblyEvaluated = {
+@@ -3343,6 +3357,9 @@ type LineLayoutPropsPossiblyEvaluated = {
  type LinePaintProps = {
    "line-opacity": DataDrivenProperty<number>;
    "line-layer-opacity": DataConstantProperty<number>;
@@ -422,7 +507,7 @@ index 67834dd09c8a0814db12c930c6352561dd58cd1e..0e2e17ecb05bfea77c18e343b6aadb1b
    "line-color": DataDrivenProperty<Color>;
    "line-translate": DataConstantProperty<[number, number]>;
    "line-translate-anchor": DataConstantProperty<"map" | "viewport">;
-@@ -3357,6 +3366,9 @@ type LinePaintProps = {
+@@ -3357,6 +3374,9 @@ type LinePaintProps = {
  type LinePaintPropsPossiblyEvaluated = {
    "line-opacity": PossiblyEvaluatedPropertyValue<number>;
    "line-layer-opacity": number;
@@ -432,7 +517,7 @@ index 67834dd09c8a0814db12c930c6352561dd58cd1e..0e2e17ecb05bfea77c18e343b6aadb1b
    "line-color": PossiblyEvaluatedPropertyValue<Color>;
    "line-translate": [number, number];
    "line-translate-anchor": "map" | "viewport";
-@@ -3738,6 +3750,7 @@ type SymbolLayoutPropsPossiblyEvaluated = {
+@@ -3738,6 +3758,7 @@ type SymbolLayoutPropsPossiblyEvaluated = {
    "text-optional": boolean;
  };
  type SymbolPaintProps = {
@@ -440,7 +525,7 @@ index 67834dd09c8a0814db12c930c6352561dd58cd1e..0e2e17ecb05bfea77c18e343b6aadb1b
    "icon-opacity": DataDrivenProperty<number>;
    "icon-color": DataDrivenProperty<Color>;
    "icon-halo-color": DataDrivenProperty<Color>;
-@@ -3754,6 +3767,7 @@ type SymbolPaintProps = {
+@@ -3754,6 +3775,7 @@ type SymbolPaintProps = {
    "text-translate-anchor": DataConstantProperty<"map" | "viewport">;
  };
  type SymbolPaintPropsPossiblyEvaluated = {

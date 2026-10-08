@@ -117,6 +117,7 @@ export const SURFACE_PATTERNS: readonly SurfacePattern[] = [
 /**
  * QGIS `landuse` RasterFill per `class` (layer blend Normal). grass / gravel / sand are
  * pixel-sized in QGIS (texture px = screen px); the others have ground-metre widths.
+ * `scrub` gets its grass texture from the separate QGIS layer `scrub (width shade)`.
  * `flowerbed` also carries the grass texture in QGIS — only the stronger one is kept;
  * `reef`'s second (wetland) texture is dropped.
  */
@@ -131,7 +132,7 @@ export const LANDUSE_CLASS_PATTERNS: readonly SurfacePattern[] = [
   },
   {
     surfaces: [
-      'forest', 'grassland', 'heath', 'meadow', 'orchard', 'plant_nursery', 'shrub',
+      'forest', 'grassland', 'heath', 'meadow', 'orchard', 'plant_nursery', 'scrub', 'shrub',
       'shrubbery', 'trees', 'tundra', 'vineyard', 'wood',
     ],
     pattern: 'grass',

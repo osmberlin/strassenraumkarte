@@ -11,6 +11,7 @@ import type {
   LayerSpecification,
 } from '@maplibre/maplibre-gl-style-spec'
 
+import { shadowPaint, type LayerShadowOptions } from '../effects'
 import { withOsmBucket } from '../expr'
 import { metresToPixels } from '../metres'
 import { iconSizeFromMetres } from '../sprite-icons'
@@ -19,6 +20,16 @@ import { styleLayerId, type OsmLayerBucketId } from '../order'
 /** Most furniture stays z17 (tippecanoe). Playground has no QGIS scale gate → z15. */
 const MINZ = 17
 const PLAYGROUND_MINZ = 15
+
+/** QGIS feature_polygon dropShadows (MapUnits, angle clockwise from north, multiply). */
+const SHADOW_FAR: LayerShadowOptions = { blurMU: 2, offsetMU: 1, angleDeg: 45, color: '#000000', opacity: 0.1 }
+const SHADOW_NEAR: LayerShadowOptions = { blurMU: 2, offsetMU: 0.5, angleDeg: 45, color: '#000000', opacity: 0.1 }
+const SHADOW_PIER: LayerShadowOptions = { blurMU: 1, offsetMU: 0, angleDeg: 45, color: '#232323', opacity: 0.2 }
+const POLY_BG_SHADOW: Record<string, LayerShadowOptions> = {
+  mast: SHADOW_NEAR,
+  pier: SHADOW_PIER,
+  shelter: SHADOW_FAR,
+}
 
 const PLAYGROUND_FILL = '#d2c8a0'
 const PLAYGROUND_OUTLINE = '#b7916e'
@@ -224,6 +235,8 @@ function pushFill(
     outline?: string
     outlineWidthM?: number
     minzoom?: number
+    /** QGIS dropShadow of the symbol layer. */
+    shadow?: LayerShadowOptions
   },
 ): void {
   const z = opts.minzoom ?? MINZ
@@ -234,11 +247,9 @@ function pushFill(
     paint: {
       'fill-color': opts.color,
       'fill-opacity': opts.opacity ?? 1,
-      ...(opts.outline
-        ? {
-            'fill-outline-color': opts.outline,
-          }
-        : {}),
+      ...(opts.shadow ? shadowPaint(opts.shadow) : {}),
+      // No `fill-outline-color`: it is always a full-strength 1 px line, far heavier than the
+      // QGIS outline (a few cm on the ground). The metre-width line layer below is the outline.
     },
   })
   if (opts.outline && (opts.outlineWidthM ?? 0) > 0) {
@@ -334,6 +345,7 @@ export function furnitureLayersForBucket(bucketId: OsmLayerBucketId): LayerSpeci
       opacity,
       outline,
       outlineWidthM: ow,
+      shadow: POLY_BG_SHADOW[c],
     })
   }
   pushFill(
@@ -548,6 +560,7 @@ export function furnitureLayersForBucket(bucketId: OsmLayerBucketId): LayerSpeci
   pushFill(layers, 'feature_polygon', 'mid-chimney', b, clsEq('chimney'), {
     color: '#505050',
     opacity: 0.5,
+    shadow: SHADOW_NEAR,
     outline: '#505050',
     outlineWidthM: 0.2,
   })
@@ -569,7 +582,7 @@ export function furnitureLayersForBucket(bucketId: OsmLayerBucketId): LayerSpeci
       clsEq('recycling'),
       ['<', ['coalesce', ['get', 'area'], 0], 150],
     ]),
-    { color: '#dadada', outline: '#808080', outlineWidthM: 0.02 },
+    { color: '#dadada', outline: '#808080', outlineWidthM: 0.02, shadow: SHADOW_FAR },
   )
   pushIcon(
     layers,
@@ -585,6 +598,7 @@ export function furnitureLayersForBucket(bucketId: OsmLayerBucketId): LayerSpeci
   )
   pushFill(layers, 'feature_polygon', 'mid-toilets', b, clsEq('toilets'), {
     color: '#cbcbcb',
+    shadow: SHADOW_FAR,
     outline: '#808080',
     outlineWidthM: 0.05,
   })
@@ -598,7 +612,7 @@ export function furnitureLayersForBucket(bucketId: OsmLayerBucketId): LayerSpeci
     'mid-waste-disposal',
     b,
     clsEq('waste_disposal'),
-    { color: '#dadada', outline: '#808080', outlineWidthM: 0.02 },
+    { color: '#dadada', outline: '#808080', outlineWidthM: 0.02, shadow: SHADOW_FAR },
   )
   pushIcon(
     layers,

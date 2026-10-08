@@ -54,6 +54,14 @@ export const COMPARE_LOCATIONS: CompareLocation[] = [
     note: 'Largest playground polygon — sand, equipment, fences',
   },
   {
+    id: 'courtyard-furniture',
+    label: 'Courtyard furniture',
+    longitude: 13.42672,
+    latitude: 52.47793,
+    zoom: 19,
+    note: 'Waste-disposal enclosures — small polygons with QGIS drop shadows',
+  },
+  {
     id: 'park-water',
     label: 'Park / water / pitches',
     longitude: 13.4168,

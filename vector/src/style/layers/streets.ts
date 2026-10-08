@@ -18,7 +18,12 @@ import {
   TACTILE,
 } from '../colors'
 import { highwayInnerBlur } from '../effects'
-import { highwayAreaFillMatch, surfacePatternLayer, withOsmBucket } from '../expr'
+import {
+  HIGHWAY_AREA_CLASSES,
+  highwayAreaFillMatch,
+  surfacePatternLayer,
+  withOsmBucket,
+} from '../expr'
 import { metresToPixels, metresToPixelsFromProp } from '../metres'
 import { OSM_LAYER_BUCKETS, styleLayerId, type OsmLayerBucketId } from '../order'
 import { bridgeRailwayLayersForBucket } from './landscape'
@@ -113,6 +118,22 @@ function pathCasingPair(
     })
   }
 }
+
+const CARRIAGEWAY_CLASSES = [
+  'primary', 'primary_link', 'secondary', 'secondary_link', 'tertiary', 'tertiary_link',
+  'residential', 'unclassified', 'road', 'bus_bay', 'turning_circle', 'turning_loop',
+]
+
+/** Datasource filter of the QGIS carriageway blur layers. */
+const CARRIAGEWAY_BLUR_FILTER = [
+  'any',
+  ['in', ['get', 'area:highway'], ['literal', CARRIAGEWAY_CLASSES]],
+  [
+    'all',
+    ['==', ['get', 'area:highway'], 'parking'],
+    ['in', ['get', 'class'], ['literal', CARRIAGEWAY_CLASSES]],
+  ],
+] as unknown as FilterSpecification
 
 /** Streets: per OSM bucket — path → service → tactile → highway_area + blur + textures. */
 export function streetLayers(): LayerSpecification[] {
@@ -381,21 +402,29 @@ export function streetLayers(): LayerSpecification[] {
     })
 
     // --- highway_area fill + blur + surface textures ---
-    const areaBase = withOsmBucket('highway_area', 15, b)
     layers.push({
       id: styleLayerId('highway_area', 'fill', b),
       type: 'fill',
-      ...areaBase,
+      ...withOsmBucket(
+        'highway_area',
+        15,
+        b,
+        f(['in', ['get', 'area:highway'], ['literal', [...HIGHWAY_AREA_CLASSES]]]),
+      ),
       paint: {
         'fill-color': highwayAreaFillMatch(),
         'fill-opacity': 1,
       },
     })
 
+    // QGIS `z14`…`z20` layers only cover carriageways and the parking lanes that belong to
+    // them — not parking spaces, footways, islands … (small polygons would be shaded all over).
     layers.push(
-      ...highwayInnerBlur(styleLayerId('highway_area', 'blur', b), areaBase, {
-        color: HIGHWAY_BLUR,
-      }),
+      ...highwayInnerBlur(
+        styleLayerId('highway_area', 'blur', b),
+        withOsmBucket('highway_area', 15, b, CARRIAGEWAY_BLUR_FILTER),
+        { color: HIGHWAY_BLUR },
+      ),
     )
 
     // Surface textures from the packed sprite (MapUnit widths baked @ z18; rotation dropped, G0.4).

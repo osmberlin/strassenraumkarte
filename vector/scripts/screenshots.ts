@@ -51,6 +51,14 @@ async function main() {
     diffPng: string
   }[] = []
 
+  // Warm-up: the first load after a source edit triggers Vite's dependency re-optimisation
+  // and a full reload, which used to leave the first location blank.
+  await page.goto(`${BASE}/?compare=1&mode=side-by-side&panes=qgis,vector`, {
+    waitUntil: 'networkidle',
+    timeout: 60_000,
+  })
+  await page.waitForTimeout(4000)
+
   for (const loc of COMPARE_LOCATIONS) {
     // Explicit panes: the default also shows the Rust raster pane, which would be nth(1).
     const url = `${BASE}/?compare=1&mode=side-by-side&panes=qgis,vector&location=${loc.id}`

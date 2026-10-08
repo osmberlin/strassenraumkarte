@@ -4,6 +4,9 @@ index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2
 diff --git a/node_modules/@maplibre/maplibre-gl-style-spec/.bun-tag-20ea4fc8bf769a4d b/.bun-tag-20ea4fc8bf769a4d
 new file mode 100644
 index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/@maplibre/maplibre-gl-style-spec/.bun-tag-7141870515484e56 b/.bun-tag-7141870515484e56
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
 diff --git a/node_modules/@maplibre/maplibre-gl-style-spec/.bun-tag-75bcce83d8d87b38 b/.bun-tag-75bcce83d8d87b38
 new file mode 100644
 index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
@@ -20,10 +23,10 @@ diff --git a/dist/gl-style-validate.mjs b/dist/gl-style-validate.mjs
 old mode 100644
 new mode 100755
 diff --git a/dist/index.cjs b/dist/index.cjs
-index 4fd5a0897723ae5af1b1264fdbc1e6d33b08d2a8..ef9145ce67d0a48ba77b38ee1933175d55152e88 100644
+index 4fd5a0897723ae5af1b1264fdbc1e6d33b08d2a8..0037a3f51cfc362d9f6dc5664ae1670a2d6c004e 100644
 --- a/dist/index.cjs
 +++ b/dist/index.cjs
-@@ -1451,7 +1451,39 @@
+@@ -1451,7 +1451,82 @@
  				},
  				"property-type": "data-driven"
  			},
@@ -60,11 +63,54 @@ index 4fd5a0897723ae5af1b1264fdbc1e6d33b08d2a8..ef9145ce67d0a48ba77b38ee1933175d
 +			"default": "normal",
 +			"property-type": "data-constant"
 +		},
++		"fill-shadow-color": {
++			"type": "color",
++			"default": "#000000",
++			"expression": {
++				"interpolated": true,
++				"parameters": ["zoom", "global-state"]
++			},
++			"property-type": "data-constant"
++		},
++		"fill-shadow-opacity": {
++			"type": "number",
++			"default": 0,
++			"minimum": 0,
++			"maximum": 1,
++			"expression": {
++				"interpolated": true,
++				"parameters": ["zoom", "global-state"]
++			},
++			"property-type": "data-constant"
++		},
++		"fill-shadow-blur": {
++			"type": "number",
++			"default": 0,
++			"minimum": 0,
++			"units": "pixels",
++			"expression": {
++				"interpolated": true,
++				"parameters": ["zoom", "global-state"]
++			},
++			"property-type": "data-constant"
++		},
++		"fill-shadow-translate": {
++			"type": "array",
++			"value": "number",
++			"length": 2,
++			"default": [0, 0],
++			"units": "pixels",
++			"expression": {
++				"interpolated": true,
++				"parameters": ["zoom", "global-state"]
++			},
++			"property-type": "data-constant"
++		},
 +		"fill-layer-opacity": {
  				"type": "number",
  				"default": 1,
  				"minimum": 0,
-@@ -1653,7 +1685,39 @@
+@@ -1653,7 +1728,39 @@
  				},
  				"property-type": "data-driven"
  			},
@@ -105,7 +151,7 @@ index 4fd5a0897723ae5af1b1264fdbc1e6d33b08d2a8..ef9145ce67d0a48ba77b38ee1933175d
  				"type": "number",
  				"default": 1,
  				"minimum": 0,
-@@ -2054,6 +2118,17 @@
+@@ -2054,6 +2161,17 @@
  			}
  		},
  		paint_symbol: {
@@ -124,15 +170,20 @@ index 4fd5a0897723ae5af1b1264fdbc1e6d33b08d2a8..ef9145ce67d0a48ba77b38ee1933175d
  				"type": "number",
  				"default": 1,
 diff --git a/dist/index.d.ts b/dist/index.d.ts
-index ab4425f6be05adb0b331af6f8fe15455bbbd4a62..6c704350b76a7bc186586bd11817650ffadeca04 100644
+index ab4425f6be05adb0b331af6f8fe15455bbbd4a62..739c9ed79ce436843f8107a33be52e855b0f4152 100644
 --- a/dist/index.d.ts
 +++ b/dist/index.d.ts
-@@ -8946,6 +8946,14 @@ type FillLayerSpecification = {
+@@ -8946,6 +8946,19 @@ type FillLayerSpecification = {
       * ```
       */
      "fill-layer-opacity"?: PropertyValueSpecification<number>;
 +    /** [strassenraumkarte patch] Gaussian blur radius (px) applied to the whole layer. */
 +    "fill-layer-blur"?: PropertyValueSpecification<number>;
++    /** [strassenraumkarte patch] Drop shadow cast by the layer: colour, opacity (0 = off), blur radius and map-anchored offset in px; multiplied onto the map. */
++    "fill-shadow-color"?: PropertyValueSpecification<ColorSpecification>;
++    "fill-shadow-opacity"?: PropertyValueSpecification<number>;
++    "fill-shadow-blur"?: PropertyValueSpecification<number>;
++    "fill-shadow-translate"?: PropertyValueSpecification<[number, number]>;
 +    /** [strassenraumkarte patch] How the blurred layer is combined with the unblurred one. */
 +    "fill-layer-blur-mode"?: "normal" | "inner-edge" | "inner-core";
 +    /** [strassenraumkarte patch] How the blurred layer is combined with the unblurred one. */
@@ -142,7 +193,7 @@ index ab4425f6be05adb0b331af6f8fe15455bbbd4a62..6c704350b76a7bc186586bd11817650f
      "fill-layer-opacity-transition"?: TransitionSpecification;
      /**
       * The color of the filled part of this layer. This color can be specified as `rgba` with an alpha component and the color's opacity will not affect the opacity of the 1px stroke, if it is used. When used with an SDF fill pattern, this serves as the foreground color of the pattern.
-@@ -9102,6 +9110,12 @@ type LineLayerSpecification = {
+@@ -9102,6 +9115,12 @@ type LineLayerSpecification = {
       * ```
       */
      "line-layer-opacity"?: PropertyValueSpecification<number>;
@@ -155,7 +206,7 @@ index ab4425f6be05adb0b331af6f8fe15455bbbd4a62..6c704350b76a7bc186586bd11817650f
      "line-layer-opacity-transition"?: TransitionSpecification;
      /**
       * The color with which the line will be drawn.
-@@ -9554,6 +9568,8 @@ type SymbolLayerSpecification = {
+@@ -9554,6 +9573,8 @@ type SymbolLayerSpecification = {
       * 1
       * ```
       */
@@ -164,12 +215,17 @@ index ab4425f6be05adb0b331af6f8fe15455bbbd4a62..6c704350b76a7bc186586bd11817650f
      "icon-opacity"?: DataDrivenPropertyValueSpecification<number>;
      "icon-opacity-transition"?: TransitionSpecification;
      /**
-@@ -10525,6 +10541,12 @@ type AllPaintProperties = {
+@@ -10525,6 +10546,17 @@ type AllPaintProperties = {
     * ```
     */
    "fill-layer-opacity"?: PropertyValueSpecification<number>;
 +  /** [strassenraumkarte patch] Gaussian blur radius (px) applied to the whole layer. */
 +  "fill-layer-blur"?: PropertyValueSpecification<number>;
++  /** [strassenraumkarte patch] Drop shadow cast by the layer: colour, opacity (0 = off), blur radius and map-anchored offset in px; multiplied onto the map. */
++  "fill-shadow-color"?: PropertyValueSpecification<ColorSpecification>;
++  "fill-shadow-opacity"?: PropertyValueSpecification<number>;
++  "fill-shadow-blur"?: PropertyValueSpecification<number>;
++  "fill-shadow-translate"?: PropertyValueSpecification<[number, number]>;
 +  /** [strassenraumkarte patch] How the blurred layer is combined with the unblurred one. */
 +  "fill-layer-blur-mode"?: "normal" | "inner-edge" | "inner-core";
 +  /** [strassenraumkarte patch] Layer compositing mode, see maplibre-style-spec#1661. */
@@ -177,7 +233,7 @@ index ab4425f6be05adb0b331af6f8fe15455bbbd4a62..6c704350b76a7bc186586bd11817650f
    "fill-layer-opacity-transition"?: TransitionSpecification;
    /**
     * The color of the filled part of this layer. This color can be specified as `rgba` with an alpha component and the color's opacity will not affect the opacity of the 1px stroke, if it is used. When used with an SDF fill pattern, this serves as the foreground color of the pattern.
-@@ -10586,6 +10608,12 @@ type AllPaintProperties = {
+@@ -10586,6 +10618,12 @@ type AllPaintProperties = {
     * ```
     */
    "line-layer-opacity"?: PropertyValueSpecification<number>;
@@ -190,7 +246,7 @@ index ab4425f6be05adb0b331af6f8fe15455bbbd4a62..6c704350b76a7bc186586bd11817650f
    "line-layer-opacity-transition"?: TransitionSpecification;
    /**
     * The color with which the line will be drawn.
-@@ -10663,6 +10691,8 @@ type AllPaintProperties = {
+@@ -10663,6 +10701,8 @@ type AllPaintProperties = {
     * 1
     * ```
     */
@@ -200,10 +256,10 @@ index ab4425f6be05adb0b331af6f8fe15455bbbd4a62..6c704350b76a7bc186586bd11817650f
    "icon-opacity-transition"?: TransitionSpecification;
    /**
 diff --git a/dist/index.mjs b/dist/index.mjs
-index 1f8cb92016301a415b6ff3474af9d123c654427c..fa6238743990beadbb6531467bd035dad86a7aa5 100644
+index 1f8cb92016301a415b6ff3474af9d123c654427c..45fff1b16b8c67464dd00a3490f0ca1f607005bc 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
-@@ -1447,6 +1447,38 @@ var v8_default = {
+@@ -1447,6 +1447,81 @@ var v8_default = {
  			},
  			"property-type": "data-driven"
  		},
@@ -239,10 +295,53 @@ index 1f8cb92016301a415b6ff3474af9d123c654427c..fa6238743990beadbb6531467bd035da
 +			"default": "normal",
 +			"property-type": "data-constant"
 +		},
++		"fill-shadow-color": {
++			"type": "color",
++			"default": "#000000",
++			"expression": {
++				"interpolated": true,
++				"parameters": ["zoom", "global-state"]
++			},
++			"property-type": "data-constant"
++		},
++		"fill-shadow-opacity": {
++			"type": "number",
++			"default": 0,
++			"minimum": 0,
++			"maximum": 1,
++			"expression": {
++				"interpolated": true,
++				"parameters": ["zoom", "global-state"]
++			},
++			"property-type": "data-constant"
++		},
++		"fill-shadow-blur": {
++			"type": "number",
++			"default": 0,
++			"minimum": 0,
++			"units": "pixels",
++			"expression": {
++				"interpolated": true,
++				"parameters": ["zoom", "global-state"]
++			},
++			"property-type": "data-constant"
++		},
++		"fill-shadow-translate": {
++			"type": "array",
++			"value": "number",
++			"length": 2,
++			"default": [0, 0],
++			"units": "pixels",
++			"expression": {
++				"interpolated": true,
++				"parameters": ["zoom", "global-state"]
++			},
++			"property-type": "data-constant"
++		},
  		"fill-layer-opacity": {
  			"type": "number",
  			"default": 1,
-@@ -1649,6 +1681,38 @@ var v8_default = {
+@@ -1649,6 +1724,38 @@ var v8_default = {
  			},
  			"property-type": "data-driven"
  		},
@@ -281,7 +380,7 @@ index 1f8cb92016301a415b6ff3474af9d123c654427c..fa6238743990beadbb6531467bd035da
  		"line-layer-opacity": {
  			"type": "number",
  			"default": 1,
-@@ -2050,6 +2114,17 @@ var v8_default = {
+@@ -2050,6 +2157,17 @@ var v8_default = {
  		}
  	},
  	paint_symbol: {

@@ -164,6 +164,17 @@ export function pitchMarkingIcon(): ExpressionSpecification {
   ] as unknown as ExpressionSpecification
 }
 
+/**
+ * `area:highway` values the QGIS highway_area renderer has a rule for. Everything else
+ * (parking_space, traffic_island, platform, …) is not drawn by that layer.
+ */
+export const HIGHWAY_AREA_CLASSES = [
+  'footway', 'path', 'steps', 'bridleway', 'pedestrian', 'cycleway', 'service', 'parking',
+  'living_street', 'motorway', 'trunk', 'motorway_link', 'trunk_link', 'primary',
+  'primary_link', 'secondary', 'secondary_link', 'tertiary', 'tertiary_link', 'residential',
+  'unclassified', 'road', 'bus_guideway', 'bus_bay', 'turning_circle', 'turning_loop',
+] as const
+
 /** highway_area fill from area:highway (sidewalk variant deferred — no footway column). */
 export function highwayAreaFillMatch(): ExpressionSpecification {
   return [
@@ -178,8 +189,6 @@ export function highwayAreaFillMatch(): ExpressionSpecification {
     'service',
     '#cccccc',
     'parking',
-    '#a8a8a7',
-    'parking_space',
     '#a8a8a7',
     'living_street',
     '#bbbbb2',

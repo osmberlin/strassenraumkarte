@@ -178,6 +178,30 @@ export function layerShadow(
 }
 
 /**
+ * QGIS dropShadow as paint properties of the casting fill layer itself (`fill-shadow-*`,
+ * local MapLibre patch — docs/maplibre-patches.md): one style layer, the shadow sits
+ * directly under its own layer, opacity applies once to the whole layer's shadow.
+ * Use `layerShadow` instead when shadows of overlapping features must darken each other
+ * or the source is not drawn (building_shade).
+ */
+export function shadowPaint(
+  options: LayerShadowOptions,
+): Pick<
+  NonNullable<FillLayerSpecification['paint']>,
+  'fill-shadow-color' | 'fill-shadow-opacity' | 'fill-shadow-blur' | 'fill-shadow-translate'
+> {
+  const { blurMU, offsetMU, angleDeg, color, opacity } = options
+  return {
+    'fill-shadow-color': color,
+    'fill-shadow-opacity': opacity,
+    'fill-shadow-blur': metresInterpolate(blurMU, 1, MAP_UNIT_LAT),
+    ...(offsetMU > 0
+      ? { 'fill-shadow-translate': metreOffsetTranslate(offsetMU, angleDeg, MAP_UNIT_LAT) }
+      : {}),
+  }
+}
+
+/**
  * Soft drop shadow under a polygon fill: translated fill + blurred outline.
  * Insert *before* the main fill in the style array.
  */

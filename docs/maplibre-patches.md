@@ -205,3 +205,35 @@ It is global and has no switch. If a thin line must stay strong, give it a width
 one pixel at that zoom.
 
 `patches/tools/apply-hairline-coverage.py` made the edit.
+
+### `fill-shadow-*` — a fill layer casts its own drop shadow
+
+```ts
+paint: {
+  'fill-color': '#dadada',
+  'fill-shadow-color': '#000000',
+  'fill-shadow-opacity': 0.1,            // 0 (default) = no shadow
+  'fill-shadow-blur': […zoom expression, px…],
+  'fill-shadow-translate': […zoom expression, [x, y] px, map-anchored…],
+}
+```
+
+Use `shadowPaint()` from `src/style/effects.ts`; it converts QGIS MapUnits and the offset angle.
+
+How it works: the layer is rendered to the scratch framebuffer once. `drawLayerShadow` blurs
+its alpha, tints it with the shadow colour, samples it shifted by the translate vector (rotated
+by the map bearing) and multiplies it onto the map; then the layer is composited from the same
+framebuffer as usual. Shader mode 3 (`shadow`) of the `layerBlur` program.
+
+When to use which:
+
+| | `fill-shadow-*` | `layerShadow()` (separate layer) |
+|---|---|---|
+| Style layers | one | shadow layer + source layer |
+| Opacity | once for the whole layer's shadow | per feature — overlapping shadows darken each other |
+| Source hidden (`building_shade`) | no | yes |
+| Shadow under *all* features of the layer | yes | yes |
+
+Neither can interleave a shadow between features of the same layer.
+
+`patches/tools/apply-fill-shadow.py` made the edits.
