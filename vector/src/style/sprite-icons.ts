@@ -87,6 +87,11 @@ export type PackedIcon = {
   params?: SvgParams
   /** Largest QGIS marker width in metres — sets the raster resolution only. */
   groundM: number
+  /**
+   * QGIS dropShadow baked under the image (black, no offset). The sprite grows by
+   * the blur margin; the marker itself stays ICON_WIDTH_PX logical px wide.
+   */
+  shadow?: { /** Blur radius as a fraction of the marker width. */ blurFrac: number; opacity: number }
 }
 
 /** Style `sprite` id of the marker sheet; MapLibre exposes its images as `symbols:<name>`. */
@@ -227,7 +232,19 @@ export const PACKED_ICONS: PackedIcon[] = [
   // Arrows: 5 m long → 1.5 m wide. Symbols: "width" 0.65–0.7 m.
   ...markingIcons('arrows', ROAD_MARKING_ARROWS, 1.5),
   ...markingIcons('symbols', ROAD_MARKING_SYMBOLS, 0.7),
-  // Crowns: diameter_crown 1–23 m, mostly 6–12 m.
-  { id: TREE_ICON.broadleaved, file: 'trees/broadleaved.png', groundM: 10 },
-  { id: TREE_ICON.needleleaved, file: 'trees/needleleaved.png', groundM: 10 },
+  // Crowns: diameter_crown 1–23 m, mostly 6–12 m. QGIS dropShadow: black α 0.4, blur
+  // 3 MapUnits (≈ 0.18 of a 10 m crown = 16.4 MapUnits), offset 0.4 MapUnits (dropped:
+  // the icon rotates). Baked in so each crown shades the crowns drawn before it.
+  {
+    id: TREE_ICON.broadleaved,
+    file: 'trees/broadleaved.png',
+    groundM: 10,
+    shadow: { blurFrac: 0.18, opacity: 0.4 },
+  },
+  {
+    id: TREE_ICON.needleleaved,
+    file: 'trees/needleleaved.png',
+    groundM: 10,
+    shadow: { blurFrac: 0.18, opacity: 0.4 },
+  },
 ]

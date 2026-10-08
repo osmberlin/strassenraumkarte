@@ -209,20 +209,13 @@ describe('buildStyle', () => {
     expect(treeIdx).toBeGreaterThan(buildingIdx)
   })
 
-  test('tree crown shadow radius halves diameter_crown', () => {
+  test('tree crowns: one flattened symbol layer at 25 %, shadow baked into the sprite', () => {
     const style = buildStyle({
       url: 'pmtiles://http://127.0.0.1:5177/tiles/strassenraumkarte.pmtiles',
     })
-    const shadow = style.layers.find((l) => l.id === 'tree-crown-shadow') as
-      | CircleLayerSpecification
-      | undefined
-    expect(shadow).toBeDefined()
-    const radius = shadow!.paint?.['circle-radius'] as unknown[]
-    // ['interpolate', …, 17, ['*', ['/', coalesce…, 2], factor], …]
-    const z17 = radius[4] as unknown[]
-    expect(z17[0]).toBe('*')
-    const half = z17[1] as unknown[]
-    expect(half[0]).toBe('/')
-    expect(half[2]).toBe(2)
+    const crown = style.layers.find((l) => l.id === 'tree-crown')
+    expect(crown?.type).toBe('symbol')
+    expect((crown?.paint as Record<string, unknown>)['symbol-layer-opacity']).toBe(0.25)
+    expect(style.layers.some((l) => l.id === 'tree-crown-shadow')).toBe(false)
   })
 })

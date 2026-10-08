@@ -1,6 +1,9 @@
 diff --git a/node_modules/maplibre-gl/.bun-tag-1ddba408b2aeda05 b/.bun-tag-1ddba408b2aeda05
 new file mode 100644
 index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/maplibre-gl/.bun-tag-2b9538386d01abeb b/.bun-tag-2b9538386d01abeb
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
 diff --git a/node_modules/maplibre-gl/.bun-tag-57613e58b17730af b/.bun-tag-57613e58b17730af
 new file mode 100644
 index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
@@ -11,7 +14,7 @@ diff --git a/node_modules/maplibre-gl/.bun-tag-984e4a1369513c3d b/.bun-tag-984e4
 new file mode 100644
 index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
 diff --git a/dist/maplibre-gl-dev.mjs b/dist/maplibre-gl-dev.mjs
-index 978bcadd8e5ff1cef5c65e1973313ada4f3d584b..99d680f3af0ba1fd19a1c6cea2740a64c295230e 100644
+index 978bcadd8e5ff1cef5c65e1973313ada4f3d584b..6f96c152d3da7ea13407fdc3675f0bae87724231 100644
 --- a/dist/maplibre-gl-dev.mjs
 +++ b/dist/maplibre-gl-dev.mjs
 @@ -8293,6 +8293,7 @@ const shaders = {
@@ -87,7 +90,28 @@ index 978bcadd8e5ff1cef5c65e1973313ada4f3d584b..99d680f3af0ba1fd19a1c6cea2740a64
  	layerOpacity: layerOpacityUniforms,
  	raster: rasterUniforms,
  	symbolIcon: symbolIconUniforms,
-@@ -16577,14 +16622,77 @@ function bindLayerOpacity(painter, width, height) {
+@@ -16044,6 +16089,20 @@ function createQuadTriangles(quadCount) {
+ const identityMat4 = identity(/* @__PURE__ */ new Float32Array(16));
+ function drawSymbols(painter, tileManager, layer, coords, variableOffsets, renderOptions) {
+ 	if (painter.renderPass !== "translucent") return;
++	// [strassenraumkarte patch] `symbol-layer-opacity`: draw the layer opaque into the
++	// scratch FBO and composite it once, so overlapping symbols do not add up.
++	const layerOpacity = layer.paint.get("symbol-layer-opacity");
++	if (layerOpacity === 0) return;
++	if (layerOpacity < 1 && !renderOptions.symbolLayerOpacityPass) {
++		if (!coords.some((coord) => tileManager.getTile(coord).getBucket(layer))) return;
++		const results = prepareDrawLayerOpacity(painter, layer, coords, !!painter.style.map.terrain);
++		drawSymbols(painter, tileManager, layer, coords, variableOffsets, {
++			...renderOptions,
++			symbolLayerOpacityPass: true
++		});
++		drawLayerOpacity(painter, layerOpacity, results, layer, "normal", 0, "normal");
++		return;
++	}
+ 	const { isRenderingToTexture } = renderOptions;
+ 	const stencilMode = StencilMode.disabled;
+ 	const colorMode = painter.colorModeForRenderPass();
+@@ -16577,14 +16636,77 @@ function bindLayerOpacity(painter, width, height) {
  	fbo.height = height;
  	painter.context.bindFramebuffer.set(fbo.framebuffer);
  }
@@ -125,8 +149,8 @@ index 978bcadd8e5ff1cef5c65e1973313ada4f3d584b..99d680f3af0ba1fd19a1c6cea2740a64
 +*   inner-core: S·(2b − 1)  — zero at the edge, full ~radius inside (shapeburst-like)
 +*/
 +function drawLayerBlur(painter, opacity, blur, target, layer, colorMode, mode) {
-+	const context = painter.context;
-+	const gl = context.gl;
+ 	const context = painter.context;
+ 	const gl = context.gl;
 +	const { width, height } = painter.layerOpacityFbo;
 +	const tapSpacing = 3 * (blur * painter.pixelRatio / 2) / 16;
 +	const draw = (stepX, stepY, passOpacity, passColorMode, passMode) => painter.useProgram("layerBlur").draw(context, gl.TRIANGLES, DepthMode.disabled, StencilMode.disabled, passColorMode, CullFaceMode.disabled, layerBlurUniformValues(passOpacity, 0, [stepX, stepY], passMode), null, null, layer.id, painter.viewportBuffer, painter.quadTriangleIndexBuffer, painter.viewportSegments, layer.paint, painter.transform.zoom);
@@ -151,8 +175,8 @@ index 978bcadd8e5ff1cef5c65e1973313ada4f3d584b..99d680f3af0ba1fd19a1c6cea2740a64
 +	painter.currentStencilSource = void 0;
 +}
 +function drawLayerOpacity(painter, opacity, prepareDrawLayerOpacityResult, layer, blend, blur, blurMode) {
- 	const context = painter.context;
- 	const gl = context.gl;
++	const context = painter.context;
++	const gl = context.gl;
 +	const colorMode = !painter._showOverdrawInspector && ColorMode.layerBlend[blend] || painter.colorModeForRenderPass();
 +	if (blur > 0) {
 +		drawLayerBlur(painter, opacity, blur, prepareDrawLayerOpacityResult, layer, colorMode, blurMode);
@@ -167,7 +191,7 @@ index 978bcadd8e5ff1cef5c65e1973313ada4f3d584b..99d680f3af0ba1fd19a1c6cea2740a64
  	painter.currentStencilSource = void 0;
  }
  //#endregion
-@@ -16642,12 +16750,17 @@ function drawLine(painter, tileManager, layer, coords, renderOptions) {
+@@ -16642,12 +16764,17 @@ function drawLine(painter, tileManager, layer, coords, renderOptions) {
  	const opacity = layer.paint.get("line-opacity");
  	const width = layer.paint.get("line-width");
  	const layerOpacity = layer.paint.get("line-layer-opacity");
@@ -187,7 +211,7 @@ index 978bcadd8e5ff1cef5c65e1973313ada4f3d584b..99d680f3af0ba1fd19a1c6cea2740a64
  		return;
  	}
  	drawLineTiles(painter, tileManager, layer, coords, renderOptions, useTerrain);
-@@ -16755,12 +16868,17 @@ function drawFill(painter, tileManager, layer, coords, renderOptions) {
+@@ -16755,12 +16882,17 @@ function drawFill(painter, tileManager, layer, coords, renderOptions) {
  	const color = layer.paint.get("fill-color");
  	const opacity = layer.paint.get("fill-opacity");
  	const layerOpacity = layer.paint.get("fill-layer-opacity");
@@ -207,7 +231,7 @@ index 978bcadd8e5ff1cef5c65e1973313ada4f3d584b..99d680f3af0ba1fd19a1c6cea2740a64
  		return;
  	}
  	const pattern = layer.paint.get("fill-pattern");
-@@ -18189,6 +18307,8 @@ var Painter = class Painter {
+@@ -18189,6 +18321,8 @@ var Painter = class Painter {
  		}
  		this.layerOpacityFbo?.destroy();
  		this.layerOpacityFbo = null;
@@ -217,7 +241,7 @@ index 978bcadd8e5ff1cef5c65e1973313ada4f3d584b..99d680f3af0ba1fd19a1c6cea2740a64
  		if (this.debugBuffer) this.debugBuffer.destroy();
  		if (this.rasterBoundsBuffer) this.rasterBoundsBuffer.destroy();
 diff --git a/dist/maplibre-gl-shared-dev.mjs b/dist/maplibre-gl-shared-dev.mjs
-index ffc0e9591a62f8dfce92b6091ad8454a631a3e3e..938d42d54f63c8924be9395087132065fbf080c0 100644
+index ffc0e9591a62f8dfce92b6091ad8454a631a3e3e..5ea8e48f6c9a985badfb3b51bdb5e88a85262e49 100644
 --- a/dist/maplibre-gl-shared-dev.mjs
 +++ b/dist/maplibre-gl-shared-dev.mjs
 @@ -4564,6 +4564,38 @@ const latest = {
@@ -298,7 +322,25 @@ index ffc0e9591a62f8dfce92b6091ad8454a631a3e3e..938d42d54f63c8924be9395087132065
  		"line-layer-opacity": {
  			"type": "number",
  			"default": 1,
-@@ -18682,6 +18746,9 @@ const getPaint$4 = () => paint$4 = paint$4 || new Properties({
+@@ -5167,6 +5231,17 @@ const latest = {
+ 		}
+ 	},
+ 	paint_symbol: {
++		"symbol-layer-opacity": {
++			"type": "number",
++			"default": 1,
++			"minimum": 0,
++			"maximum": 1,
++			"expression": {
++				"interpolated": true,
++				"parameters": ["zoom", "global-state"]
++			},
++			"property-type": "data-constant"
++		},
+ 		"icon-opacity": {
+ 			"type": "number",
+ 			"default": 1,
+@@ -18682,6 +18757,9 @@ const getPaint$4 = () => paint$4 = paint$4 || new Properties({
  	"fill-antialias": new DataConstantProperty(latest["paint_fill"]["fill-antialias"], "fill-antialias"),
  	"fill-opacity": new DataDrivenProperty(latest["paint_fill"]["fill-opacity"], "fill-opacity"),
  	"fill-layer-opacity": new DataConstantProperty(latest["paint_fill"]["fill-layer-opacity"], "fill-layer-opacity"),
@@ -308,7 +350,7 @@ index ffc0e9591a62f8dfce92b6091ad8454a631a3e3e..938d42d54f63c8924be9395087132065
  	"fill-color": new DataDrivenProperty(latest["paint_fill"]["fill-color"], "fill-color"),
  	"fill-outline-color": new DataDrivenProperty(latest["paint_fill"]["fill-outline-color"], "fill-outline-color"),
  	"fill-translate": new DataConstantProperty(latest["paint_fill"]["fill-translate"], "fill-translate"),
-@@ -21613,6 +21680,9 @@ let paint$2;
+@@ -21613,6 +21691,9 @@ let paint$2;
  const getPaint$2 = () => paint$2 = paint$2 || new Properties({
  	"line-opacity": new DataDrivenProperty(latest["paint_line"]["line-opacity"], "line-opacity"),
  	"line-layer-opacity": new DataConstantProperty(latest["paint_line"]["line-layer-opacity"], "line-layer-opacity"),
@@ -318,8 +360,16 @@ index ffc0e9591a62f8dfce92b6091ad8454a631a3e3e..938d42d54f63c8924be9395087132065
  	"line-color": new DataDrivenProperty(latest["paint_line"]["line-color"], "line-color"),
  	"line-translate": new DataConstantProperty(latest["paint_line"]["line-translate"], "line-translate"),
  	"line-translate-anchor": new DataConstantProperty(latest["paint_line"]["line-translate-anchor"], "line-translate-anchor"),
+@@ -24484,6 +24565,7 @@ const getLayout = () => layout = layout || new Properties({
+ });
+ let paint$1;
+ const getPaint$1 = () => paint$1 = paint$1 || new Properties({
++	"symbol-layer-opacity": new DataConstantProperty(latest["paint_symbol"]["symbol-layer-opacity"], "symbol-layer-opacity"),
+ 	"icon-opacity": new DataDrivenProperty(latest["paint_symbol"]["icon-opacity"], "icon-opacity"),
+ 	"icon-color": new DataDrivenProperty(latest["paint_symbol"]["icon-color"], "icon-color"),
+ 	"icon-halo-color": new DataDrivenProperty(latest["paint_symbol"]["icon-halo-color"], "icon-halo-color"),
 diff --git a/dist/maplibre-gl.d.ts b/dist/maplibre-gl.d.ts
-index 67834dd09c8a0814db12c930c6352561dd58cd1e..eea6c6354031fa7bc7cf0df98b778f7a2908f65d 100644
+index 67834dd09c8a0814db12c930c6352561dd58cd1e..0e2e17ecb05bfea77c18e343b6aadb1bd40a1ba3 100644
 --- a/dist/maplibre-gl.d.ts
 +++ b/dist/maplibre-gl.d.ts
 @@ -3051,6 +3051,9 @@ type FillPaintProps = {
@@ -362,6 +412,22 @@ index 67834dd09c8a0814db12c930c6352561dd58cd1e..eea6c6354031fa7bc7cf0df98b778f7a
    "line-color": PossiblyEvaluatedPropertyValue<Color>;
    "line-translate": [number, number];
    "line-translate-anchor": "map" | "viewport";
+@@ -3738,6 +3750,7 @@ type SymbolLayoutPropsPossiblyEvaluated = {
+   "text-optional": boolean;
+ };
+ type SymbolPaintProps = {
++  "symbol-layer-opacity": DataConstantProperty<number>;
+   "icon-opacity": DataDrivenProperty<number>;
+   "icon-color": DataDrivenProperty<Color>;
+   "icon-halo-color": DataDrivenProperty<Color>;
+@@ -3754,6 +3767,7 @@ type SymbolPaintProps = {
+   "text-translate-anchor": DataConstantProperty<"map" | "viewport">;
+ };
+ type SymbolPaintPropsPossiblyEvaluated = {
++  "symbol-layer-opacity": number;
+   "icon-opacity": PossiblyEvaluatedPropertyValue<number>;
+   "icon-color": PossiblyEvaluatedPropertyValue<Color>;
+   "icon-halo-color": PossiblyEvaluatedPropertyValue<Color>;
 diff --git a/package.json b/package.json
 index d3680c38ad0fcb24c54d28cd906d8719d7404643..5a178f9ac444172b8b7aeb2edd0d9b2cd2ba674e 100644
 --- a/package.json

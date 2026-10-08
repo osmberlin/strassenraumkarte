@@ -166,13 +166,33 @@ async function iconEntry(icon: PackedIcon, pixelRatio: number): Promise<SpriteEn
     .ensureAlpha()
     .png()
     .toBuffer()
+  // Logical marker width = width / pixelRatio = ICON_WIDTH_PX on every sheet.
+  const spritePixelRatio = width / ICON_WIDTH_PX
+  const id = icon.id.slice(SYMBOL_SPRITE_ID.length + 1)
+  if (!icon.shadow) return { id, buffer, width, height, pixelRatio: spritePixelRatio }
+
+  // Blurred black copy of the alpha under the image, on a canvas grown by the blur margin.
+  const radius = icon.shadow.blurFrac * width
+  const pad = Math.ceil(radius * 1.5)
+  const extend = { top: pad, bottom: pad, left: pad, right: pad, background: '#00000000' }
+  const alpha = await sharp(buffer).extend(extend).extractChannel('alpha').blur(radius / 2).toBuffer()
+  const shadow = await sharp({
+    create: {
+      width: width + 2 * pad,
+      height: height + 2 * pad,
+      channels: 3,
+      background: '#000000',
+    },
+  })
+    .joinChannel(await sharp(alpha).linear(icon.shadow.opacity, 0).toBuffer())
+    .png()
+    .toBuffer()
   return {
-    id: icon.id.slice(SYMBOL_SPRITE_ID.length + 1),
-    buffer,
-    width,
-    height,
-    // Logical width = width / pixelRatio = ICON_WIDTH_PX on every sheet.
-    pixelRatio: width / ICON_WIDTH_PX,
+    id,
+    buffer: await sharp(shadow).composite([{ input: buffer, left: pad, top: pad }]).png().toBuffer(),
+    width: width + 2 * pad,
+    height: height + 2 * pad,
+    pixelRatio: spritePixelRatio,
   }
 }
 

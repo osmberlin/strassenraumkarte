@@ -255,6 +255,39 @@ export function innerShadow(
   ]
 }
 
+export type InnerFadeOptions = {
+  color: EffectColor
+  /** Per-feature opacity (default 1). */
+  opacity?: number | ExpressionSpecification
+  /** Opacity of the composited layer (QGIS layer opacity). */
+  layerOpacity?: number
+  /** Fade distance as a QGIS blur radius in MapUnits. */
+  blurMU: number
+  /** `inner-edge`: strongest at the polygon edge. `inner-core`: zero at the edge, full inside. */
+  mode: 'inner-edge' | 'inner-core'
+  blend?: 'normal' | 'multiply' | 'screen'
+}
+
+/**
+ * A colour that fades across the inside of a polygon (`fill-layer-blur-mode`, local
+ * MapLibre patch). Building block for inner shadows/glows (`inner-edge`) and a
+ * stand-in for whole-shape Shapeburst fills (`inner-core`).
+ */
+export function innerFade(
+  id: string,
+  base: LayerBase,
+  options: InnerFadeOptions,
+): FillLayerSpecification {
+  return innerEdgeLayer(id, base, {
+    color: options.color,
+    opacity: options.opacity ?? 1,
+    layerOpacity: options.layerOpacity,
+    blur: metresInterpolate(options.blurMU, 1, MAP_UNIT_LAT),
+    mode: options.mode,
+    blend: options.blend ?? 'normal',
+  })
+}
+
 function innerEdgeLayer(
   id: string,
   base: LayerBase,
@@ -263,6 +296,8 @@ function innerEdgeLayer(
     opacity: number | ExpressionSpecification
     blur: ExpressionSpecification
     layerOpacity?: number
+    mode?: 'inner-edge' | 'inner-core'
+    blend?: 'normal' | 'multiply' | 'screen'
   },
 ): FillLayerSpecification {
   return {
@@ -275,8 +310,8 @@ function innerEdgeLayer(
       'fill-antialias': false,
       'fill-layer-opacity': options.layerOpacity ?? 1,
       'fill-layer-blur': options.blur,
-      'fill-layer-blur-mode': 'inner-edge',
-      'fill-layer-blend': 'multiply',
+      'fill-layer-blur-mode': options.mode ?? 'inner-edge',
+      'fill-layer-blend': options.blend ?? 'multiply',
     },
   }
 }

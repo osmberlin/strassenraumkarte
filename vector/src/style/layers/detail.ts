@@ -591,9 +591,10 @@ export function markingFurnitureLayers(): LayerSpecification[] {
  * - shrub: broadleaved.png, size = `@mercator_scale * diameter_crown`, same shadow, blur 1.5
  * `tree_stump` has no category (trunk only). Layer "trunk" draws on top at opacity 0.75.
  *
- * Deviations: MapLibre has no layer-level opacity for symbols, so overlapping crowns
- * accumulate (QGIS flattens the layer first, then applies 0.25); the drop shadow is one soft
- * circle layer under all crowns instead of a per-feature blurred copy of the crown shape.
+ * The 0.25 is `symbol-layer-opacity` (local MapLibre patch, docs/maplibre-patches.md).
+ * The crown dropShadow is baked into the sprite (`shadow` in sprite-icons.ts), so inside the
+ * flattened layer every crown shades the crowns drawn before it, as in QGIS. Its blur is a
+ * fixed fraction of the crown instead of 3 map units, and the 0.4 offset is dropped.
  */
 export function treeLayers(): LayerSpecification[] {
   const layers: LayerSpecification[] = []
@@ -621,27 +622,6 @@ export function treeLayers(): LayerSpecification[] {
     20,
     ['*', ['/', ['coalesce', ['get', 'circumference'], 1.57], 6.283185], metresFactor(20)],
   ]
-
-  layers.push({
-    id: 'tree-crown-shadow',
-    type: 'circle',
-    ...treeBase,
-    filter: hasCrown,
-    paint: {
-      'circle-color': '#000000',
-      // dropShadow opacity 0.4 × layer opacity 0.25
-      'circle-opacity': 0.1,
-      // shrub blur 1.5 vs tree 3 map units → softer / harder circle-blur stand-in
-      'circle-blur': [
-        'case',
-        ['==', ['get', 'natural'], 'shrub'],
-        0.4,
-        0.6,
-      ],
-      'circle-radius': crownRadius,
-      'circle-translate': shadowTranslate,
-    } as never,
-  })
 
   layers.push({
     id: 'tree-trunk-shadow',
@@ -681,7 +661,8 @@ export function treeLayers(): LayerSpecification[] {
       'icon-ignore-placement': true,
     },
     paint: {
-      'icon-opacity': 0.25,
+      // QGIS layer opacity: crowns are flattened first, so overlaps do not darken.
+      'symbol-layer-opacity': 0.25,
     },
   })
 

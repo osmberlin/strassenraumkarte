@@ -152,3 +152,22 @@ kerb line along every carriageway.
 
 `patches/tools/apply-layer-blur.py` and `apply-layer-blur-mode.py` are the scripts that made the edits; the first documents every
 anchor and both are the starting point when re-applying to a new MapLibre version.
+
+### `symbol-layer-opacity` — opacity of a flattened symbol layer
+
+MapLibre 6 has `fill-layer-opacity` and `line-layer-opacity` but nothing for symbols.
+
+```ts
+paint: { 'symbol-layer-opacity': 0.25 }   // tree crowns
+```
+
+Icons and text of the layer are drawn at their own opacity into the scratch framebuffer, which
+is then composited once. Overlapping symbols do not add up — the behaviour of a QGIS layer
+opacity. Not combined with blur or blend modes yet (easy to add: it goes through the same
+`drawLayerOpacity`).
+
+A per-feature QGIS effect that must interleave with the features of its own layer (each tree's
+shadow falls on the trees drawn before it) cannot be a separate layer. Bake it into the sprite
+instead — see `shadow` in `src/style/sprite-icons.ts`.
+
+`patches/tools/apply-symbol-layer-opacity.py` made the edits.

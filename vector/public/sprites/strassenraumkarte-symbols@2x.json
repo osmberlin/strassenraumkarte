@@ -2,461 +2,461 @@
   "trees/broadleaved": {
     "x": 0,
     "y": 0,
-    "width": 220,
-    "height": 228,
+    "width": 340,
+    "height": 348,
     "pixelRatio": 3.4375
   },
   "trees/needleleaved": {
-    "x": 220,
+    "x": 340,
     "y": 0,
-    "width": 220,
-    "height": 228,
+    "width": 340,
+    "height": 348,
     "pixelRatio": 3.4375
   },
   "tourism/viewpoint_all_directions": {
-    "x": 440,
+    "x": 680,
     "y": 0,
     "width": 114,
     "height": 114,
     "pixelRatio": 1.78125
   },
   "traffic_signs/arrows/left": {
-    "x": 554,
+    "x": 794,
     "y": 0,
     "width": 32,
     "height": 106,
     "pixelRatio": 0.5
   },
   "traffic_signs/arrows/left-yellow": {
-    "x": 586,
+    "x": 826,
     "y": 0,
     "width": 32,
     "height": 106,
     "pixelRatio": 0.5
   },
   "traffic_signs/arrows/left;right": {
-    "x": 618,
+    "x": 858,
     "y": 0,
     "width": 32,
     "height": 106,
     "pixelRatio": 0.5
   },
   "traffic_signs/arrows/left;right-yellow": {
-    "x": 650,
+    "x": 890,
     "y": 0,
     "width": 32,
     "height": 106,
     "pixelRatio": 0.5
   },
   "traffic_signs/arrows/left;through": {
-    "x": 682,
+    "x": 922,
     "y": 0,
     "width": 32,
     "height": 106,
     "pixelRatio": 0.5
   },
   "traffic_signs/arrows/left;through-yellow": {
-    "x": 714,
+    "x": 954,
     "y": 0,
     "width": 32,
     "height": 106,
     "pixelRatio": 0.5
   },
   "traffic_signs/arrows/merge_to_left": {
-    "x": 746,
+    "x": 986,
     "y": 0,
     "width": 32,
     "height": 106,
     "pixelRatio": 0.5
   },
   "traffic_signs/arrows/merge_to_left-yellow": {
-    "x": 778,
+    "x": 1018,
     "y": 0,
     "width": 32,
     "height": 106,
     "pixelRatio": 0.5
   },
   "traffic_signs/arrows/merge_to_right": {
-    "x": 810,
+    "x": 1050,
     "y": 0,
     "width": 32,
     "height": 106,
     "pixelRatio": 0.5
   },
   "traffic_signs/arrows/merge_to_right-yellow": {
-    "x": 842,
+    "x": 1082,
     "y": 0,
     "width": 32,
     "height": 106,
     "pixelRatio": 0.5
   },
   "traffic_signs/arrows/right": {
-    "x": 874,
+    "x": 1114,
     "y": 0,
     "width": 32,
     "height": 106,
     "pixelRatio": 0.5
   },
   "traffic_signs/arrows/right-yellow": {
-    "x": 906,
+    "x": 1146,
     "y": 0,
     "width": 32,
     "height": 106,
     "pixelRatio": 0.5
   },
   "traffic_signs/arrows/slight_left": {
-    "x": 938,
+    "x": 1178,
     "y": 0,
     "width": 32,
     "height": 106,
     "pixelRatio": 0.5
   },
   "traffic_signs/arrows/slight_left-yellow": {
-    "x": 970,
+    "x": 1210,
     "y": 0,
     "width": 32,
     "height": 106,
     "pixelRatio": 0.5
   },
   "traffic_signs/arrows/slight_right": {
-    "x": 1002,
+    "x": 1242,
     "y": 0,
     "width": 32,
     "height": 106,
     "pixelRatio": 0.5
   },
   "traffic_signs/arrows/slight_right-yellow": {
-    "x": 1034,
+    "x": 1274,
     "y": 0,
     "width": 32,
     "height": 106,
     "pixelRatio": 0.5
   },
   "traffic_signs/arrows/through": {
-    "x": 1066,
+    "x": 1306,
     "y": 0,
     "width": 32,
     "height": 106,
     "pixelRatio": 0.5
   },
   "traffic_signs/arrows/through-yellow": {
-    "x": 1098,
+    "x": 1338,
     "y": 0,
     "width": 32,
     "height": 106,
     "pixelRatio": 0.5
   },
   "traffic_signs/arrows/through;right": {
-    "x": 1130,
+    "x": 1370,
     "y": 0,
     "width": 32,
     "height": 106,
     "pixelRatio": 0.5
   },
   "traffic_signs/arrows/through;right-yellow": {
-    "x": 1162,
+    "x": 1402,
     "y": 0,
     "width": 32,
     "height": 106,
     "pixelRatio": 0.5
   },
   "amenity/fountain": {
-    "x": 1194,
+    "x": 1434,
     "y": 0,
     "width": 70,
     "height": 70,
     "pixelRatio": 1.09375
   },
   "traffic_signs/DE/605-10": {
-    "x": 1264,
+    "x": 1504,
     "y": 0,
     "width": 16,
     "height": 64,
     "pixelRatio": 0.25
   },
   "traffic_signs/DE/605-11": {
-    "x": 1280,
+    "x": 1520,
     "y": 0,
     "width": 16,
     "height": 64,
     "pixelRatio": 0.25
   },
   "traffic_signs/DE/605-20": {
-    "x": 1296,
+    "x": 1536,
     "y": 0,
     "width": 16,
     "height": 64,
     "pixelRatio": 0.25
   },
   "traffic_signs/DE/605-21": {
-    "x": 1312,
+    "x": 1552,
     "y": 0,
     "width": 16,
     "height": 64,
     "pixelRatio": 0.25
   },
   "tourism/viewpoint": {
-    "x": 1328,
+    "x": 1568,
     "y": 0,
     "width": 66,
     "height": 54,
     "pixelRatio": 1.03125
   },
   "amenity/loading_ramp": {
-    "x": 1394,
+    "x": 1634,
     "y": 0,
     "width": 54,
     "height": 54,
     "pixelRatio": 0.84375
   },
   "leisure/table_tennis": {
-    "x": 1448,
+    "x": 1688,
     "y": 0,
     "width": 38,
     "height": 54,
     "pixelRatio": 0.59375
   },
   "leisure/table_tennis_net_no": {
-    "x": 1486,
+    "x": 1726,
     "y": 0,
     "width": 38,
     "height": 54,
     "pixelRatio": 0.59375
   },
   "leisure/table_tennis_net_yes": {
-    "x": 1524,
+    "x": 1764,
     "y": 0,
     "width": 38,
     "height": 54,
     "pixelRatio": 0.59375
   },
   "amenity/mobility_hub": {
-    "x": 1562,
+    "x": 1802,
     "y": 0,
     "width": 48,
     "height": 48,
     "pixelRatio": 0.75
   },
   "amenity/mobility_hub_Jelbi": {
-    "x": 1610,
+    "x": 1850,
     "y": 0,
     "width": 48,
     "height": 48,
     "pixelRatio": 0.75
   },
   "public_transport/s-train": {
-    "x": 1658,
+    "x": 1898,
     "y": 0,
     "width": 48,
     "height": 48,
     "pixelRatio": 0.75
   },
   "amenity/recycling_container": {
-    "x": 1706,
+    "x": 1946,
     "y": 0,
     "width": 44,
     "height": 44,
     "pixelRatio": 0.6875
   },
   "public_transport/subway": {
-    "x": 1750,
+    "x": 1990,
     "y": 0,
     "width": 44,
     "height": 44,
     "pixelRatio": 0.6875
   },
   "tourism/guidepost": {
-    "x": 1794,
-    "y": 0,
+    "x": 0,
+    "y": 348,
     "width": 40,
     "height": 40,
     "pixelRatio": 0.625
   },
   "amenity/bicycle_rental": {
-    "x": 1834,
-    "y": 0,
+    "x": 40,
+    "y": 348,
     "width": 40,
     "height": 38,
     "pixelRatio": 0.625
   },
   "amenity/toilets": {
-    "x": 1874,
-    "y": 0,
+    "x": 80,
+    "y": 348,
     "width": 36,
     "height": 36,
     "pixelRatio": 0.5625
   },
   "tourism/artwork": {
-    "x": 1910,
-    "y": 0,
+    "x": 116,
+    "y": 348,
     "width": 36,
     "height": 36,
     "pixelRatio": 0.5625
   },
   "historic/memorial": {
-    "x": 1946,
-    "y": 0,
+    "x": 152,
+    "y": 348,
     "width": 26,
     "height": 34,
     "pixelRatio": 0.40625
   },
   "amenity/small_electric_vehicle": {
-    "x": 1972,
-    "y": 0,
+    "x": 178,
+    "y": 348,
     "width": 40,
     "height": 32,
     "pixelRatio": 0.625
   },
   "amenity/recycling": {
-    "x": 2012,
-    "y": 0,
+    "x": 218,
+    "y": 348,
     "width": 30,
     "height": 30,
     "pixelRatio": 0.46875
   },
   "traffic_signs/street_name_sign": {
-    "x": 0,
-    "y": 228,
+    "x": 248,
+    "y": 348,
     "width": 30,
     "height": 30,
     "pixelRatio": 0.46875
   },
   "traffic_signs/symbols/footway": {
-    "x": 30,
-    "y": 228,
+    "x": 278,
+    "y": 348,
     "width": 16,
     "height": 30,
     "pixelRatio": 0.25
   },
   "traffic_signs/symbols/footway-yellow": {
-    "x": 46,
-    "y": 228,
+    "x": 294,
+    "y": 348,
     "width": 16,
     "height": 30,
     "pixelRatio": 0.25
   },
   "amenity/bicycle": {
-    "x": 62,
-    "y": 228,
+    "x": 310,
+    "y": 348,
     "width": 40,
     "height": 28,
     "pixelRatio": 0.625
   },
   "rock/rock01": {
-    "x": 102,
-    "y": 228,
+    "x": 350,
+    "y": 348,
     "width": 22,
     "height": 28,
     "pixelRatio": 0.34375
   },
   "amenity/post_box_green": {
-    "x": 124,
-    "y": 228,
+    "x": 372,
+    "y": 348,
     "width": 26,
     "height": 26,
     "pixelRatio": 0.40625
   },
   "amenity/post_box_yellow": {
-    "x": 150,
-    "y": 228,
+    "x": 398,
+    "y": 348,
     "width": 26,
     "height": 26,
     "pixelRatio": 0.40625
   },
   "amenity/telephone": {
-    "x": 176,
-    "y": 228,
+    "x": 424,
+    "y": 348,
     "width": 26,
     "height": 26,
     "pixelRatio": 0.40625
   },
   "tourism/information": {
-    "x": 202,
-    "y": 228,
+    "x": 450,
+    "y": 348,
     "width": 26,
     "height": 26,
     "pixelRatio": 0.40625
   },
   "amenity/cargo_bike": {
-    "x": 228,
-    "y": 228,
+    "x": 476,
+    "y": 348,
     "width": 48,
     "height": 24,
     "pixelRatio": 0.75
   },
   "amenity/bench": {
-    "x": 276,
-    "y": 228,
+    "x": 524,
+    "y": 348,
     "width": 38,
     "height": 22,
     "pixelRatio": 0.59375
   },
   "leisure/picnic_table": {
-    "x": 314,
-    "y": 228,
+    "x": 562,
+    "y": 348,
     "width": 38,
     "height": 22,
     "pixelRatio": 0.59375
   },
   "amenity/waste_basket": {
-    "x": 352,
-    "y": 228,
+    "x": 600,
+    "y": 348,
     "width": 18,
     "height": 22,
     "pixelRatio": 0.28125
   },
   "traffic_signs/DE/222": {
-    "x": 370,
-    "y": 228,
+    "x": 618,
+    "y": 348,
     "width": 20,
     "height": 20,
     "pixelRatio": 0.3125
   },
   "traffic_signs/DE/222-10": {
-    "x": 390,
-    "y": 228,
+    "x": 638,
+    "y": 348,
     "width": 20,
     "height": 20,
     "pixelRatio": 0.3125
   },
   "traffic_signs/symbols/wheelchair": {
-    "x": 410,
-    "y": 228,
+    "x": 658,
+    "y": 348,
     "width": 16,
     "height": 20,
     "pixelRatio": 0.25
   },
   "traffic_signs/symbols/wheelchair-yellow": {
-    "x": 426,
-    "y": 228,
+    "x": 674,
+    "y": 348,
     "width": 16,
     "height": 20,
     "pixelRatio": 0.25
   },
   "man_made/manhole": {
-    "x": 442,
-    "y": 228,
+    "x": 690,
+    "y": 348,
     "width": 16,
     "height": 16,
     "pixelRatio": 0.25
   },
   "amenity/bench_backrest_no": {
-    "x": 458,
-    "y": 228,
+    "x": 706,
+    "y": 348,
     "width": 38,
     "height": 12,
     "pixelRatio": 0.59375
   },
   "traffic_signs/symbols/bicycle": {
-    "x": 496,
-    "y": 228,
+    "x": 744,
+    "y": 348,
     "width": 16,
     "height": 10,
     "pixelRatio": 0.25
   },
   "traffic_signs/symbols/bicycle-yellow": {
-    "x": 512,
-    "y": 228,
+    "x": 760,
+    "y": 348,
     "width": 16,
     "height": 10,
     "pixelRatio": 0.25

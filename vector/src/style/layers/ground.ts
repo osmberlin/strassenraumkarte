@@ -13,7 +13,7 @@ import {
   WATER_SHORE,
   WATERWAY_LINE,
 } from '../colors'
-import { innerGlow, innerShadow, layerShadow, outerGlow } from '../effects'
+import { innerFade, innerGlow, innerShadow, layerShadow, outerGlow } from '../effects'
 import {
   base,
   landuseFillMatch,
@@ -50,42 +50,6 @@ function pushSurfacePatterns(
 /** icon-size so a PITCH_ICON_PIXELS raster covers `metres` on the ground. */
 function pitchIconSizeFromMetres(metres: ExpressionSpecification): ExpressionSpecification {
   return metresToPixels(['/', metres, PITCH_ICON_PIXELS] as ExpressionSpecification)
-}
-
-/**
- * QGIS shoreline max distance (metres): clamp(10·log10($area)−25, 1.5, 20).
- * Exported as `shore_m`; fraction scales each concentric band.
- */
-function shoreMetres(fraction: number): ExpressionSpecification {
-  return [
-    '*',
-    ['coalesce', ['get', 'shore_m'], 5],
-    fraction,
-  ] as ExpressionSpecification
-}
-
-/** Inward blurred ring — Shapeburst stand-in (matched width + blur). */
-function shoreBand(
-  id: string,
-  waterBase: ReturnType<typeof base>,
-  fraction: number,
-  opacity: number,
-): LayerSpecification {
-  const widthM = shoreMetres(fraction)
-  const w = metresToPixels(widthM)
-  return {
-    id,
-    type: 'line',
-    ...waterBase,
-    layout: { 'line-cap': 'butt', 'line-join': 'round' },
-    paint: {
-      'line-color': WATER_SHORE,
-      'line-opacity': opacity,
-      'line-width': w,
-      'line-blur': w,
-      'line-offset': metresToPixels(['*', widthM, -0.5] as ExpressionSpecification),
-    },
-  }
 }
 
 /**
@@ -137,6 +101,15 @@ export function groundLayers(): LayerSpecification[] {
       'fill-opacity': 1,
     },
   })
+
+  // QGIS landuse rule swimming_pool: SimpleFill + innerShadow (#a396d9, blur 4 MapUnits, multiply).
+  layers.push(
+    ...innerShadow(
+      'landuse-swimming_pool',
+      { ...landuseBase, filter: f(['==', ['get', 'class'], 'swimming_pool']) },
+      { blurM: 4, color: WATER_INNER, opacity: 1 },
+    ),
+  )
 
   layers.push(
     ...outerGlow('landuse-forest', { ...landuseBase, filter: forestFilter }, {
@@ -236,18 +209,39 @@ export function groundLayers(): LayerSpecification[] {
     },
   })
 
-  // Shapeburst shoreline — 3 inward blurred bands scaled by exported shore_m.
+  // QGIS stacks three symbol layers that each carry the same innerShadow
+  // (#a396d9, blur 4 MapUnits, multiply) — the edge shade multiplies up three times.
+  for (const n of [1, 2, 3]) {
+    layers.push(
+      ...innerShadow(`water-${n}`, waterBase, { blurM: 4, color: WATER_INNER, opacity: 1 }),
+    )
+  }
+
+  // Shapeburst shoreline: white α 0.2 at the bank fading inward. QGIS scales the
+  // distance per feature (1.5–20 m by area); a layer blur is one value → mid-size pond.
   layers.push(
-    shoreBand('water-shore-outer', waterBase, 1, 0.14),
-    shoreBand('water-shore-mid', waterBase, 0.55, 0.22),
-    shoreBand('water-shore-inner', waterBase, 0.28, 0.32),
+    innerFade('water-shore', waterBase, {
+      color: '#ffffff',
+      opacity: 0.4, // inner-edge peaks at half strength on a straight bank
+      blurMU: 6,
+      mode: 'inner-edge',
+    }),
   )
 
+  layers.push({
+    id: 'water-pattern',
+    type: 'fill',
+    ...waterBase,
+    paint: { 'fill-pattern': 'water', 'fill-opacity': 0.2 },
+  })
+
+  // `water body (depth effect)`: whole-shape Shapeburst to #0000cd, layer opacity 0.15.
   layers.push(
-    ...innerShadow('water', waterBase, {
-      blurM: 4,
-      color: WATER_INNER,
-      opacity: 1,
+    innerFade('water-depth', waterBase, {
+      color: '#0000cd',
+      layerOpacity: 0.15,
+      blurMU: 12,
+      mode: 'inner-core',
     }),
   )
 
