@@ -62,6 +62,14 @@ export const COMPARE_LOCATIONS: CompareLocation[] = [
     note: 'Waste-disposal enclosures — small polygons with QGIS drop shadows',
   },
   {
+    id: 'sett-street',
+    label: 'Sett street',
+    longitude: 13.42607,
+    latitude: 52.47511,
+    zoom: 20,
+    note: 'Sett carriageway (direction 260°) — texture scale and rotation at overzoom',
+  },
+  {
     id: 'park-water',
     label: 'Park / water / pitches',
     longitude: 13.4168,

@@ -19,6 +19,8 @@ import path from 'node:path'
 
 import sharp from 'sharp'
 
+import { TEXTURE_REF_ZOOM } from '../src/style/colors'
+
 import {
   ICON_WIDTH_PX,
   PACKED_ICONS,
@@ -44,7 +46,6 @@ const SYMBOL_SHEET = 'strassenraumkarte-symbols'
 const DEFAULT_LAT = 52.48
 const METRES_PER_PIXEL_Z0 = 78271.51696
 /** Archive/compare detail zoom — bake MapUnit texture widths here. */
-const TEXTURE_REF_ZOOM = 18
 const MIN_PATTERN_PX = 16
 
 function pxPerMetre(z: number, lat = DEFAULT_LAT): number {

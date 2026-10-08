@@ -243,3 +243,41 @@ When to use which:
 Neither can interleave a shadow between features of the same layer.
 
 `patches/tools/apply-fill-shadow.py` made the edits.
+
+### `fill-pattern-reference-zoom` and `fill-pattern-rotate` — ground-sized, rotated patterns
+
+```ts
+paint: {
+  'fill-pattern': 'surface/sett',
+  'fill-pattern-reference-zoom': 19,                       // TEXTURE_REF_ZOOM
+  'fill-pattern-rotate': ['coalesce', ['get', 'direction'], 0],
+}
+```
+
+- `fill-pattern-reference-zoom` (number, default −1 = off; zoom expressions allowed): the
+  pattern image keeps the ground size it has at that zoom. Its size is multiplied by
+  `2^(tileZoom − reference)` and MapLibre's integer-zoom crossfade is bypassed. The pattern
+  stays anchored to the global pixel grid: seamless across tiles and zoom levels.
+- `fill-pattern-rotate` (degrees clockwise, data-driven): rotates the pattern per feature.
+  Only has an effect together with a reference zoom.
+
+Bake the sprite so that one logical sprite pixel is one CSS pixel at the reference zoom
+(`TEXTURE_REF_ZOOM` in `src/style/colors.ts`, used by `scripts/build-sprite.ts`). Use
+`surfacePatternLayers()` from `src/style/expr.ts` rather than writing the paint by hand.
+
+Things to know:
+
+- **Rotation pivots on the tile origin.** A rotated lattice cannot be reduced modulo the
+  pattern size per axis, and a float32 cannot carry a global pixel coordinate (up to 2^27)
+  through a rotation with sub-pixel precision. So a rotated feature shows a phase jump at tile
+  edges and when the tile zoom changes. An exact version needs split-precision arithmetic in
+  the vertex shader (or a per-feature phase computed in the worker); not done.
+- **No mipmaps.** Far below the reference zoom the pattern is undersampled into noise. Pick the
+  reference zoom near the zooms that matter and bake the sprite for it.
+- A new data-driven paint property needs no bucket code: adding a `DataDrivenProperty` to the
+  layer's paint properties and a `#pragma maplibre: define … pattern_rotate` to the vertex
+  shader is enough — the binder name is the property name minus the layer-type prefix.
+- Screen-sized textures (QGIS unit Pixel: grass, sand, gravel) must stay in a layer *without*
+  the reference zoom.
+
+`patches/tools/apply-pattern-ground.py` made the edits.

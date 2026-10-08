@@ -71,16 +71,27 @@ export const FOREST_CLASSES = ["forest","scrub","shrub","shrubbery","trees","woo
 
 /**
  * Shared 19-entry `surface` → sprite `fill-pattern` table for QGIS
- * `landuse surface` and `pitch surface` (identical categories).
- * MapUnit textures are baked to QGIS ground width at z18 in `bun run sprite`
- * (G0.4); rotation and per-zoom scale still dropped.
+ * `landuse surface` and `pitch surface` (identical categories; `pitch surface` does not
+ * rotate sett in QGIS — ignored). MapUnit textures are baked to QGIS ground width at
+ * TEXTURE_REF_ZOOM in `bun run sprite`.
  */
+/**
+ * Zoom at which `bun run sprite` bakes ground-metre textures: one logical sprite pixel is
+ * one CSS pixel there. `fill-pattern-reference-zoom` (local MapLibre patch) keeps them at
+ * that ground size on every other zoom.
+ */
+export const TEXTURE_REF_ZOOM = 19
+
 export type SurfacePattern = {
   /** Attribute values (`surface`, or `class` for landuse) that share this pattern + opacity. */
   surfaces: readonly string[]
   /** Sprite id (from `bun run sprite`). */
   pattern: string
   opacity: number
+  /** QGIS width unit Pixel: the texture is screen-sized, not ground-sized. */
+  pixelSized?: true
+  /** QGIS angle = "direction" + this (degrees clockwise). Omitted = not rotated. */
+  rotate?: number
 }
 
 export const SURFACE_PATTERNS: readonly SurfacePattern[] = [
@@ -102,15 +113,16 @@ export const SURFACE_PATTERNS: readonly SurfacePattern[] = [
     ],
     pattern: 'sand',
     opacity: 0.08,
+    pixelSized: true,
   },
   {
     surfaces: ['concrete', 'concrete:plates'],
     pattern: 'surface/concrete',
     opacity: 0.15,
   },
-  { surfaces: ['grass'], pattern: 'grass', opacity: 0.06 },
-  { surfaces: ['paving_stones'], pattern: 'surface/paving_stones', opacity: 0.07 },
-  { surfaces: ['sett'], pattern: 'surface/sett', opacity: 0.12 },
+  { surfaces: ['grass'], pattern: 'grass', opacity: 0.06, pixelSized: true },
+  { surfaces: ['paving_stones'], pattern: 'surface/paving_stones', opacity: 0.07, rotate: 45 },
+  { surfaces: ['sett'], pattern: 'surface/sett', opacity: 0.12, rotate: 0 },
   { surfaces: ['woodchips'], pattern: 'woodchips', opacity: 0.1 },
 ] as const
 
@@ -129,6 +141,7 @@ export const LANDUSE_CLASS_PATTERNS: readonly SurfacePattern[] = [
     ],
     pattern: 'grass',
     opacity: 0.06,
+    pixelSized: true,
   },
   {
     surfaces: [
@@ -137,6 +150,7 @@ export const LANDUSE_CLASS_PATTERNS: readonly SurfacePattern[] = [
     ],
     pattern: 'grass',
     opacity: 0.09,
+    pixelSized: true,
   },
   {
     surfaces: [
@@ -145,8 +159,14 @@ export const LANDUSE_CLASS_PATTERNS: readonly SurfacePattern[] = [
     ],
     pattern: 'gravel',
     opacity: 0.08,
+    pixelSized: true,
   },
-  { surfaces: ['basin', 'beach', 'dune', 'salt_pond', 'sand'], pattern: 'sand', opacity: 0.08 },
+  {
+    surfaces: ['basin', 'beach', 'dune', 'salt_pond', 'sand'],
+    pattern: 'sand',
+    opacity: 0.08,
+    pixelSized: true,
+  },
   { surfaces: ['flowerbed'], pattern: 'flowerbed', opacity: 0.25 },
   {
     surfaces: ['glacier', 'reef', 'shoal', 'swimming_pool', 'mud'],
@@ -162,9 +182,14 @@ export const LANDUSE_CLASS_PATTERNS: readonly SurfacePattern[] = [
  */
 export const HIGHWAY_SURFACE_PATTERNS: readonly SurfacePattern[] = [
   { surfaces: ['asphalt'], pattern: 'surface/asphalt', opacity: 0.06 },
-  { surfaces: ['concrete', 'concrete:plates'], pattern: 'surface/concrete', opacity: 0.35 },
-  { surfaces: ['paving_stones'], pattern: 'surface/paving_stones', opacity: 0.1 },
-  { surfaces: ['sett'], pattern: 'surface/sett', opacity: 0.12 },
+  {
+    surfaces: ['concrete', 'concrete:plates'],
+    pattern: 'surface/concrete',
+    opacity: 0.35,
+    rotate: 0,
+  },
+  { surfaces: ['paving_stones'], pattern: 'surface/paving_stones', opacity: 0.1, rotate: 45 },
+  { surfaces: ['sett'], pattern: 'surface/sett', opacity: 0.12, rotate: 0 },
 ] as const
 
 /** QGIS `pitch` fill CASE fallback. */

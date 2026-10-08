@@ -18,6 +18,7 @@ The QGIS raster tiles are the reference.
 | [09-baseline-vs-now](./09-baseline-vs-now/README.md) | Summary: QGIS · start · now, with the difference numbers |
 | [10-furniture-shadows-and-outlines](./10-furniture-shadows-and-outlines/README.md) | Patch: `fill-shadow-*`; parking spaces, 1 px outlines and inner-shadow filter fixed |
 | [11-marker-rows](./11-marker-rows/README.md) | Bollard rows, embankment ticks and separation markers that rendered nothing |
+| [12-ground-sized-rotated-textures](./12-ground-sized-rotated-textures/README.md) | Patch: `fill-pattern-reference-zoom` and `fill-pattern-rotate` for surface textures |
 
 ## Adding a step
 

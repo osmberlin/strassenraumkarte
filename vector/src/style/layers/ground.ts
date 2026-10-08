@@ -20,7 +20,7 @@ import {
   landuseFillMatch,
   pitchFillCase,
   pitchMarkingIcon,
-  surfacePatternLayer,
+  surfacePatternLayers,
 } from '../expr'
 import { metresToPixels } from '../metres'
 import { landscapeLayers } from './landscape'
@@ -32,20 +32,21 @@ function f(expr: ExpressionSpecification): FilterSpecification {
   return expr as FilterSpecification
 }
 
-/** Shared multiplied surface texture layer for landuse / pitch (QGIS layer blend Multiply). */
+/** Shared multiplied surface texture layers for landuse / pitch (QGIS layer blend Multiply). */
 function pushSurfacePatterns(
   layers: LayerSpecification[],
   idPrefix: string,
   sourceLayer: string,
   minzoom: number,
 ): void {
-  const { filter, paint } = surfacePatternLayer(SURFACE_PATTERNS)
-  layers.push({
-    id: `${idPrefix}-pattern`,
-    type: 'fill',
-    ...base(sourceLayer, minzoom, filter),
-    paint,
-  })
+  for (const { role, filter, paint } of surfacePatternLayers(SURFACE_PATTERNS)) {
+    layers.push({
+      id: `${idPrefix}-${role}`,
+      type: 'fill',
+      ...base(sourceLayer, minzoom, filter),
+      paint,
+    })
+  }
 }
 
 /** icon-size so a PITCH_ICON_PIXELS raster covers `metres` on the ground. */
@@ -104,16 +105,17 @@ export function groundLayers(): LayerSpecification[] {
   })
 
   // Class textures of the QGIS landuse symbols (grass on lawns and woods, gravel, sand, …).
-  const classTextures = surfacePatternLayer(LANDUSE_CLASS_PATTERNS, {
+  for (const { role, filter, paint } of surfacePatternLayers(LANDUSE_CLASS_PATTERNS, {
     property: 'class',
     blend: 'normal',
-  })
-  layers.push({
-    id: 'landuse-class-pattern',
-    type: 'fill',
-    ...base('landuse', 15, classTextures.filter),
-    paint: classTextures.paint,
-  })
+  })) {
+    layers.push({
+      id: `landuse-class-${role}`,
+      type: 'fill',
+      ...base('landuse', 15, filter),
+      paint,
+    })
+  }
 
   // QGIS landuse rule swimming_pool: SimpleFill + innerShadow (#a396d9, blur 4 MapUnits, multiply).
   layers.push(

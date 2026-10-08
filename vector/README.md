@@ -67,7 +67,7 @@ QGIS MapUnit sizes use `@mercator_scale`. MapLibre paints CSS px on 512 tiles:
 | innerShadow | `fill-layer-blur-mode: inner-edge` (patch), multiplied | close to QGIS |
 | outerGlow | two stacked blurred outlines | join artefacts if too wide |
 | Shapeburst / gradients | 2–3 inward blurred `line` bands (`shore_m`) | roof shape skipped (experimental magma/#990003); water depth green ramp omitted; shoreline banded |
-| RasterFill textures (Multiply) | `fill-pattern` from sprite + `fill-layer-blend: multiply` (patch) | no per-feature rotation / ground-metre scale (G1 surface table) |
+| RasterFill textures (Multiply) | `fill-pattern` from sprite + `fill-layer-blend: multiply` (patch) | rotated textures restart at tile edges |
 | pitch_markings SvgMarker | `symbol` + packed `pitches/*` | uniform `icon-size` from `dist_long`; no independent aspect-fit |
 | SvgMarker / RasterMarker (furniture, arrows, rocks) | `symbol` + packed `symbols:*` sheet (`src/style/sprite-icons.ts`), QGIS `param(fill)` colours baked in | marker offsets dropped; short arrows not widened |
 | RasterMarker tree crowns (layer opacity 0.25) | `symbol` with `symbols:trees/*`, `icon-opacity` 0.25 + soft circle shadow | overlapping crowns accumulate (no symbol layer opacity) |
@@ -84,6 +84,7 @@ MapLibre is patched locally (`patches/`, applied by `bun install`) — see [docs
 | symbol layer opacity | `symbol-layer-opacity`: flatten, then fade (tree crowns) |
 | sub-pixel line ink | none — lines below 1 px get the ink QGIS gives them (`scripts/line-ink.ts` measures it) |
 | layer drop shadow | `fill-shadow-color` / `-opacity` / `-blur` / `-translate` (via `shadowPaint`) |
+| ground-sized, rotated patterns | `fill-pattern-reference-zoom`, `fill-pattern-rotate` (via `surfacePatternLayers`) |
 | layer blur mode | `fill-layer-blur-mode`: `inner-edge` (inner shadow) / `inner-core` |
 
 ## Style modules

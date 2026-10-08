@@ -21,7 +21,7 @@ import { highwayInnerBlur } from '../effects'
 import {
   HIGHWAY_AREA_CLASSES,
   highwayAreaFillMatch,
-  surfacePatternLayer,
+  surfacePatternLayers,
   withOsmBucket,
 } from '../expr'
 import { metresToPixels, metresToPixelsFromProp } from '../metres'
@@ -427,14 +427,15 @@ export function streetLayers(): LayerSpecification[] {
       ),
     )
 
-    // Surface textures from the packed sprite (MapUnit widths baked @ z18; rotation dropped, G0.4).
-    const surfaces = surfacePatternLayer(HIGHWAY_SURFACE_PATTERNS)
-    layers.push({
-      id: styleLayerId('highway_area', 'pattern', b),
-      type: 'fill',
-      ...withOsmBucket('highway_area', 15, b, surfaces.filter),
-      paint: surfaces.paint,
-    })
+    // Surface textures: QGIS ground width at every zoom, rotated to the street direction.
+    for (const { role, filter, paint } of surfacePatternLayers(HIGHWAY_SURFACE_PATTERNS)) {
+      layers.push({
+        id: styleLayerId('highway_area', role, b),
+        type: 'fill',
+        ...withOsmBucket('highway_area', 15, b, filter),
+        paint,
+      })
+    }
   }
 
   return layers

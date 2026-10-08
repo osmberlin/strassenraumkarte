@@ -28,7 +28,7 @@ change or can be done in style/sprite/ETL.
 |---|---|---|---|---|---|
 | 1 | **Drop shadow** (offset + Gaussian blur, multiplied) | 77 / 23 — `feature_polygon` 49, `bridge_shade`, `feature_way`, `landuse` 7 each, tree crown, `building_shade`, `building_parts`, scrub, trunk | `layerShadow` (blurred, multiplied layer) for buildings; old `dropShadow` helper (translated fill + blurred line) for forest and bridges; none for `feature_polygon` | High → **done** for buildings (step 02), forest, bridges, trees (sprite, step 04) and `feature_polygon` furniture (`fill-shadow-*`, step 10) | **Patched**: `fill-layer-blur` + multiply |
 | 2 | **Multiply / Screen blend** | Layer blend Multiply on `landuse surface`, `pitch surface`; Multiply inside the effect stack of `highway_area` textures (35 / 5); Screen on `roof shape`; every shadow composites with Multiply | ~~plain alpha-over~~ → **done**, `fill-layer-blend` patch | Medium | **Patched** (step 01) |
-| 3 | **Texture rotation and ground-metre scale** (RasterFill `angle`, `width` in map units) | 133 / 96 RasterFill; 7 unique data-defined angles, 38 data-defined widths | Sprite baked at the z18 ground width, rotation dropped | Medium — sett/paving ignore street direction; scale is wrong off z18 | Style: per-zoom sprite variants. Rotation needs a **patch** (`fill-pattern-rotate`) |
+| 3 | **Texture rotation and ground-metre scale** (RasterFill `angle`, `width` in map units) | 133 / 96 RasterFill; 7 unique data-defined angles, 38 data-defined widths | ~~Sprite baked at the z18 ground width, rotation dropped~~ → **done**, `fill-pattern-reference-zoom` + `fill-pattern-rotate` (step 12) | Low: rotated textures restart at tile edges; no mipmaps below the reference zoom | **Patched** |
 | 4 | **Parametric pattern fills** (LinePatternFill / PointPatternFill, rotated per feature) | 44 / 8 and 15 / 3 — `road_marking_polygon`, construction, playground, dog park | Baked hatch sprites; road-marking hatching is flat white | Medium–high on restriction markings | ETL (generate hatch lines) or SDF pattern + rotation patch |
 | 5 | **HashLine** (perpendicular ticks) | 42 / 6 — steps, railway ties, road markings, separation | `line-dasharray` along the line | Medium | Style: `line-pattern` sprite, or ETL ticks |
 | 6 | **MarkerLine** (markers at a ground-metre interval, offset) | 59 / 11 — `barrier_way`, `landscape_way`, `road_marking_way`, separation, tactile paving | `symbol-placement: line` + `symbol-spacing`; several markers are glyph stand-ins that do not render | Medium | Style: sprite icons / round-cap dashes; ETL points for exact spacing |
@@ -92,7 +92,7 @@ patch. Tracked here until fixed.
 - [x] Runtime icons are squeezed into 64×64 squares and SVG `param(fill)` is not substituted
       (arrows render black and ~3× too wide).
 - [x] Tree crowns are flat blurred circles; QGIS uses the `symbols/trees/*.png` raster markers.
-- [ ] Texture scale is baked for z18 only. (`@2x` textures are now resampled from the source.)
+- [x] Texture scale is baked for z18 only → ground-sized at every zoom (step 12).
 - [ ] Effect helpers (glows only — shadows are patched): blurred lines peak at half the stated opacity and inner effects peak
       inside the polygon instead of at its edge.
 - [x] Dash lengths scale with the data-driven line width (`detail.ts`).

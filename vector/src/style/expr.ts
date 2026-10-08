@@ -7,7 +7,7 @@ import type {
   FilterSpecification,
 } from '@maplibre/maplibre-gl-style-spec'
 
-import { LANDUSE_FILL, type SurfacePattern } from './colors'
+import { LANDUSE_FILL, TEXTURE_REF_ZOOM, type SurfacePattern } from './colors'
 import { SOURCE_ID } from './source'
 import type { OsmLayerBucketId } from './order'
 import { osmLayerFilter } from './order'
@@ -220,32 +220,61 @@ export function coalesceWidth(fallbackM: number): ExpressionSpecification {
   return ['coalesce', ['get', 'width'], fallbackM] as ExpressionSpecification
 }
 
+export type SurfacePatternLayer = {
+  /** Append to the layer id: `pattern` (ground-sized textures) or `pattern-px` (screen-sized). */
+  role: 'pattern' | 'pattern-px'
+  filter: FilterSpecification
+  paint: NonNullable<FillLayerSpecification['paint']>
+}
+
 /**
- * One texture layer for an attribute → pattern table (QGIS RasterFill categories).
- * A single layer per table keeps a blended one to one offscreen composite
- * (`fill-layer-blend`, see docs/maplibre-patches.md) instead of one per value.
+ * Texture layers for an attribute → pattern table (QGIS RasterFill categories): at most
+ * one for ground-sized textures and one for screen-sized ones, so a blended table costs
+ * one or two offscreen composites (`fill-layer-blend`) instead of one per value.
+ *
+ * Ground-sized textures keep their QGIS width at every zoom and follow the feature's
+ * `direction` where QGIS rotates them (`fill-pattern-reference-zoom` /
+ * `fill-pattern-rotate`, local MapLibre patch — docs/maplibre-patches.md).
  */
-export function surfacePatternLayer(
+export function surfacePatternLayers(
   groups: readonly SurfacePattern[],
   options: { property?: string; blend?: 'normal' | 'multiply' } = {},
-): { filter: FilterSpecification; paint: NonNullable<FillLayerSpecification['paint']> } {
+): SurfacePatternLayer[] {
   const { property = 'surface', blend = 'multiply' } = options
   const value: ExpressionSpecification = ['get', property]
-  const pattern: unknown[] = ['match', value]
-  const opacity: unknown[] = ['match', value]
-  for (const group of groups) {
-    pattern.push([...group.surfaces], group.pattern)
-    opacity.push([...group.surfaces], group.opacity)
+  const build = (subset: readonly SurfacePattern[], ground: boolean): SurfacePatternLayer => {
+    const pattern: unknown[] = ['match', value]
+    const opacity: unknown[] = ['match', value]
+    const rotate: unknown[] = ['match', value]
+    for (const group of subset) {
+      pattern.push([...group.surfaces], group.pattern)
+      opacity.push([...group.surfaces], group.opacity)
+      if (group.rotate != null) {
+        rotate.push([...group.surfaces], ['+', ['coalesce', ['get', 'direction'], 0], group.rotate])
+      }
+    }
+    // Fallbacks are unreachable behind the filter but required by `match`.
+    pattern.push(subset[0]!.pattern)
+    opacity.push(0)
+    rotate.push(0)
+    return {
+      role: ground ? 'pattern' : 'pattern-px',
+      filter: ['in', value, ['literal', subset.flatMap((g) => [...g.surfaces])]] as FilterSpecification,
+      paint: {
+        'fill-pattern': pattern as ExpressionSpecification,
+        'fill-opacity': opacity as ExpressionSpecification,
+        ...(ground ? { 'fill-pattern-reference-zoom': TEXTURE_REF_ZOOM } : {}),
+        ...(ground && rotate.length > 3
+          ? { 'fill-pattern-rotate': rotate as ExpressionSpecification }
+          : {}),
+        ...(blend === 'normal' ? {} : { 'fill-layer-blend': blend }),
+      },
+    }
   }
-  // Fallbacks are unreachable behind the filter but required by `match`.
-  pattern.push(groups[0]!.pattern)
-  opacity.push(0)
-  return {
-    filter: ['in', value, ['literal', groups.flatMap((g) => [...g.surfaces])]] as FilterSpecification,
-    paint: {
-      'fill-pattern': pattern as ExpressionSpecification,
-      'fill-opacity': opacity as ExpressionSpecification,
-      ...(blend === 'normal' ? {} : { 'fill-layer-blend': blend }),
-    },
-  }
+  const groundSized = groups.filter((g) => !g.pixelSized)
+  const pixelSized = groups.filter((g) => g.pixelSized)
+  return [
+    ...(groundSized.length ? [build(groundSized, true)] : []),
+    ...(pixelSized.length ? [build(pixelSized, false)] : []),
+  ]
 }
