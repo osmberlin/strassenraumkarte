@@ -1,26 +1,44 @@
 /**
- * Pack style/textures/*.png (+ rasterized pitch SVGs) into MapLibre sprites.
+ * Pack style/textures/*.png, rasterized pitch SVGs and the closed set of QGIS marker
+ * images (`PACKED_ICONS`, style/symbols/**) into MapLibre sprites.
  *
  * MapUnit RasterFill textures are resized so one tile ≈ QGIS ground width at
  * TEXTURE_REF_ZOOM (z18). Pixel-width textures (grass/gravel/sand/forest) stay native.
+ * Marker icons keep their aspect ratio at a fixed logical width (`ICON_WIDTH_PX`) with
+ * QGIS `param(fill|outline|…)` placeholders replaced by the project's colours.
+ * Every ratio is resampled from the source image, never from another ratio's output.
  *
- * Outputs:
- *   public/sprites/strassenraumkarte.png + .json
- *   public/sprites/strassenraumkarte@2x.png + .json
+ * Outputs (each as `.png` + `.json`, 1× and `@2x`):
+ *   public/sprites/strassenraumkarte          textures / patterns / pitches, palette PNG
+ *   public/sprites/strassenraumkarte-symbols  marker icons, RGBA PNG
  *
  * Run: `bun run sprite`
  */
-import { mkdir, readdir, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 import sharp from 'sharp'
+
+import {
+  ICON_WIDTH_PX,
+  PACKED_ICONS,
+  iconRasterWidthPx,
+  SYMBOL_SPRITE_ID,
+  substituteSvgParams,
+  type PackedIcon,
+} from '../src/style/sprite-icons'
 
 const ROOT = path.resolve(import.meta.dir, '..')
 const REPO = path.resolve(ROOT, '..')
 const TEXTURES = path.join(REPO, 'style', 'textures')
 const PITCHES = path.join(TEXTURES, 'pitches')
-const PAW_SVG = path.join(REPO, 'style', 'symbols', 'leisure', 'paw.svg')
+const SYMBOLS = path.join(REPO, 'style', 'symbols')
+const PAW_SVG = path.join(SYMBOLS, 'leisure', 'paw.svg')
 const OUT = path.join(ROOT, 'public', 'sprites')
+/** Default sprite: fill textures, patterns, pitches (ids without prefix). */
+const TEXTURE_SHEET = 'strassenraumkarte'
+/** `symbols` sprite: QGIS marker icons (`symbols:<name>` in the style). */
+const SYMBOL_SHEET = 'strassenraumkarte-symbols'
 
 /** Match vector/src/style/metres.ts (Berlin / Neukölln). */
 const DEFAULT_LAT = 52.48
@@ -53,6 +71,8 @@ type SpriteEntry = {
   buffer: Buffer
   width: number
   height: number
+  /** Sprite JSON pixelRatio when it differs from the sheet ratio (hi-res icons). */
+  pixelRatio?: number
 }
 
 type SpriteLayout = {
@@ -64,57 +84,96 @@ type SpriteLayout = {
   pixelRatio: number
 }
 
-/** Resize a MapUnit texture so its CSS width matches `widthM` at TEXTURE_REF_ZOOM. */
-async function rescaleMapUnitTexture(
-  id: string,
-  buffer: Buffer,
-  srcW: number,
-  srcH: number,
-  widthM: number,
-): Promise<SpriteEntry> {
-  const ppm = pxPerMetre(TEXTURE_REF_ZOOM)
-  const targetW = Math.max(MIN_PATTERN_PX, Math.round(widthM * ppm))
-  const targetH = Math.max(1, Math.round((srcH * targetW) / srcW))
-  if (targetW === srcW && targetH === srcH) {
-    return { id, buffer, width: srcW, height: srcH }
+/**
+ * One texture at `pixelRatio`, resampled from the source file. MapUnit textures get the
+ * CSS width that matches `widthM` at TEXTURE_REF_ZOOM; pixel-width textures keep the
+ * source size as their CSS size.
+ */
+async function textureEntry(full: string, id: string, pixelRatio: number): Promise<SpriteEntry> {
+  const meta = await sharp(full).metadata()
+  const srcW = meta.width ?? 0
+  const srcH = meta.height ?? 0
+  const widthM = TEXTURE_WIDTH_M[id]
+  let w1 = srcW
+  let h1 = srcH
+  if (widthM != null && srcW > 0 && srcH > 0) {
+    w1 = Math.max(MIN_PATTERN_PX, Math.round(widthM * pxPerMetre(TEXTURE_REF_ZOOM)))
+    h1 = Math.max(1, Math.round((srcH * w1) / srcW))
+    if (pixelRatio === 1) {
+      console.log(
+        `[sprite] ${id} ${srcW}×${srcH} → ${w1}×${h1} (${widthM} m @ z${TEXTURE_REF_ZOOM})`,
+      )
+    }
   }
-  const out = await sharp(buffer)
-    .resize(targetW, targetH, { kernel: 'lanczos3', fit: 'fill' })
-    .ensureAlpha()
-    .png()
-    .toBuffer()
-  console.log(
-    `[sprite] ${id} ${srcW}×${srcH} → ${targetW}×${targetH} (${widthM} m @ z${TEXTURE_REF_ZOOM})`,
-  )
-  return { id, buffer: out, width: targetW, height: targetH }
+  // Pixel-width textures have no detail beyond the source: store them once at source size
+  // and declare pixelRatio 1 on every sheet (same CSS size, a quarter of the @2× bytes).
+  const native = widthM == null
+  const width = native ? srcW : w1 * pixelRatio
+  const height = native ? srcH : h1 * pixelRatio
+  let img = sharp(full)
+  if (width !== srcW || height !== srcH) {
+    img = img.resize(width, height, { kernel: 'lanczos3', fit: 'fill' })
+  }
+  const buffer = await img.ensureAlpha().png().toBuffer()
+  return { id, buffer, width, height, ...(native ? { pixelRatio: 1 } : {}) }
 }
 
-async function collectPngs(dir: string, prefix = ''): Promise<SpriteEntry[]> {
-  const entries: SpriteEntry[] = []
+async function collectPngs(dir: string, prefix: string, pixelRatio: number): Promise<SpriteEntry[]> {
   let names: string[]
   try {
     names = await readdir(dir)
   } catch {
-    return entries
+    return []
   }
-  for (const name of names) {
-    const full = path.join(dir, name)
-    if (name.endsWith('.png')) {
-      const id = (prefix ? `${prefix}/${name.replace(/\.png$/i, '')}` : name.replace(/\.png$/i, ''))
-        .replaceAll('\\', '/')
-      const meta = await sharp(full).metadata()
-      const srcW = meta.width ?? 0
-      const srcH = meta.height ?? 0
-      const buffer = await sharp(full).ensureAlpha().png().toBuffer()
-      const widthM = TEXTURE_WIDTH_M[id]
-      if (widthM != null && srcW > 0 && srcH > 0) {
-        entries.push(await rescaleMapUnitTexture(id, buffer, srcW, srcH, widthM))
-      } else {
-        entries.push({ id, buffer, width: srcW, height: srcH })
-      }
-    }
+  const entries: SpriteEntry[] = []
+  for (const name of names.sort()) {
+    if (!name.endsWith('.png')) continue
+    const base = name.replace(/\.png$/i, '')
+    const id = prefix ? `${prefix}/${base}` : base
+    entries.push(await textureEntry(path.join(dir, name), id, pixelRatio))
   }
   return entries
+}
+
+/**
+ * One QGIS marker image at `pixelRatio`: ICON_WIDTH_PX logical px wide, height from the
+ * source aspect ratio, stored at the resolution it is drawn at (`iconRasterWidthPx`).
+ * SVGs are rasterized from the vector source, PNGs are downsampled from the original.
+ */
+async function iconEntry(icon: PackedIcon, pixelRatio: number): Promise<SpriteEntry> {
+  const full = path.join(SYMBOLS, icon.file)
+  const width1x = iconRasterWidthPx(icon.groundM)
+  const isSvg = icon.file.endsWith('.svg')
+  const input: Buffer | string = isSvg
+    ? Buffer.from(substituteSvgParams(await readFile(full, 'utf8'), icon.params))
+    : full
+  const meta = await sharp(input).metadata()
+  const srcW = meta.width ?? 0
+  const srcH = meta.height ?? 0
+  if (srcW <= 0 || srcH <= 0) throw new Error(`[sprite] no intrinsic size: ${icon.file}`)
+  // Derive from the 1× size so both sheets describe the same logical box.
+  const width = width1x * pixelRatio
+  const height = Math.max(1, Math.round((width1x * srcH) / srcW)) * pixelRatio
+  const source = isSvg
+    ? // Rasterize ≥ 2× the target (and never tiny), then lanczos down: librsvg alone
+      // drops thin strokes at 10–20 px and rejects densities that round to a 0 px image.
+      sharp(input, {
+        density: Math.min(100_000, Math.max(8, (72 * Math.max(width * 2, 256)) / srcW)),
+      })
+    : sharp(input)
+  const buffer = await source
+    .resize(width, height, { kernel: 'lanczos3', fit: 'fill' })
+    .ensureAlpha()
+    .png()
+    .toBuffer()
+  return {
+    id: icon.id.slice(SYMBOL_SPRITE_ID.length + 1),
+    buffer,
+    width,
+    height,
+    // Logical width = width / pixelRatio = ICON_WIDTH_PX on every sheet.
+    pixelRatio: width / ICON_WIDTH_PX,
+  }
 }
 
 async function collectPitchSvgs(pixelRatio: number): Promise<SpriteEntry[]> {
@@ -125,7 +184,7 @@ async function collectPitchSvgs(pixelRatio: number): Promise<SpriteEntry[]> {
   } catch {
     return entries
   }
-  for (const name of names) {
+  for (const name of names.sort()) {
     if (!name.endsWith('.svg')) continue
     const full = path.join(PITCHES, name)
     const size = Math.round(64 * pixelRatio)
@@ -260,7 +319,10 @@ function pack(entries: SpriteEntry[], pixelRatio: number): {
   height: number
   layout: SpriteLayout[]
 } {
-  const sorted = [...entries].sort((a, b) => b.height - a.height || b.width - a.width)
+  // Id tie-break keeps the layout independent of readdir order.
+  const sorted = [...entries].sort(
+    (a, b) => b.height - a.height || b.width - a.width || (a.id < b.id ? -1 : 1),
+  )
   const maxRowWidth = 1024 * pixelRatio
   let x = 0
   let y = 0
@@ -280,7 +342,7 @@ function pack(entries: SpriteEntry[], pixelRatio: number): {
       y,
       width: e.width,
       height: e.height,
-      pixelRatio,
+      pixelRatio: e.pixelRatio ?? pixelRatio,
     })
     sheetW = Math.max(sheetW, x + e.width)
     rowH = Math.max(rowH, e.height)
@@ -294,17 +356,36 @@ function pack(entries: SpriteEntry[], pixelRatio: number): {
   }
 }
 
-async function writeSprite(entries: SpriteEntry[], pixelRatio: number, suffix: string) {
+/**
+ * Sheet encodings.
+ * - `palette`: one 256-colour palette (libimagequant via sharp, dithered) for the texture
+ *   sheet. It is ~4× smaller than RGBA and the content is photographic noise drawn at low
+ *   opacity, where the dithered error (RMSE ≈ 4/255) is not visible. Output is byte-stable
+ *   for a given sharp/libvips version.
+ * - `rgba`: lossless for the marker sheet — flat brand colours, gradients and soft alpha
+ *   edges shift visibly when they have to share one palette, and the sheet is small anyway.
+ */
+type SheetEncoding = 'rgba' | 'palette'
+
+async function writeSprite(
+  entries: SpriteEntry[],
+  pixelRatio: number,
+  basename: string,
+  encoding: SheetEncoding,
+) {
   const { width, height, layout } = pack(entries, pixelRatio)
   const composites = layout.map((l) => {
     const src = entries.find((e) => e.id === l.id)!
     return { input: src.buffer, left: l.x, top: l.y }
   })
 
-  const pngPath = path.join(OUT, `strassenraumkarte${suffix}.png`)
-  const jsonPath = path.join(OUT, `strassenraumkarte${suffix}.json`)
+  const suffix = pixelRatio === 2 ? '@2x' : ''
+  const pngPath = path.join(OUT, `${basename}${suffix}.png`)
+  const jsonPath = path.join(OUT, `${basename}${suffix}.json`)
 
-  await sharp({
+  // Composite to raw first: sharp applies png() options to the composited result only
+  // when it is the final step of the same pipeline, and raw keeps the two steps explicit.
+  const raw = await sharp({
     create: {
       width,
       height,
@@ -313,8 +394,13 @@ async function writeSprite(entries: SpriteEntry[], pixelRatio: number, suffix: s
     },
   })
     .composite(composites)
-    .png()
-    .toFile(pngPath)
+    .raw()
+    .toBuffer()
+  const sheet = sharp(raw, { raw: { width, height, channels: 4 } })
+  await (encoding === 'palette'
+    ? sheet.png({ palette: true, colours: 256, quality: 100, dither: 1, effort: 10, compressionLevel: 9 })
+    : sheet.png({ compressionLevel: 9, adaptiveFiltering: true })
+  ).toFile(pngPath)
 
   const json: Record<string, { x: number; y: number; width: number; height: number; pixelRatio: number }> =
     {}
@@ -328,39 +414,29 @@ async function writeSprite(entries: SpriteEntry[], pixelRatio: number, suffix: s
     }
   }
   await writeFile(jsonPath, JSON.stringify(json, null, 2))
-  console.log(`[sprite] ${path.basename(pngPath)} ${width}×${height}, ${layout.length} icons`)
+  const { size } = await stat(pngPath)
+  console.log(
+    `[sprite] ${path.basename(pngPath)} ${width}×${height}, ${layout.length} images, ${encoding}, ${(size / 1024).toFixed(0)} KiB`,
+  )
 }
 
 async function main() {
   await mkdir(OUT, { recursive: true })
 
-  // Collect once at 1× (MapUnit textures already ground-scaled @ z18).
-  const rootPngs = await collectPngs(TEXTURES)
-  const surfacePngs = await collectPngs(path.join(TEXTURES, 'surface'), 'surface')
-  const textures1x = [...rootPngs, ...surfacePngs]
-
   for (const ratio of [1, 2] as const) {
-    const suffix = ratio === 2 ? '@2x' : ''
+    const textures = [
+      ...(await collectPngs(TEXTURES, '', ratio)),
+      ...(await collectPngs(path.join(TEXTURES, 'surface'), 'surface', ratio)),
+    ]
     const pitches = await collectPitchSvgs(ratio)
     const patterns = await Promise.all([
       buildConstructionHatch(ratio),
       buildOutdoorSeatingHatch(ratio),
       buildDogParkPaw(ratio),
     ])
-    // @2×: scale the already ground-scaled 1× buffers.
-    const textures =
-      ratio === 1
-        ? textures1x
-        : await Promise.all(
-            textures1x.map(async (e) => {
-              const buffer = await sharp(e.buffer)
-                .resize(e.width * 2, e.height * 2, { kernel: 'lanczos3' })
-                .png()
-                .toBuffer()
-              return { ...e, buffer, width: e.width * 2, height: e.height * 2 }
-            }),
-          )
-    await writeSprite([...textures, ...pitches, ...patterns], ratio, suffix)
+    const icons = await Promise.all(PACKED_ICONS.map((icon) => iconEntry(icon, ratio)))
+    await writeSprite([...textures, ...pitches, ...patterns], ratio, TEXTURE_SHEET, 'palette')
+    await writeSprite(icons, ratio, SYMBOL_SHEET, 'rgba')
   }
 }
 

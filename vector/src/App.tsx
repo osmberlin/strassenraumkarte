@@ -33,7 +33,7 @@ import { installMissingStyleImageResolver } from './lib/missing-style-images'
 import { mapLib, pmtilesSourceUrl } from './maplibre-setup'
 import { emptyBaseStyle } from './style/build-style'
 import { basicLayerSpecs } from './style/basic'
-import { SOURCE_ID, absoluteSpriteUrl } from './style/source'
+import { SOURCE_ID, spriteSources } from './style/source'
 import {
   legendEntries,
   layerMatchesLegend,
@@ -48,7 +48,7 @@ const debugLayers = basicLayerSpecs() as LayerSpecification[]
 const qgisLegend = legendEntries()
 const BASE_STYLE = emptyBaseStyle({
   name: 'Straßenraumkarte vector',
-  sprite: absoluteSpriteUrl(window.location.origin),
+  sprite: spriteSources(window.location.origin),
 })
 
 /** Cartographic QGIS port vs blue/purple/red tile-contents debug style. */

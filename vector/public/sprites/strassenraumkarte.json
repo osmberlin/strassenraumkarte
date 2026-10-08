@@ -41,42 +41,42 @@
     "height": 126,
     "pixelRatio": 1
   },
-  "pitches/soccer": {
+  "pitches/badminton": {
     "x": 165,
     "y": 1180,
     "width": 64,
     "height": 64,
     "pixelRatio": 1
   },
-  "pitches/tennis": {
+  "pitches/basketball_1": {
     "x": 229,
     "y": 1180,
     "width": 64,
     "height": 64,
     "pixelRatio": 1
   },
-  "pitches/handball": {
+  "pitches/basketball_2": {
     "x": 293,
     "y": 1180,
     "width": 64,
     "height": 64,
     "pixelRatio": 1
   },
-  "pitches/rugby_union": {
+  "pitches/chess": {
     "x": 357,
     "y": 1180,
     "width": 64,
     "height": 64,
     "pixelRatio": 1
   },
-  "pitches/badminton": {
+  "pitches/field_hockey": {
     "x": 421,
     "y": 1180,
     "width": 64,
     "height": 64,
     "pixelRatio": 1
   },
-  "pitches/chess": {
+  "pitches/handball": {
     "x": 485,
     "y": 1180,
     "width": 64,
@@ -90,42 +90,42 @@
     "height": 64,
     "pixelRatio": 1
   },
-  "pitches/soccer_small": {
+  "pitches/rugby_league": {
     "x": 613,
     "y": 1180,
     "width": 64,
     "height": 64,
     "pixelRatio": 1
   },
-  "pitches/volleyball": {
+  "pitches/rugby_union": {
     "x": 677,
     "y": 1180,
     "width": 64,
     "height": 64,
     "pixelRatio": 1
   },
-  "pitches/rugby_league": {
+  "pitches/soccer": {
     "x": 741,
     "y": 1180,
     "width": 64,
     "height": 64,
     "pixelRatio": 1
   },
-  "pitches/basketball_1": {
+  "pitches/soccer_small": {
     "x": 805,
     "y": 1180,
     "width": 64,
     "height": 64,
     "pixelRatio": 1
   },
-  "pitches/basketball_2": {
+  "pitches/tennis": {
     "x": 869,
     "y": 1180,
     "width": 64,
     "height": 64,
     "pixelRatio": 1
   },
-  "pitches/field_hockey": {
+  "pitches/volleyball": {
     "x": 933,
     "y": 1180,
     "width": 64,

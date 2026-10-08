@@ -4,11 +4,12 @@ import type {
   LayerSpecification,
 } from '@maplibre/maplibre-gl-style-spec'
 
-import { MARKING_DEFAULT, TREE_CROWN, TREE_SHADOW, TREE_TRUNK } from '../colors'
+import { MARKING_DEFAULT, TREE_SHADOW, TREE_TRUNK } from '../colors'
 import { metreOffsetTranslate } from '../effects'
 import { OSM_LAYER_BUCKETS, styleLayerId, type OsmLayerBucketId } from '../order'
 import { base, withOsmBucket } from '../expr'
 import { metresToPixels, metresToPixelsFromProp } from '../metres'
+import { TREE_ICON, iconSizeFromMetres, markingIconSuffix } from '../sprite-icons'
 import { furnitureLayersForBucket } from './furniture'
 import { patternLayers } from './patterns'
 
@@ -25,8 +26,8 @@ const MARKING_REF_WIDTH_M = 0.12
 /** QGIS road markings / separation have no scale gate — match archive minzoom. */
 const MARKING_MINZ = 15
 
-/** Rasterized SVG size used by `missing-style-images` resolver. */
-const ICON_PIXELS = 64
+/** QGIS layer opacity of `road_marking_node` (icons never overlap, so per-icon is equal). */
+const ROAD_MARKING_NODE_OPACITY = 0.67
 
 function f(expr: ExpressionSpecification): FilterSpecification {
   return expr as FilterSpecification
@@ -121,13 +122,13 @@ function surfaceColourFill(): ExpressionSpecification {
   ] as ExpressionSpecification
 }
 
-function markingWidthPx(): ExpressionSpecification {
-  return metresToPixelsFromProp('width', MARKING_REF_WIDTH_M)
+/** road_marking_node traffic sign: QGIS marker width = "width" (m). */
+function roadSignWidthM(): ExpressionSpecification {
+  return ['coalesce', ['get', 'width'], ['get', 'length'], 2] as ExpressionSpecification
 }
 
-/** icon-size so a ICON_PIXELS raster covers `metres` on the ground. */
-function iconSizeFromMetres(metres: ExpressionSpecification): ExpressionSpecification {
-  return metresToPixels(['/', metres, ICON_PIXELS] as ExpressionSpecification)
+function markingWidthPx(): ExpressionSpecification {
+  return metresToPixelsFromProp('width', MARKING_REF_WIDTH_M)
 }
 
 function pushMarkingLine(
@@ -418,7 +419,7 @@ export function markingFurnitureLayers(): LayerSpecification[] {
       join: 'miter',
     })
 
-    // --- road_marking_node — SvgMarker via missing-image resolver ---
+    // --- road_marking_node — SvgMarker: packed `symbols:` icons, runtime resolver for signs ---
     layers.push({
       id: styleLayerId('road_marking_node', 'arrow', b),
       type: 'symbol',
@@ -429,23 +430,28 @@ export function markingFurnitureLayers(): LayerSpecification[] {
         f(['==', ['get', 'road_marking'], 'arrow']),
       ),
       layout: {
+        // QGIS fill = "colour" (white, or yellow for temporary markings).
         'icon-image': [
           'concat',
-          'symbols/traffic_signs/arrows/',
+          'symbols:traffic_signs/arrows/',
           ['to-string', ['get', 'arrow']],
+          markingIconSuffix(),
         ],
         'icon-rotate': ['coalesce', ['get', 'direction'], 0],
         'icon-rotation-alignment': 'map',
         'icon-pitch-alignment': 'map',
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
-        // QGIS height = length; width = length * 0.3 * clamp — square icon uses length.
+        // QGIS: height = length, width = length * 0.3 * max(1, min(2, 2 - length / 5)).
+        // The SVGs are 150×500 (0.3), so width = 0.3 * length reproduces the height; the
+        // extra widening of arrows shorter than 5 m is not reproduced (uniform icon-size).
         'icon-size': iconSizeFromMetres([
-          'coalesce',
-          ['get', 'length'],
-          5,
+          '*',
+          ['coalesce', ['get', 'length'], 5],
+          0.3,
         ] as ExpressionSpecification),
       },
+      paint: { 'icon-opacity': ROAD_MARKING_NODE_OPACITY },
     })
 
     layers.push({
@@ -458,25 +464,29 @@ export function markingFurnitureLayers(): LayerSpecification[] {
         f(['==', ['get', 'road_marking'], 'traffic_sign']),
       ),
       layout: {
+        // Open-ended sign catalogue → runtime resolver (`symbols/…`, slash). QGIS sets
+        // width = "width" and height = "length" independently (signs are painted stretched
+        // along the lane); the `#<height/width>` suffix asks the resolver for that stretch.
         'icon-image': [
           'concat',
           'symbols/traffic_signs/',
           ['to-string', ['coalesce', ['get', 'class'], 'DE']],
           '/',
           ['to-string', ['get', 'symbol']],
+          '#',
+          [
+            'to-string',
+            ['/', ['coalesce', ['get', 'length'], ['get', 'width'], 2], roadSignWidthM()],
+          ],
         ],
         'icon-rotate': ['+', ['coalesce', ['get', 'direction'], 0], 180],
         'icon-rotation-alignment': 'map',
         'icon-pitch-alignment': 'map',
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
-        'icon-size': iconSizeFromMetres([
-          'coalesce',
-          ['get', 'width'],
-          ['get', 'length'],
-          2,
-        ] as ExpressionSpecification),
+        'icon-size': iconSizeFromMetres(roadSignWidthM()),
       },
+      paint: { 'icon-opacity': ROAD_MARKING_NODE_OPACITY },
     })
 
     layers.push({
@@ -495,8 +505,9 @@ export function markingFurnitureLayers(): LayerSpecification[] {
       layout: {
         'icon-image': [
           'concat',
-          'symbols/traffic_signs/symbols/',
+          'symbols:traffic_signs/symbols/',
           ['to-string', ['get', 'symbol']],
+          markingIconSuffix(),
         ],
         'icon-rotate': ['coalesce', ['get', 'direction'], 0],
         'icon-rotation-alignment': 'map',
@@ -510,6 +521,7 @@ export function markingFurnitureLayers(): LayerSpecification[] {
           1,
         ] as ExpressionSpecification),
       },
+      paint: { 'icon-opacity': ROAD_MARKING_NODE_OPACITY },
     })
 
     // --- separation ---
@@ -571,20 +583,33 @@ export function markingFurnitureLayers(): LayerSpecification[] {
   return layers
 }
 
-/** Trees — circle crowns (graphics optional later). Shadow then crown then trunk. */
+/**
+ * Trees. QGIS layer "tree crown" (categorized on `natural`, layer opacity 0.25):
+ * - tree:  RasterMarker `symbols/trees/<needleleaved|broadleaved>.png`, width =
+ *   `@mercator_scale * diameter_crown`, angle = "rotation", dropShadow (black, opacity 0.4,
+ *   multiply, blur 3 map units, offset 0.4 @ 45°)
+ * - shrub: broadleaved.png, size = `@mercator_scale * diameter_crown`, same shadow, blur 1.5
+ * `tree_stump` has no category (trunk only). Layer "trunk" draws on top at opacity 0.75.
+ *
+ * Deviations: MapLibre has no layer-level opacity for symbols, so overlapping crowns
+ * accumulate (QGIS flattens the layer first, then applies 0.25); the drop shadow is one soft
+ * circle layer under all crowns instead of a per-feature blurred copy of the crown shape.
+ */
 export function treeLayers(): LayerSpecification[] {
   const layers: LayerSpecification[] = []
   const treeBase = base('tree', 17)
   const shadowTranslate = metreOffsetTranslate(0.4, 45)
+  const hasCrown = f(['in', ['get', 'natural'], ['literal', ['tree', 'shrub']]])
+  const crownDiameterM = ['coalesce', ['get', 'diameter_crown'], 7] as ExpressionSpecification
 
   const crownRadius: ExpressionSpecification = [
     'interpolate',
     ['exponential', 2],
     ['zoom'],
     17,
-    ['*', ['/', ['coalesce', ['get', 'diameter_crown'], 7], 2], metresFactor(17)],
+    ['*', ['/', crownDiameterM, 2], metresFactor(17)],
     20,
-    ['*', ['/', ['coalesce', ['get', 'diameter_crown'], 7], 2], metresFactor(20)],
+    ['*', ['/', crownDiameterM, 2], metresFactor(20)],
   ]
 
   const trunkRadius: ExpressionSpecification = [
@@ -601,10 +626,12 @@ export function treeLayers(): LayerSpecification[] {
     id: 'tree-crown-shadow',
     type: 'circle',
     ...treeBase,
+    filter: hasCrown,
     paint: {
-      'circle-color': TREE_SHADOW,
-      'circle-opacity': 0.35,
-      // shrub blur 1.5 m vs tree 3 m → softer / harder circle-blur stand-in
+      'circle-color': '#000000',
+      // dropShadow opacity 0.4 × layer opacity 0.25
+      'circle-opacity': 0.1,
+      // shrub blur 1.5 vs tree 3 map units → softer / harder circle-blur stand-in
       'circle-blur': [
         'case',
         ['==', ['get', 'natural'], 'shrub'],
@@ -631,15 +658,31 @@ export function treeLayers(): LayerSpecification[] {
 
   layers.push({
     id: 'tree-crown',
-    type: 'circle',
+    type: 'symbol',
     ...treeBase,
-    filter: ['!=', ['get', 'natural'], 'tree_stump'],
+    filter: hasCrown,
+    layout: {
+      // `leaf_type` is exported from the next pipeline run on; older tiles → broadleaved.
+      'icon-image': [
+        'case',
+        [
+          'all',
+          ['==', ['get', 'natural'], 'tree'],
+          ['==', ['get', 'leaf_type'], 'needleleaved'],
+        ],
+        TREE_ICON.needleleaved,
+        TREE_ICON.broadleaved,
+      ],
+      'icon-size': iconSizeFromMetres(crownDiameterM),
+      'icon-rotate': ['coalesce', ['get', 'rotation'], 0],
+      'icon-rotation-alignment': 'map',
+      'icon-pitch-alignment': 'map',
+      'icon-allow-overlap': true,
+      'icon-ignore-placement': true,
+    },
     paint: {
-      'circle-color': TREE_CROWN,
-      'circle-opacity': 0.85,
-      'circle-blur': 0.35,
-      'circle-radius': crownRadius,
-    } as never,
+      'icon-opacity': 0.25,
+    },
   })
 
   layers.push({

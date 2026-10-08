@@ -1,8 +1,8 @@
 /**
  * G6 — Street furniture & barriers (QGIS highway layered stack, after separation).
  *
- * Prefer circle layers for SimpleMarkers; SvgMarker / RasterMarker go through
- * `setMissingStyleImageResolver` (`symbols/…` ids). Compound multi-part markers
+ * Prefer circle layers for SimpleMarkers; SvgMarker / RasterMarker use the packed
+ * `symbols:…` sprite icons (`../sprite-icons.ts`), sized by their QGIS width in metres. Compound multi-part markers
  * are simplified (see docs Known deviations).
  */
 import type {
@@ -13,9 +13,9 @@ import type {
 
 import { withOsmBucket } from '../expr'
 import { metresToPixels } from '../metres'
+import { iconSizeFromMetres } from '../sprite-icons'
 import { styleLayerId, type OsmLayerBucketId } from '../order'
 
-const ICON_PIXELS = 64
 /** Most furniture stays z17 (tippecanoe). Playground has no QGIS scale gate → z15. */
 const MINZ = 17
 const PLAYGROUND_MINZ = 15
@@ -49,14 +49,6 @@ function circleRadiusM(diameterM: number): ExpressionSpecification {
   return metresToPixels(diameterM / 2)
 }
 
-function iconSizeFromMetres(metres: number | ExpressionSpecification): ExpressionSpecification {
-  const m =
-    typeof metres === 'number'
-      ? metres
-      : (metres as ExpressionSpecification)
-  return metresToPixels(['/', m, ICON_PIXELS] as ExpressionSpecification)
-}
-
 function subclassStr(): ExpressionSpecification {
   return ['to-string', ['coalesce', ['get', 'subclass'], '']] as ExpressionSpecification
 }
@@ -80,21 +72,26 @@ function bicycleParkingIcon(): ExpressionSpecification {
   return [
     'case',
     ['==', ['get', 'class'], 'bicycle_rental'],
-    'symbols/amenity/bicycle_rental',
+    'symbols:amenity/bicycle_rental',
     ['==', subclassStr(), 'cargo_bike'],
-    'symbols/amenity/cargo_bike',
+    'symbols:amenity/cargo_bike',
     ['==', ['get', 'class'], 'small_electric_vehicle_parking'],
-    'symbols/amenity/small_electric_vehicle',
-    'symbols/amenity/bicycle',
+    'symbols:amenity/small_electric_vehicle',
+    'symbols:amenity/bicycle',
   ] as ExpressionSpecification
+}
+
+/** QGIS: `@mercator_scale * if("subclass" = 'cargo_bike', 2.2, 1.8)`. */
+function bicycleParkingSizeM(): ExpressionSpecification {
+  return ['case', ['==', subclassStr(), 'cargo_bike'], 2.2, 1.8] as ExpressionSpecification
 }
 
 function benchIcon(): ExpressionSpecification {
   return [
     'case',
     ['>=', ['index-of', 'backrest_no', subclassStr()], 0],
-    'symbols/amenity/bench_backrest_no',
-    'symbols/amenity/bench',
+    'symbols:amenity/bench_backrest_no',
+    'symbols:amenity/bench',
   ] as ExpressionSpecification
 }
 
@@ -102,8 +99,8 @@ function postBoxIcon(): ExpressionSpecification {
   return [
     'case',
     ['==', subclassStr(), 'PIN Mail'],
-    'symbols/amenity/post_box_green',
-    'symbols/amenity/post_box_yellow',
+    'symbols:amenity/post_box_green',
+    'symbols:amenity/post_box_yellow',
   ] as ExpressionSpecification
 }
 
@@ -111,10 +108,10 @@ function tableTennisIcon(): ExpressionSpecification {
   return [
     'case',
     ['==', subclassStr(), 'net_no'],
-    'symbols/leisure/table_tennis_net_no',
+    'symbols:leisure/table_tennis_net_no',
     ['==', subclassStr(), 'net_yes'],
-    'symbols/leisure/table_tennis_net_yes',
-    'symbols/leisure/table_tennis',
+    'symbols:leisure/table_tennis_net_yes',
+    'symbols:leisure/table_tennis',
   ] as ExpressionSpecification
 }
 
@@ -122,8 +119,8 @@ function mobilityHubIcon(): ExpressionSpecification {
   return [
     'case',
     ['==', subclassStr(), 'Jelbi'],
-    'symbols/amenity/mobility_hub_Jelbi',
-    'symbols/amenity/mobility_hub',
+    'symbols:amenity/mobility_hub_Jelbi',
+    'symbols:amenity/mobility_hub',
   ] as ExpressionSpecification
 }
 
@@ -131,8 +128,8 @@ function trafficArrowIcon(): ExpressionSpecification {
   return [
     'case',
     ['>=', ['index-of', '222-10', subclassStr()], 0],
-    'symbols/traffic_signs/DE/222-10',
-    'symbols/traffic_signs/DE/222',
+    'symbols:traffic_signs/DE/222-10',
+    'symbols:traffic_signs/DE/222',
   ] as ExpressionSpecification
 }
 
@@ -140,12 +137,12 @@ function trafficPanelIcon(): ExpressionSpecification {
   return [
     'case',
     ['>=', ['index-of', '605-20', subclassStr()], 0],
-    'symbols/traffic_signs/DE/605-20',
+    'symbols:traffic_signs/DE/605-20',
     ['>=', ['index-of', '605-11', subclassStr()], 0],
-    'symbols/traffic_signs/DE/605-11',
+    'symbols:traffic_signs/DE/605-11',
     ['>=', ['index-of', '605-21', subclassStr()], 0],
-    'symbols/traffic_signs/DE/605-21',
-    'symbols/traffic_signs/DE/605-10',
+    'symbols:traffic_signs/DE/605-21',
+    'symbols:traffic_signs/DE/605-10',
   ] as ExpressionSpecification
 }
 
@@ -393,7 +390,7 @@ export function furnitureLayersForBucket(bucketId: OsmLayerBucketId): LayerSpeci
     'bg-bike-icon',
     b,
     clsIn(['bicycle_parking', 'bicycle_rental', 'small_electric_vehicle_parking']),
-    { icon: bicycleParkingIcon(), sizeM: 1.8, opacity: 1 },
+    { icon: bicycleParkingIcon(), sizeM: bicycleParkingSizeM(), opacity: 1 },
   )
   pushIcon(
     layers,
@@ -401,7 +398,7 @@ export function furnitureLayersForBucket(bucketId: OsmLayerBucketId): LayerSpeci
     'bg-fountain-icon',
     b,
     clsEq('fountain'),
-    { icon: 'symbols/amenity/fountain', sizeM: 3.2 },
+    { icon: 'symbols:amenity/fountain', sizeM: 3.2 },
   )
   pushIcon(
     layers,
@@ -581,7 +578,7 @@ export function furnitureLayersForBucket(bucketId: OsmLayerBucketId): LayerSpeci
       clsEq('recycling'),
       ['<', ['coalesce', ['get', 'area'], 0], 150],
     ]),
-    { icon: 'symbols/amenity/recycling', sizeM: 2 },
+    { icon: 'symbols:amenity/recycling_container', sizeM: 2 },
   )
   pushFill(layers, 'feature_polygon', 'mid-toilets', b, clsEq('toilets'), {
     color: '#cbcbcb',
@@ -589,7 +586,7 @@ export function furnitureLayersForBucket(bucketId: OsmLayerBucketId): LayerSpeci
     outlineWidthM: 0.05,
   })
   pushIcon(layers, 'feature_polygon', 'mid-toilets-icon', b, clsEq('toilets'), {
-    icon: 'symbols/amenity/toilets',
+    icon: 'symbols:amenity/toilets',
     sizeM: 1.6,
   })
   pushFill(
@@ -606,7 +603,7 @@ export function furnitureLayersForBucket(bucketId: OsmLayerBucketId): LayerSpeci
     'mid-waste-disposal-icon',
     b,
     clsEq('waste_disposal'),
-    { icon: 'symbols/amenity/recycling', sizeM: 2 },
+    { icon: 'symbols:amenity/recycling_container', sizeM: 2 },
   )
 
   // --- feature_way (middleground) ---
@@ -794,7 +791,7 @@ export function furnitureLayersForBucket(bucketId: OsmLayerBucketId): LayerSpeci
 
   // SVG / raster icons (resolver)
   pushIcon(layers, 'feature_node', 'artwork', b, clsEq('artwork'), {
-    icon: 'symbols/tourism/artwork',
+    icon: 'symbols:tourism/artwork',
     sizeM: 1.6,
     opacity: 0.67,
   })
@@ -809,10 +806,10 @@ export function furnitureLayersForBucket(bucketId: OsmLayerBucketId): LayerSpeci
     'bike-icon',
     b,
     clsIn(['bicycle_parking', 'bicycle_rental', 'small_electric_vehicle_parking']),
-    { icon: bicycleParkingIcon(), sizeM: 1.8 },
+    { icon: bicycleParkingIcon(), sizeM: bicycleParkingSizeM() },
   )
   pushIcon(layers, 'feature_node', 'fountain-icon', b, clsEq('fountain'), {
-    icon: 'symbols/amenity/fountain',
+    icon: 'symbols:amenity/fountain',
     sizeM: 3.2,
   })
   pushIcon(
@@ -821,14 +818,14 @@ export function furnitureLayersForBucket(bucketId: OsmLayerBucketId): LayerSpeci
     'guidepost',
     b,
     f(['all', clsEq('information'), ['==', subclassStr(), 'guidepost']]),
-    { icon: 'symbols/tourism/guidepost', sizeM: 1.8 },
+    { icon: 'symbols:tourism/guidepost', sizeM: 1.8 },
   )
   pushIcon(layers, 'feature_node', 'loading-ramp', b, clsEq('loading_ramp'), {
-    icon: 'symbols/amenity/loading_ramp',
+    icon: 'symbols:amenity/loading_ramp',
     sizeM: 2.5,
   })
   pushIcon(layers, 'feature_node', 'manhole', b, clsEq('manhole'), {
-    icon: 'symbols/man_made/manhole',
+    icon: 'symbols:man_made/manhole',
     sizeM: 0.75,
     opacity: 0.5,
   })
@@ -838,7 +835,7 @@ export function furnitureLayersForBucket(bucketId: OsmLayerBucketId): LayerSpeci
     'picnic-table',
     b,
     clsIn(['picnic_table', 'table']),
-    { icon: 'symbols/leisure/picnic_table', sizeM: 1.75 },
+    { icon: 'symbols:leisure/picnic_table', sizeM: 1.75 },
   )
   pushIcon(layers, 'feature_node', 'post-box', b, clsEq('post_box'), {
     icon: postBoxIcon(),
@@ -846,7 +843,7 @@ export function furnitureLayersForBucket(bucketId: OsmLayerBucketId): LayerSpeci
     opacity: 0.5,
   })
   pushIcon(layers, 'feature_node', 'recycling', b, clsEq('recycling'), {
-    icon: 'symbols/amenity/recycling',
+    icon: 'symbols:amenity/recycling',
     sizeM: 1.4,
   })
   pushIcon(layers, 'feature_node', 'table-tennis', b, clsEq('table_tennis'), {
@@ -854,7 +851,7 @@ export function furnitureLayersForBucket(bucketId: OsmLayerBucketId): LayerSpeci
     sizeM: 1.7,
   })
   pushIcon(layers, 'feature_node', 'telephone', b, clsEq('telephone'), {
-    icon: 'symbols/amenity/telephone',
+    icon: 'symbols:amenity/telephone',
     sizeM: 1.2,
   })
   pushIcon(
@@ -892,13 +889,13 @@ export function furnitureLayersForBucket(bucketId: OsmLayerBucketId): LayerSpeci
       ['>=', ['index-of', 'street_name_sign', subclassStr()], 0],
     ]),
     {
-      icon: 'symbols/traffic_signs/street_name_sign',
+      icon: 'symbols:traffic_signs/street_name_sign',
       sizeM: 1.4,
       rotate: ['coalesce', ['get', 'direction'], 0] as ExpressionSpecification,
     },
   )
   pushIcon(layers, 'feature_node', 'waste-basket', b, clsEq('waste_basket'), {
-    icon: 'symbols/amenity/waste_basket',
+    icon: 'symbols:amenity/waste_basket',
     sizeM: 0.8,
   })
 
@@ -963,7 +960,7 @@ export function furnitureLayersForBucket(bucketId: OsmLayerBucketId): LayerSpeci
     strokeWidthM: 0.12,
   })
   pushIcon(layers, 'barrier_node', 'rock', b, barrierIn(['rock', 'block']), {
-    icon: 'symbols/rock/rock01',
+    icon: 'symbols:rock/rock01',
     sizeM: 0.6,
     opacity: 0.67,
   })

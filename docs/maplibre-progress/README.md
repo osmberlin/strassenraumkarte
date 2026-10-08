@@ -9,6 +9,7 @@ The QGIS raster tiles are the reference.
 | [00-baseline](./00-baseline/README.md) | State of the port before renderer patches |
 | [01-layer-blend-multiply](./01-layer-blend-multiply/README.md) | First MapLibre patch: `fill-layer-blend: multiply` for surface textures |
 | [02-layer-blur-shadows](./02-layer-blur-shadows/README.md) | Second patch: `fill-layer-blur` → soft building shadows, QGIS building stack |
+| [03-inner-shadows-and-assets](./03-inner-shadows-and-assets/README.md) | Inner shadows (`fill-layer-blur-mode`), tree crown textures, correct icons |
 
 ## Adding a step
 

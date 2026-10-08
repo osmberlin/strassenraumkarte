@@ -1,10 +1,16 @@
 /**
- * MapLibre v6 missing-image resolver for unbounded SVG symbols under style/symbols/.
+ * MapLibre v6 missing-image resolver for the open-ended traffic sign catalogue under
+ * `style/symbols/traffic_signs/` (road_marking_node `"class"/"symbol"` → any file).
+ * Everything with a fixed id lives in the `symbols:` sprite (`src/style/sprite-icons.ts`).
  *
- * Id conventions accepted:
- *   - `symbols/traffic_signs/DE/foo` → /symbols/traffic_signs/DE/foo.svg
- *   - `symbols/trees/broadleaved` → /symbols/trees/broadleaved.png (also tries .svg)
- * Skips sentinels: '', 'null', 'undefined'.
+ * Id: `symbols/traffic_signs/<class>/<symbol>[#<stretch>]` → `/symbols/traffic_signs/<class>/<symbol>.svg`
+ *   `#<stretch>` (optional) = wanted height/width ratio. QGIS sets marker width and height
+ *   independently for painted signs; MapLibre can only scale an icon uniformly, so the
+ *   stretch is baked into the raster.
+ *
+ * Same sizing contract as the sprite: `ICON_WIDTH_PX` logical px wide, height from the
+ * aspect ratio, rasterized at drawn size × devicePixelRatio (`iconRasterWidthPx`). QGIS `param(fill) …` placeholders are
+ * replaced first (browsers treat them as invalid paint → black).
  *
  * SVGs are rasterized via HTMLImageElement — `createImageBitmap` / `map.loadImage`
  * do not accept SVG (see research/maplibre-ad-hoc-image-loading).
@@ -14,59 +20,84 @@
  */
 import type { Map as MapLibreMap } from 'maplibre-gl'
 
-const SENTINELS = new Set(['', 'null', 'undefined', 'none'])
-const INSTALLED = new WeakSet<MapLibreMap>()
+import {
+  ICON_WIDTH_PX,
+  RUNTIME_SIGN_GROUND_M,
+  iconRasterWidthPx,
+  substituteSvgParams,
+} from '../style/sprite-icons'
 
-function candidateUrls(id: string): string[] {
-  const clean = id.replace(/^\/+/, '').replace(/\.svg$/i, '').replace(/\.png$/i, '')
-  const pathId = clean.startsWith('symbols/') ? clean : `symbols/${clean}`
-  return [`/${pathId}.svg`, `/${pathId}.png`, `/${clean}.svg`, `/${clean}.png`]
+const RUNTIME_PREFIX = 'symbols/traffic_signs/'
+const INSTALLED = new WeakSet<MapLibreMap>()
+/** Cap raster size for extreme stretch values from data. */
+const MAX_STRETCH = 8
+
+type ParsedId = { url: string; stretch: number | null }
+
+function parseId(id: string): ParsedId | null {
+  if (!id.startsWith(RUNTIME_PREFIX)) return null
+  const hash = id.lastIndexOf('#')
+  const pathId = hash >= 0 ? id.slice(0, hash) : id
+  // `<class>/<symbol>` from tile data — keep it inside the sign folder.
+  if (pathId.includes('..') || pathId.endsWith('/') || /\/(null|undefined)?$/.test(pathId)) {
+    return null
+  }
+  const stretch = hash >= 0 ? Number(id.slice(hash + 1)) : Number.NaN
+  return {
+    url: `/${pathId.split('/').map(encodeURIComponent).join('/')}.svg`,
+    stretch: Number.isFinite(stretch) && stretch > 0 ? Math.min(stretch, MAX_STRETCH) : null,
+  }
 }
 
-function loadHtmlImage(url: string, size: number): Promise<HTMLImageElement | null> {
+function loadHtmlImage(src: string): Promise<HTMLImageElement | null> {
   return new Promise((resolve) => {
     const img = new Image()
     img.decoding = 'async'
     img.onload = () => resolve(img)
     img.onerror = () => resolve(null)
-    // Explicit size helps SVG without intrinsic dimensions paint into the canvas.
-    img.width = size
-    img.height = size
-    img.src = url
+    img.src = src
   })
 }
 
-async function svgDataUrl(url: string, size: number): Promise<string | null> {
+/** Height/width from the root `<svg>` (`width`/`height`, else `viewBox`). */
+function svgAspect(svg: string): number | null {
+  const root = /<svg\b[^>]*>/i.exec(svg)?.[0]
+  if (!root) return null
+  const num = (name: string) => {
+    const m = new RegExp(`\\s${name}\\s*=\\s*["']\\s*([0-9.]+)(px)?\\s*["']`, 'i').exec(root)
+    return m ? Number(m[1]) : Number.NaN
+  }
+  let w = num('width')
+  let h = num('height')
+  if (!(w > 0 && h > 0)) {
+    const vb = /\sviewBox\s*=\s*["']([^"']+)["']/i.exec(root)?.[1]?.trim().split(/[\s,]+/).map(Number)
+    w = vb?.[2] ?? Number.NaN
+    h = vb?.[3] ?? Number.NaN
+  }
+  return w > 0 && h > 0 ? h / w : null
+}
+
+/** Raster at `width` px; the caller declares `pixelRatio = width / ICON_WIDTH_PX`. */
+async function rasterize({ url, stretch }: ParsedId, width: number): Promise<ImageData | null> {
   try {
     const res = await fetch(url)
     if (!res.ok) return null
-    let text = await res.text()
+    const text = await res.text()
     if (!text.includes('<svg')) return null
-    // Force a viewport so drawImage has non-zero content.
-    if (!/width\s*=/.test(text)) {
-      text = text.replace(/<svg\b/, `<svg width="${size}" height="${size}"`)
-    }
-    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(text)}`
-  } catch {
-    return null
-  }
-}
-
-async function rasterizeUrl(url: string, size = 64): Promise<ImageData | null> {
-  try {
-    const isSvg = url.endsWith('.svg')
-    const src = isSvg ? await svgDataUrl(url, size) : url
-    if (!src) return null
-    const img = await loadHtmlImage(src, size)
+    const svg = substituteSvgParams(text)
+    const img = await loadHtmlImage(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`)
     if (!img) return null
+    const natural = img.naturalWidth > 0 ? img.naturalHeight / img.naturalWidth : 1
+    const aspect = stretch ?? svgAspect(svg) ?? natural
+    const height = Math.max(1, Math.round(width * aspect))
     const canvas = document.createElement('canvas')
-    canvas.width = size
-    canvas.height = size
+    canvas.width = width
+    canvas.height = height
     const ctx = canvas.getContext('2d')
     if (!ctx) return null
-    ctx.clearRect(0, 0, size, size)
-    ctx.drawImage(img, 0, 0, size, size)
-    return ctx.getImageData(0, 0, size, size)
+    // drawImage re-rasterizes the SVG at the destination size (crisp, stretch included).
+    ctx.drawImage(img, 0, 0, width, height)
+    return ctx.getImageData(0, 0, width, height)
   } catch {
     return null
   }
@@ -77,18 +108,18 @@ export function installMissingStyleImageResolver(map: MapLibreMap): void {
   INSTALLED.add(map)
 
   map.setMissingStyleImageResolver(async (id) => {
-    if (SENTINELS.has(id) || map.hasImage(id)) return
+    const parsed = parseId(id)
+    if (!parsed || map.hasImage(id)) return
 
-    for (const url of candidateUrls(id)) {
-      const image = await rasterizeUrl(url)
-      if (!image) continue
-      if (map.hasImage(id)) return
-      try {
-        map.addImage(id, image, { pixelRatio: 1 })
-      } catch {
-        // Parallel requests for the same id can race past hasImage().
-      }
-      return
+    // Same resolution rule as the sprite (no mipmaps → store at drawn size), × screen density.
+    const dpr = Math.min(4, Math.max(1, Math.ceil(window.devicePixelRatio || 1)))
+    const width = iconRasterWidthPx(RUNTIME_SIGN_GROUND_M) * dpr
+    const image = await rasterize(parsed, width)
+    if (!image || map.hasImage(id)) return
+    try {
+      map.addImage(id, image, { pixelRatio: width / ICON_WIDTH_PX })
+    } catch {
+      // Parallel requests for the same id can race past hasImage().
     }
   })
 }

@@ -46,7 +46,7 @@ change or can be done in style/sprite/ETL.
 | Per-feature line offset (26 data-defined) | SimpleLine | `line-offset` (data-driven) | None |
 | CentroidFill (42 / 6) | `feature_polygon` | `symbol` layer on the polygon | Low |
 | FontMarker (14 / 2) | flagpole, stolperstein | Circle stand-in | Negligible |
-| Layer opacity ≠ 1 (~100 raw) | markings 0.67, tree crown 0.25, … | `fill-layer-opacity` / `line-layer-opacity` (MapLibre ≥ 6) or per-feature opacity | Low |
+| Layer opacity ≠ 1 (~100 raw) | markings 0.67, tree crown 0.25, … | `fill-layer-opacity` / `line-layer-opacity` (MapLibre ≥ 6) or per-feature opacity | Low for fills and lines. **Symbol layers have no layer opacity**: overlapping tree crowns (QGIS: flatten, then 25 %) stack up darker — next patch candidate (`icon-layer-opacity`) |
 | Label buffer, curved labels | all labels | `text-halo-*`, `symbol-placement: line` | Low (DejaVu → Open Sans) |
 
 ### Not used in the project
@@ -81,12 +81,12 @@ patch. Tracked here until fixed.
       marking/furniture buckets, so ground-level markings paint over bridges (`qgis.ts`).
 - [ ] Glyph stand-ins (▲ ▼ ▶ ●) render nothing — the glyph PBFs do not contain them. Affects
       cliffs, peaks, sharks teeth, bollard rows, guard stones.
-- [ ] Runtime icons are squeezed into 64×64 squares and SVG `param(fill)` is not substituted
+- [x] Runtime icons are squeezed into 64×64 squares and SVG `param(fill)` is not substituted
       (arrows render black and ~3× too wide).
-- [ ] Tree crowns are flat blurred circles; QGIS uses the `symbols/trees/*.png` raster markers.
-- [ ] Texture scale is baked for z18 only; `@2x` textures are upscaled from the 1× buffer.
-- [ ] Effect helpers: blurred lines peak at half the stated opacity and inner effects peak
+- [x] Tree crowns are flat blurred circles; QGIS uses the `symbols/trees/*.png` raster markers.
+- [ ] Texture scale is baked for z18 only. (`@2x` textures are now resampled from the source.)
+- [ ] Effect helpers (glows only — shadows are patched): blurred lines peak at half the stated opacity and inner effects peak
       inside the polygon instead of at its edge.
 - [ ] Dash lengths scale with the data-driven line width (`detail.ts`).
-- [ ] `/symbols/*` is only served by the dev server, not by `vite preview` or a build.
+- [x] `/symbols/*` is only served by the dev server, not by `vite preview` or a build.
 - [ ] Unused sprites (`forest`, `gravel`, `water`, `flowerbed`); `water` should be used at α 0.2.

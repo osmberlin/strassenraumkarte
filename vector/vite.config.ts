@@ -2,7 +2,7 @@ import { createReadStream, existsSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { defineConfig, type Plugin } from 'vite'
+import { defineConfig, type Connect, type Plugin } from 'vite'
 
 const bunCacheLinks = path.join(homedir(), '.bun', 'install', 'cache', 'links')
 const rootDir = path.dirname(fileURLToPath(import.meta.url))
@@ -55,27 +55,41 @@ function resolveRustTilesRoot(): string {
 
 const rustTilesRoot = resolveRustTilesRoot()
 
-/** Serve `/symbols/*` and `/textures/*` from the QGIS `style/` folder (dev + preview). */
+/**
+ * Serve `/symbols/*` and `/textures/*` from the QGIS `style/` folder — the runtime icon
+ * resolver fetches traffic sign SVGs from there. Registered for `vite dev` and
+ * `vite preview`; a static deployment has to copy `style/symbols/traffic_signs` itself.
+ */
 function styleAssetsPlugin(): Plugin {
+  const middleware: Connect.NextHandleFunction = (req, res, next) => {
+    const url = (req.url ?? '').split('?')[0] ?? ''
+    if (!url.startsWith('/symbols/') && !url.startsWith('/textures/')) {
+      next()
+      return
+    }
+    let rel: string
+    try {
+      rel = decodeURIComponent(url.slice(1))
+    } catch {
+      next()
+      return
+    }
+    const file = path.resolve(styleRoot, rel)
+    if (!file.startsWith(styleRoot + path.sep) || !existsSync(file) || !statSync(file).isFile()) {
+      next()
+      return
+    }
+    if (file.endsWith('.svg')) res.setHeader('Content-Type', 'image/svg+xml')
+    else if (file.endsWith('.png')) res.setHeader('Content-Type', 'image/png')
+    createReadStream(file).pipe(res)
+  }
   return {
     name: 'strassenraumkarte-style-assets',
     configureServer(server) {
-      server.middlewares.use((req, res, next) => {
-        const url = (req.url ?? '').split('?')[0] ?? ''
-        if (!url.startsWith('/symbols/') && !url.startsWith('/textures/')) {
-          next()
-          return
-        }
-        const rel = decodeURIComponent(url.slice(1))
-        const file = path.resolve(styleRoot, rel)
-        if (!file.startsWith(styleRoot) || !existsSync(file)) {
-          next()
-          return
-        }
-        if (file.endsWith('.svg')) res.setHeader('Content-Type', 'image/svg+xml')
-        else if (file.endsWith('.png')) res.setHeader('Content-Type', 'image/png')
-        createReadStream(file).pipe(res)
-      })
+      server.middlewares.use(middleware)
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use(middleware)
     },
   }
 }

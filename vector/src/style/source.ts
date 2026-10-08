@@ -1,11 +1,15 @@
 /**
  * Vector source + glyph/sprite URLs for the MapLibre style.
  *
- * Sprite is optional until `scripts/build-sprite.ts` lands (w5).
+ * Sprites come from `scripts/build-sprite.ts` (`bun run sprite`).
  * Glyphs: MapLibre demotiles (Open Sans / Arial Unicode MS) — confirmed for G12.
  */
-import type { VectorSourceSpecification } from '@maplibre/maplibre-gl-style-spec'
+import type {
+  SpriteSpecification,
+  VectorSourceSpecification,
+} from '@maplibre/maplibre-gl-style-spec'
 
+import { SYMBOL_SPRITE_ID } from './sprite-icons'
 import {
   SOURCE_ID,
   SOURCE_MAXZOOM,
@@ -28,10 +32,21 @@ export const GLYPHS_URL = 'https://demotiles.maplibre.org/font/{fontstack}/{rang
 /** Sprite base path (no extension). MapLibre 6 requires an absolute URL at runtime. */
 export const SPRITE_PATH = '/sprites/strassenraumkarte'
 
+/** Marker icon sheet (`symbols:*` ids, lossless RGBA) — see `sprite-icons.ts`. */
+export const SYMBOL_SPRITE_PATH = '/sprites/strassenraumkarte-symbols'
+
 /** Resolve sprite to an absolute URL (MapLibre 6 rejects root-relative sprite). */
-export function absoluteSpriteUrl(origin = 'http://127.0.0.1:5177'): string {
-  if (SPRITE_PATH.startsWith('http://') || SPRITE_PATH.startsWith('https://')) return SPRITE_PATH
-  return `${origin.replace(/\/$/, '')}${SPRITE_PATH}`
+export function absoluteSpriteUrl(origin = 'http://127.0.0.1:5177', spritePath = SPRITE_PATH): string {
+  if (spritePath.startsWith('http://') || spritePath.startsWith('https://')) return spritePath
+  return `${origin.replace(/\/$/, '')}${spritePath}`
+}
+
+/** Style `sprite`: textures/patterns (default, unprefixed ids) + marker icons (`symbols:`). */
+export function spriteSources(origin?: string): SpriteSpecification {
+  return [
+    { id: 'default', url: absoluteSpriteUrl(origin) },
+    { id: SYMBOL_SPRITE_ID, url: absoluteSpriteUrl(origin, SYMBOL_SPRITE_PATH) },
+  ]
 }
 
 export type SourceUrlOptions = {

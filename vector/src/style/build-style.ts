@@ -1,14 +1,18 @@
 /**
  * Style builder — emits a MapLibre StyleSpecification for the vector channel.
  */
-import type { LayerSpecification, StyleSpecification } from '@maplibre/maplibre-gl-style-spec'
+import type {
+  LayerSpecification,
+  SpriteSpecification,
+  StyleSpecification,
+} from '@maplibre/maplibre-gl-style-spec'
 
 import { MAP_MAX_ZOOM, MAP_MIN_ZOOM } from '../../layers'
 import { qgisLayerSpecs } from './qgis'
-import { GLYPHS_URL, SOURCE_ID, absoluteSpriteUrl, vectorSourceSpec, type SourceUrlOptions } from './source'
+import { GLYPHS_URL, SOURCE_ID, spriteSources, vectorSourceSpec, type SourceUrlOptions } from './source'
 
 export type BuildStyleOptions = SourceUrlOptions & {
-  sprite?: string
+  sprite?: SpriteSpecification
   glyphs?: string
   name?: string
   backgroundColor?: string
@@ -20,7 +24,7 @@ const BACKGROUND = '#ededed'
 export function buildStyle(options: BuildStyleOptions): StyleSpecification {
   const {
     url,
-    sprite = absoluteSpriteUrl(),
+    sprite = spriteSources(),
     glyphs = GLYPHS_URL,
     name = 'Straßenraumkarte vector',
     backgroundColor = BACKGROUND,
@@ -57,7 +61,7 @@ export function emptyBaseStyle(
   const {
     name = 'Straßenraumkarte vector',
     glyphs = GLYPHS_URL,
-    sprite = absoluteSpriteUrl(),
+    sprite = spriteSources(),
     backgroundColor = BACKGROUND,
   } = options
 

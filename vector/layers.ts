@@ -362,6 +362,8 @@ export const LAYERS: LayerDef[] = [
       'COALESCE(circumference, 1.57) AS circumference',
       'rotation',
       'ref',
+      // QGIS crown image: needleleaved.png vs broadleaved.png
+      'leaf_type',
     ],
     minzoom: 17,
     maxzoom: 18,

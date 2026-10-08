@@ -16,7 +16,7 @@ PostGIS → GeoJSONSeq → tippecanoe → `.pmtiles`, styled with a MapLibre por
 cd vector
 bun install
 PGPASSWORD=… bun run pipeline   # export + tiles + report
-bun run sprite                  # pack style/textures → public/sprites/
+bun run sprite                  # pack style/textures + style/symbols → public/sprites/
 bun run validate-style          # validateStyleMin
 bun run dev                     # http://127.0.0.1:5177
 ```
@@ -69,7 +69,9 @@ QGIS MapUnit sizes use `@mercator_scale`. MapLibre paints CSS px on 512 tiles:
 | Shapeburst / gradients | 2–3 inward blurred `line` bands (`shore_m`) | roof shape skipped (experimental magma/#990003); water depth green ramp omitted; shoreline banded |
 | RasterFill textures (Multiply) | `fill-pattern` from sprite + `fill-layer-blend: multiply` (patch) | no per-feature rotation / ground-metre scale (G1 surface table) |
 | pitch_markings SvgMarker | `symbol` + packed `pitches/*` | uniform `icon-size` from `dist_long`; no independent aspect-fit |
-| SvgMarker traffic signs | `setMissingStyleImageResolver` | icons only when style requests them |
+| SvgMarker / RasterMarker (furniture, arrows, rocks) | `symbol` + packed `symbols:*` sheet (`src/style/sprite-icons.ts`), QGIS `param(fill)` colours baked in | marker offsets dropped; short arrows not widened |
+| RasterMarker tree crowns (layer opacity 0.25) | `symbol` with `symbols:trees/*`, `icon-opacity` 0.25 + soft circle shadow | overlapping crowns accumulate (no symbol layer opacity) |
+| SvgMarker road-marking signs (open set) | `setMissingStyleImageResolver` (`symbols/traffic_signs/…#stretch`) | needs `/symbols/*` served (dev + preview middleware) |
 
 ## Renderer patches and gaps
 
@@ -88,7 +90,7 @@ MapLibre is patched locally (`patches/`, applied by `bun install`) — see [docs
 | `layers.ts` | Export columns, tippecanoe zooms/groups |
 | `metres.ts` / `effects.ts` / `order.ts` | Scale, shadows/glows, OSM `layer` buckets |
 | `colors.ts` + `layers/*` | QGIS-faithful paints (w4c) |
-| `scripts/build-sprite.ts` | Texture atlas `@1x`/`@2x` |
+| `scripts/build-sprite.ts` | Sprites `@1x`/`@2x`: textures (palette PNG) + `-symbols` marker icons (RGBA) |
 | `locations.ts` + `src/compare/` | Compare viewpoints + UI |
 
 ## MapLibre 6 + Vite

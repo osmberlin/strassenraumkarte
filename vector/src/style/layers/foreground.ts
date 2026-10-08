@@ -13,8 +13,8 @@ import type {
 
 import { base } from '../expr'
 import { metresToPixels } from '../metres'
+import { iconSizeFromMetres } from '../sprite-icons'
 
-const ICON_PIXELS = 64
 /** QGIS entrance minScale 3000 ≈ z17.5 */
 const ENTRANCE_MINZ = 18
 const FG_MINZ = 17
@@ -29,11 +29,6 @@ function clsEq(value: string): ExpressionSpecification {
 
 function subclassStr(): ExpressionSpecification {
   return ['to-string', ['coalesce', ['get', 'subclass'], '']] as ExpressionSpecification
-}
-
-function iconSizeFromMetres(metres: number | ExpressionSpecification): ExpressionSpecification {
-  const m = typeof metres === 'number' ? metres : metres
-  return metresToPixels(['/', m, ICON_PIXELS] as ExpressionSpecification)
 }
 
 function circleRadiusM(diameterM: number): ExpressionSpecification {
@@ -80,7 +75,7 @@ export function foregroundLayers(): LayerSpecification[] {
       ]),
     ),
     layout: {
-      'icon-image': 'symbols/tourism/information',
+      'icon-image': 'symbols:tourism/information',
       'icon-size': iconSizeFromMetres(1.2),
       'icon-allow-overlap': true,
       'icon-ignore-placement': true,
@@ -112,7 +107,7 @@ export function foregroundLayers(): LayerSpecification[] {
       ]),
     ),
     layout: {
-      'icon-image': 'symbols/historic/memorial',
+      'icon-image': 'symbols:historic/memorial',
       'icon-size': iconSizeFromMetres(1.2),
       'icon-allow-overlap': true,
       'icon-ignore-placement': true,
@@ -161,7 +156,7 @@ export function foregroundLayers(): LayerSpecification[] {
     type: 'symbol',
     ...base('feature_node', FG_MINZ, f(clsEq('toilets'))),
     layout: {
-      'icon-image': 'symbols/amenity/toilets',
+      'icon-image': 'symbols:amenity/toilets',
       'icon-size': iconSizeFromMetres(1.6),
       'icon-allow-overlap': true,
       'icon-ignore-placement': true,
@@ -177,8 +172,8 @@ export function foregroundLayers(): LayerSpecification[] {
       'icon-image': [
         'case',
         ['>=', ['index-of', 'all_directions', subclassStr()], 0],
-        'symbols/tourism/viewpoint_all_directions',
-        'symbols/tourism/viewpoint',
+        'symbols:tourism/viewpoint_all_directions',
+        'symbols:tourism/viewpoint',
       ] as ExpressionSpecification,
       'icon-size': iconSizeFromMetres([
         'case',
@@ -231,7 +226,7 @@ export function foregroundLayers(): LayerSpecification[] {
       ]),
     ),
     layout: {
-      'icon-image': 'symbols/public_transport/subway',
+      'icon-image': 'symbols:public_transport/subway',
       'icon-size': iconSizeFromMetres(2),
       'icon-allow-overlap': true,
       'icon-ignore-placement': true,
@@ -250,7 +245,7 @@ export function foregroundLayers(): LayerSpecification[] {
       ]),
     ),
     layout: {
-      'icon-image': 'symbols/public_transport/s-train',
+      'icon-image': 'symbols:public_transport/s-train',
       'icon-size': iconSizeFromMetres(2.2),
       'icon-allow-overlap': true,
       'icon-ignore-placement': true,

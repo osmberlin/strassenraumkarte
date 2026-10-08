@@ -95,10 +95,8 @@ vector/public/tiles/**
 !vector/public/tiles/.gitkeep
 vector/public/sprites/**
 !vector/public/sprites/.gitkeep
-!vector/public/sprites/strassenraumkarte.json
-!vector/public/sprites/strassenraumkarte.png
-!vector/public/sprites/strassenraumkarte@2x.json
-!vector/public/sprites/strassenraumkarte@2x.png
+!vector/public/sprites/strassenraumkarte*.json
+!vector/public/sprites/strassenraumkarte*.png
 vector/dist/
 vector/node_modules/
 vector/.tsbuildinfo-*

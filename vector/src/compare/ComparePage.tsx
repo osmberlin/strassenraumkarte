@@ -30,7 +30,7 @@ import type { MapParam } from '../lib/mapParam'
 import { installMissingStyleImageResolver } from '../lib/missing-style-images'
 import { mapLib, pmtilesSourceUrl } from '../maplibre-setup'
 import { emptyBaseStyle } from '../style/build-style'
-import { SOURCE_ID, absoluteSpriteUrl } from '../style/source'
+import { SOURCE_ID, spriteSources } from '../style/source'
 import { qgisLayerSpecs } from '../style/qgis'
 
 const RASTER_SOURCE = 'qgis-raster'
@@ -38,7 +38,7 @@ const RUST_RASTER_SOURCE = 'rust-raster'
 const vectorLayers = qgisLayerSpecs() as LayerSpecification[]
 const baseStyle = emptyBaseStyle({
   name: 'compare',
-  sprite: absoluteSpriteUrl(window.location.origin),
+  sprite: spriteSources(window.location.origin),
 })
 
 type Props = {
