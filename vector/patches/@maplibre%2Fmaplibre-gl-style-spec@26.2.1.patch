@@ -1,6 +1,9 @@
 diff --git a/node_modules/@maplibre/maplibre-gl-style-spec/.bun-tag-20ea4fc8bf769a4d b/.bun-tag-20ea4fc8bf769a4d
 new file mode 100644
 index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/@maplibre/maplibre-gl-style-spec/.bun-tag-a7da24cba4556759 b/.bun-tag-a7da24cba4556759
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
 diff --git a/dist/gl-style-format.mjs b/dist/gl-style-format.mjs
 old mode 100644
 new mode 100755
@@ -11,10 +14,10 @@ diff --git a/dist/gl-style-validate.mjs b/dist/gl-style-validate.mjs
 old mode 100644
 new mode 100755
 diff --git a/dist/index.cjs b/dist/index.cjs
-index 4fd5a0897723ae5af1b1264fdbc1e6d33b08d2a8..063067816ab5ce4cc839aaa8e4456e0b1f6df376 100644
+index 4fd5a0897723ae5af1b1264fdbc1e6d33b08d2a8..56528592d1f5e9a8a5d5b538bca0b095853f7730 100644
 --- a/dist/index.cjs
 +++ b/dist/index.cjs
-@@ -1451,7 +1451,18 @@
+@@ -1451,7 +1451,29 @@
  				},
  				"property-type": "data-driven"
  			},
@@ -30,11 +33,22 @@ index 4fd5a0897723ae5af1b1264fdbc1e6d33b08d2a8..063067816ab5ce4cc839aaa8e4456e0b
 +			"default": "normal",
 +			"property-type": "data-constant"
 +		},
++		"fill-layer-blur": {
++			"type": "number",
++			"default": 0,
++			"minimum": 0,
++			"units": "pixels",
++			"expression": {
++				"interpolated": true,
++				"parameters": ["zoom", "global-state"]
++			},
++			"property-type": "data-constant"
++		},
 +		"fill-layer-opacity": {
  				"type": "number",
  				"default": 1,
  				"minimum": 0,
-@@ -1653,7 +1664,18 @@
+@@ -1653,7 +1675,29 @@
  				},
  				"property-type": "data-driven"
  			},
@@ -50,55 +64,74 @@ index 4fd5a0897723ae5af1b1264fdbc1e6d33b08d2a8..063067816ab5ce4cc839aaa8e4456e0b
 +			"default": "normal",
 +			"property-type": "data-constant"
 +		},
++		"line-layer-blur": {
++			"type": "number",
++			"default": 0,
++			"minimum": 0,
++			"units": "pixels",
++			"expression": {
++				"interpolated": true,
++				"parameters": ["zoom", "global-state"]
++			},
++			"property-type": "data-constant"
++		},
 +		"line-layer-opacity": {
  				"type": "number",
  				"default": 1,
  				"minimum": 0,
 diff --git a/dist/index.d.ts b/dist/index.d.ts
-index ab4425f6be05adb0b331af6f8fe15455bbbd4a62..ef73fa5886291a8f752a636a1ab65c3d26b7ac49 100644
+index ab4425f6be05adb0b331af6f8fe15455bbbd4a62..7906e4ca805fda793001eb4d0bd329b213d45ebd 100644
 --- a/dist/index.d.ts
 +++ b/dist/index.d.ts
-@@ -8946,6 +8946,8 @@ type FillLayerSpecification = {
+@@ -8946,6 +8946,10 @@ type FillLayerSpecification = {
       * ```
       */
      "fill-layer-opacity"?: PropertyValueSpecification<number>;
++    /** [strassenraumkarte patch] Gaussian blur radius (px) applied to the whole layer. */
++    "fill-layer-blur"?: PropertyValueSpecification<number>;
 +    /** [strassenraumkarte patch] Layer compositing mode, see maplibre-style-spec#1661. */
 +    "fill-layer-blend"?: "normal" | "multiply" | "screen" | "plus";
      "fill-layer-opacity-transition"?: TransitionSpecification;
      /**
       * The color of the filled part of this layer. This color can be specified as `rgba` with an alpha component and the color's opacity will not affect the opacity of the 1px stroke, if it is used. When used with an SDF fill pattern, this serves as the foreground color of the pattern.
-@@ -9102,6 +9104,8 @@ type LineLayerSpecification = {
+@@ -9102,6 +9106,10 @@ type LineLayerSpecification = {
       * ```
       */
      "line-layer-opacity"?: PropertyValueSpecification<number>;
++    /** [strassenraumkarte patch] Gaussian blur radius (px) applied to the whole layer. */
++    "line-layer-blur"?: PropertyValueSpecification<number>;
 +    /** [strassenraumkarte patch] Layer compositing mode, see maplibre-style-spec#1661. */
 +    "line-layer-blend"?: "normal" | "multiply" | "screen" | "plus";
      "line-layer-opacity-transition"?: TransitionSpecification;
      /**
       * The color with which the line will be drawn.
-@@ -10525,6 +10529,8 @@ type AllPaintProperties = {
+@@ -10525,6 +10533,10 @@ type AllPaintProperties = {
     * ```
     */
    "fill-layer-opacity"?: PropertyValueSpecification<number>;
++  /** [strassenraumkarte patch] Gaussian blur radius (px) applied to the whole layer. */
++  "fill-layer-blur"?: PropertyValueSpecification<number>;
 +  /** [strassenraumkarte patch] Layer compositing mode, see maplibre-style-spec#1661. */
 +  "fill-layer-blend"?: "normal" | "multiply" | "screen" | "plus";
    "fill-layer-opacity-transition"?: TransitionSpecification;
    /**
     * The color of the filled part of this layer. This color can be specified as `rgba` with an alpha component and the color's opacity will not affect the opacity of the 1px stroke, if it is used. When used with an SDF fill pattern, this serves as the foreground color of the pattern.
-@@ -10586,6 +10592,8 @@ type AllPaintProperties = {
+@@ -10586,6 +10598,10 @@ type AllPaintProperties = {
     * ```
     */
    "line-layer-opacity"?: PropertyValueSpecification<number>;
++  /** [strassenraumkarte patch] Gaussian blur radius (px) applied to the whole layer. */
++  "line-layer-blur"?: PropertyValueSpecification<number>;
 +  /** [strassenraumkarte patch] Layer compositing mode, see maplibre-style-spec#1661. */
 +  "line-layer-blend"?: "normal" | "multiply" | "screen" | "plus";
    "line-layer-opacity-transition"?: TransitionSpecification;
    /**
     * The color with which the line will be drawn.
 diff --git a/dist/index.mjs b/dist/index.mjs
-index 1f8cb92016301a415b6ff3474af9d123c654427c..6a6bf6ebd36b248a0212bad599297c056ace8c91 100644
+index 1f8cb92016301a415b6ff3474af9d123c654427c..203fe4d99e7b2e28cd814ef3dfd1fa13b420c322 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
-@@ -1447,6 +1447,17 @@ var v8_default = {
+@@ -1447,6 +1447,28 @@ var v8_default = {
  			},
  			"property-type": "data-driven"
  		},
@@ -113,10 +146,21 @@ index 1f8cb92016301a415b6ff3474af9d123c654427c..6a6bf6ebd36b248a0212bad599297c05
 +			"default": "normal",
 +			"property-type": "data-constant"
 +		},
++		"fill-layer-blur": {
++			"type": "number",
++			"default": 0,
++			"minimum": 0,
++			"units": "pixels",
++			"expression": {
++				"interpolated": true,
++				"parameters": ["zoom", "global-state"]
++			},
++			"property-type": "data-constant"
++		},
  		"fill-layer-opacity": {
  			"type": "number",
  			"default": 1,
-@@ -1649,6 +1660,17 @@ var v8_default = {
+@@ -1649,6 +1671,28 @@ var v8_default = {
  			},
  			"property-type": "data-driven"
  		},
@@ -129,6 +173,17 @@ index 1f8cb92016301a415b6ff3474af9d123c654427c..6a6bf6ebd36b248a0212bad599297c05
 +				"plus": {}
 +			},
 +			"default": "normal",
++			"property-type": "data-constant"
++		},
++		"line-layer-blur": {
++			"type": "number",
++			"default": 0,
++			"minimum": 0,
++			"units": "pixels",
++			"expression": {
++				"interpolated": true,
++				"parameters": ["zoom", "global-state"]
++			},
 +			"property-type": "data-constant"
 +		},
  		"line-layer-opacity": {

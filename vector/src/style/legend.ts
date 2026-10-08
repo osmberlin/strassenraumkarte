@@ -217,7 +217,7 @@ export function legendEntries(): LegendEntry[] {
       color: BUILDING_PARTS_FILL,
       minzoom: 15,
       maxzoom: 17,
-      layerIds: ['building-parts', 'building-fill', 'building-lines'],
+      layerIds: ['building-shade', 'building-parts', 'building-lines'],
     },
     {
       id: 'housenumber',

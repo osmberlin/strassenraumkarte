@@ -95,3 +95,46 @@ Limits: only modes expressible with fixed-function blending (the upstream propos
 `overlay`, `color`, `luminosity`, `erase`, which need a backdrop texture). Each blended layer
 costs one full-screen composite, so put all features that share a mode into one layer
 (`surfacePatternLayer` in `src/style/expr.ts` does this for the surface textures).
+
+### `{fill,line}-layer-blur` — Gaussian blur of a whole layer
+
+Closes gap #1 (drop shadows) in [maplibre-style-gaps.md](./maplibre-style-gaps.md); there is no
+upstream proposal for 2D layers.
+
+```ts
+paint: {
+  'fill-color': '#000',
+  'fill-opacity': 0.138,                 // per feature: overlapping shadows darken each other
+  'fill-translate': […], 'fill-translate-anchor': 'map',
+  'fill-layer-blur': ['interpolate', ['exponential', 2], ['zoom'], 15, 0.67, 20, 21.4],
+  'fill-layer-blend': 'multiply',
+}
+```
+
+Value: blur radius in CSS pixels, zoom expressions allowed. It is the QGIS `blur_level`
+converted to pixels; internally σ = radius / 2 and the kernel is cut at 3σ. Use
+`layerShadow()` from `src/style/effects.ts` instead of writing this by hand — it also converts
+QGIS MapUnits and the offset angle.
+
+How it works: the layer is rendered to the scratch framebuffer, blurred horizontally into a
+second framebuffer (`painter.layerBlurFbo`), then blurred vertically while being composited
+with the layer opacity and blend mode. 33 taps per pass with linear filtering.
+
+Things to know:
+
+- **QGIS effect sizes in MapUnits are Web-Mercator metres**, not ground metres — unlike symbol
+  sizes they are not multiplied by `@mercator_scale`. `layerShadow` converts at the equator.
+- **QGIS effect angles are clockwise from north** (135 = lower right).
+- **Per-feature vs per-layer:** a QGIS effect on a *symbol layer* is applied per feature, one on
+  the *renderer* per layer. Put the opacity in `fill-opacity` for the first and in
+  `fill-layer-opacity` for the second. Per-feature opacity inside the framebuffer followed by a
+  multiply composite gives exactly the stacked-multiply result `D·(1 − a)ⁿ`.
+- **Also check the symbol alpha.** The effect opacity is scaled by it (building parts: 0.4 × 0.7).
+- **A shadow cannot fall on features of its own layer.** QGIS interleaves shadow and source per
+  feature; here the whole shadow layer sits below the whole source layer.
+- The blur reads only what is on screen, so a shadow of something just outside the viewport is
+  approximated by edge clamping.
+- Cost: two extra full-screen passes per blurred layer.
+
+`patches/tools/apply-layer-blur.py` is the script that made the edits; it documents every
+anchor and is the starting point when re-applying to a new MapLibre version.

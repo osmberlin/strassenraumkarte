@@ -24,7 +24,7 @@ export type DropShadowOptions = {
   blurM: number
   /** Ground-metre offset distance. */
   offsetM: number
-  /** Direction of the offset in degrees (QGIS: 0 = east, 90 = north). */
+  /** Direction of the offset in degrees (QGIS: 0 = north, clockwise). */
   angleDeg: number
   color: EffectColor
   opacity: number | ExpressionSpecification
@@ -88,7 +88,8 @@ export function metresInterpolate(
 
 /**
  * Zoom-interpolated [x,y] translate; stop values wrapped in `literal`.
- * QGIS angle: 0 = east, 90 = north; map Y grows south → uy = −sin.
+ * QGIS effect angle: 0 = north, clockwise (135 = lower right, the QGIS default);
+ * screen Y grows south → (sin, −cos).
  */
 export function metreOffsetTranslate(
   offsetM: number,
@@ -96,8 +97,8 @@ export function metreOffsetTranslate(
   lat: number = DEFAULT_LAT,
 ): ExpressionSpecification {
   const rad = (angleDeg * Math.PI) / 180
-  const ux = Math.cos(rad)
-  const uy = -Math.sin(rad)
+  const ux = Math.sin(rad)
+  const uy = -Math.cos(rad)
   const at = (z: number): ExpressionSpecification => {
     const d = metresToPixelsAtZoom(offsetM, z, lat)
     return ['literal', [d * ux, d * uy]] as ExpressionSpecification
@@ -120,6 +121,60 @@ function highwayBlurRamp(scale = 1): ExpressionSpecification {
     expr.push(zoom, mmToPixels(mm) * scale)
   }
   return expr as ExpressionSpecification
+}
+
+/**
+ * QGIS effect sizes given in raw MapUnits are EPSG:3857 metres, *not* multiplied
+ * by `@mercator_scale` like symbol sizes — convert at the equator (cos φ = 1).
+ */
+const MAP_UNIT_LAT = 0
+
+export type LayerShadowOptions = {
+  /** QGIS `blur_level` in MapUnits. */
+  blurMU: number
+  /** QGIS `offset_distance` in MapUnits. */
+  offsetMU: number
+  /** QGIS `offset_angle`: 0 = north, clockwise. */
+  angleDeg: number
+  color: EffectColor
+  opacity: number
+}
+
+/**
+ * QGIS dropShadow as one fill layer: the polygons are drawn offset in the shadow
+ * colour, Gaussian-blurred as a whole and multiplied onto the map
+ * (`fill-layer-blur` / `fill-layer-blend`, local MapLibre patch — see
+ * docs/maplibre-patches.md). Insert *before* the layer that casts the shadow.
+ *
+ * The opacity is applied per feature inside the layer, so overlapping shadows
+ * darken each other exactly like QGIS' per-feature multiply: alpha-over gives
+ * 1 − (1 − a)ⁿ coverage, and multiplying that onto the map leaves D·(1 − a)ⁿ.
+ * `building_shade` relies on this — its stacked polygons form the penumbra.
+ */
+export function layerShadow(
+  id: string,
+  base: LayerBase,
+  options: LayerShadowOptions,
+): FillLayerSpecification {
+  const { blurMU, offsetMU, angleDeg, color, opacity } = options
+  return {
+    id,
+    type: 'fill',
+    ...base,
+    paint: {
+      'fill-color': color,
+      'fill-antialias': false,
+      ...(offsetMU > 0
+        ? {
+            'fill-translate': metreOffsetTranslate(offsetMU, angleDeg, MAP_UNIT_LAT),
+            'fill-translate-anchor': 'map' as const,
+          }
+        : {}),
+      'fill-opacity': opacity,
+      'fill-layer-blur': metresInterpolate(blurMU, 1, MAP_UNIT_LAT),
+      'fill-layer-blend': 'multiply',
+    },
+  }
 }
 
 /**

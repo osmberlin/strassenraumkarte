@@ -4,8 +4,12 @@ import type {
 } from '@maplibre/maplibre-gl-style-spec'
 
 import { BUILDING_LINES, BUILDING_PARTS_FILL } from '../colors'
+import { layerShadow } from '../effects'
 import { base } from '../expr'
 import { metresToPixels } from '../metres'
+
+/** Mean of the QGIS roof Shapeburst ramp #990003 → #ffffff. */
+const ROOF_SHAPE_MEAN = '#cc8081'
 
 /** QGIS enableorderby height ascending — shorter parts under taller. */
 const PARTS_SORT_KEY = [
@@ -15,21 +19,44 @@ const PARTS_SORT_KEY = [
 ] as ExpressionSpecification
 
 /**
- * Buildings: parts (sorted by height) → footprint → lines.
+ * Buildings: shadows → parts (sorted by height) → lines.
  *
- * QGIS `building_shade` uses drawSource OFF + Gaussian dropShadow of extruded
- * shade polygons. MapLibre cannot blur fills; painting shade/parts drop shadows
- * reads as a hard black SE slab — skipped (known deviation vs QGIS/Rust).
+ * QGIS has no footprint layer: the pink is `building_parts` at α 0.7 over its own
+ * shadow and `building_shade`, which is what gives roofs their darker tone
+ * (#ffe9e9 alone would be far too pale).
  *
- * Roof-shape gradients (#990003 magma / Shapeburst) are intentionally skipped —
- * unfinished QGIS experiment (see docs/maplibre-style-groups.md G10).
+ * Depth comes from two QGIS dropShadows, both multiplied onto the ground:
+ * `building_shade` (height-extruded shade polygons from the ETL, source hidden)
+ * and the building parts themselves.
+ *
+ * `roof shape` (layer blend Screen, opacity 0.404) is a Shapeburst from #990003
+ * at the edge to white in the middle for nearly every building. MapLibre has no
+ * distance-to-edge fill, so it is screened as one flat mid-ramp colour: right
+ * overall tone, no lighter roof centre (gap #8 in docs/maplibre-style-gaps.md).
  */
 export function buildingLayers(): LayerSpecification[] {
   const partsBase = base('building_parts_dissolved_height', 15)
-  const buildingBase = base('building', 15)
   const linesBase = base('building_lines', 15)
 
   const layers: LayerSpecification[] = []
+
+  layers.push(
+    layerShadow('building-shade', base('building_shade', 15), {
+      blurMU: 1.6,
+      offsetMU: 0.4,
+      angleDeg: 40,
+      color: '#000000',
+      opacity: 0.138,
+    }),
+    layerShadow('building-parts-shadow', partsBase, {
+      blurMU: 2,
+      offsetMU: 1,
+      angleDeg: 40,
+      color: '#232323',
+      // effect opacity 0.4 × symbol alpha 0.7
+      opacity: 0.28,
+    }),
+  )
 
   layers.push({
     id: 'building-parts-fill',
@@ -58,13 +85,14 @@ export function buildingLayers(): LayerSpecification[] {
   })
 
   layers.push({
-    id: 'building-fill',
+    id: 'building-roof-shape',
     type: 'fill',
-    ...buildingBase,
+    ...base('building', 15),
     paint: {
-      'fill-color': BUILDING_PARTS_FILL,
-      'fill-opacity': 0.85,
-      'fill-outline-color': '#d4b0b0',
+      'fill-color': ROOF_SHAPE_MEAN,
+      'fill-antialias': false,
+      'fill-layer-opacity': 0.404,
+      'fill-layer-blend': 'screen',
     },
   })
 
