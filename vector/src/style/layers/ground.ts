@@ -13,7 +13,7 @@ import {
   WATER_SHORE,
   WATERWAY_LINE,
 } from '../colors'
-import { dropShadow, innerGlow, innerShadow, outerGlow } from '../effects'
+import { innerGlow, innerShadow, layerShadow, outerGlow } from '../effects'
 import {
   base,
   landuseFillMatch,
@@ -110,9 +110,9 @@ export function groundLayers(): LayerSpecification[] {
   const layers: LayerSpecification[] = []
 
   layers.push(
-    ...dropShadow('landuse-forest', { ...landuseBase, filter: forestFilter }, {
-      blurM: 1,
-      offsetM: 0.4,
+    layerShadow('landuse-forest-shadow', { ...landuseBase, filter: forestFilter }, {
+      blurMU: 1,
+      offsetMU: 0.4,
       angleDeg: 40,
       color: '#232323',
       opacity: 0.33,

@@ -10,9 +10,10 @@ import type {
   LayerSpecification,
 } from '@maplibre/maplibre-gl-style-spec'
 
-import { dropShadow } from '../effects'
+import { layerShadow } from '../effects'
 import { base, withOsmBucket } from '../expr'
 import { metresToPixels } from '../metres'
+import { iconSizeFromMetres } from '../sprite-icons'
 import { styleLayerId, type OsmLayerBucketId } from '../order'
 
 const LANDSCAPE_BROWN = '#965220'
@@ -23,7 +24,6 @@ const RAIL_TIE = '#a8a8a7'
 const RAIL_TIE_DISUSED = '#b0b0af'
 const SPRING_FILL = '#cac7ed'
 const SPRING_OUTLINE = '#a396d9'
-const ICON_PIXELS = 64
 
 function f(expr: ExpressionSpecification): FilterSpecification {
   return expr as FilterSpecification
@@ -87,10 +87,6 @@ function tieWidthM(): ExpressionSpecification {
     ['+', ['/', ['to-number', ['get', 'gauge']], 1000], 1.1],
     2.5,
   ] as ExpressionSpecification
-}
-
-function iconSizeFromMetres(metres: number): ExpressionSpecification {
-  return metresToPixels(['/', metres, ICON_PIXELS] as ExpressionSpecification)
 }
 
 /** Landscape way/node — after water in the ground stack. */
@@ -159,14 +155,14 @@ export function landscapeLayers(): LayerSpecification[] {
     paint: { 'text-color': LANDSCAPE_BROWN },
   })
 
-  // Rock / stone — rock01 via runtime resolver; rotation from export.
+  // Rock / stone — packed rock01 (QGIS RasterMarker, 1 m wide); rotation from export.
   for (const cls of ['rock', 'stone'] as const) {
     layers.push({
       id: `landscape_node-${cls}`,
       type: 'symbol',
       ...base('landscape_node', 15, f(['==', ['get', 'class'], cls])),
       layout: {
-        'icon-image': 'symbols/rock/rock01',
+        'icon-image': 'symbols:rock/rock01',
         'icon-size': iconSizeFromMetres(1),
         'icon-rotate': ['coalesce', ['get', 'rotation'], 0],
         'icon-rotation-alignment': 'map',
@@ -198,12 +194,12 @@ export function bridgeRailwayLayersForBucket(bucketId: OsmLayerBucketId): LayerS
   const layers: LayerSpecification[] = []
   const b = bucketId
 
-  // bridge_shade — fill + widest dropShadow in the project (blur 5 m)
+  // bridge_shade — fill + widest layerShadow in the project (blur 5 m)
   const shadeBase = withOsmBucket('bridge_shade', 15, b)
   layers.push(
-    ...dropShadow(`bridge_shade-${b}`, shadeBase, {
-      blurM: 5,
-      offsetM: 0,
+    layerShadow(styleLayerId('bridge_shade', 'shadow', b), shadeBase, {
+      blurMU: 5,
+      offsetMU: 0,
       angleDeg: 45,
       color: '#000000',
       opacity: 0.33,

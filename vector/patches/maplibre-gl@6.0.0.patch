@@ -1,6 +1,9 @@
 diff --git a/node_modules/maplibre-gl/.bun-tag-1ddba408b2aeda05 b/.bun-tag-1ddba408b2aeda05
 new file mode 100644
 index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/maplibre-gl/.bun-tag-57613e58b17730af b/.bun-tag-57613e58b17730af
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
 diff --git a/node_modules/maplibre-gl/.bun-tag-6d74fb340781969a b/.bun-tag-6d74fb340781969a
 new file mode 100644
 index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
@@ -8,7 +11,7 @@ diff --git a/node_modules/maplibre-gl/.bun-tag-984e4a1369513c3d b/.bun-tag-984e4
 new file mode 100644
 index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
 diff --git a/dist/maplibre-gl-dev.mjs b/dist/maplibre-gl-dev.mjs
-index 978bcadd8e5ff1cef5c65e1973313ada4f3d584b..4a731366485e8c2b37dfefe106436215b1893621 100644
+index 978bcadd8e5ff1cef5c65e1973313ada4f3d584b..99d680f3af0ba1fd19a1c6cea2740a64c295230e 100644
 --- a/dist/maplibre-gl-dev.mjs
 +++ b/dist/maplibre-gl-dev.mjs
 @@ -8293,6 +8293,7 @@ const shaders = {
@@ -164,7 +167,7 @@ index 978bcadd8e5ff1cef5c65e1973313ada4f3d584b..4a731366485e8c2b37dfefe106436215
  	painter.currentStencilSource = void 0;
  }
  //#endregion
-@@ -16642,12 +16750,15 @@ function drawLine(painter, tileManager, layer, coords, renderOptions) {
+@@ -16642,12 +16750,17 @@ function drawLine(painter, tileManager, layer, coords, renderOptions) {
  	const opacity = layer.paint.get("line-opacity");
  	const width = layer.paint.get("line-width");
  	const layerOpacity = layer.paint.get("line-layer-opacity");
@@ -175,6 +178,8 @@ index 978bcadd8e5ff1cef5c65e1973313ada4f3d584b..4a731366485e8c2b37dfefe106436215
  	const useTerrain = !!painter.style.map.terrain;
 -	if (layerOpacity < 1) {
 +	if (layerOpacity < 1 || layerBlend !== "normal" || layerBlur > 0) {
++		// [strassenraumkarte patch] The offscreen pass costs full-screen draws — skip it when no visible tile has features for this layer.
++		if (!coords.some((coord) => tileManager.getTile(coord).getBucket(layer))) return;
  		const results = prepareDrawLayerOpacity(painter, layer, coords, useTerrain);
  		drawLineTiles(painter, tileManager, layer, coords, renderOptions, useTerrain);
 -		drawLayerOpacity(painter, layerOpacity, results, layer);
@@ -182,7 +187,7 @@ index 978bcadd8e5ff1cef5c65e1973313ada4f3d584b..4a731366485e8c2b37dfefe106436215
  		return;
  	}
  	drawLineTiles(painter, tileManager, layer, coords, renderOptions, useTerrain);
-@@ -16755,12 +16866,15 @@ function drawFill(painter, tileManager, layer, coords, renderOptions) {
+@@ -16755,12 +16868,17 @@ function drawFill(painter, tileManager, layer, coords, renderOptions) {
  	const color = layer.paint.get("fill-color");
  	const opacity = layer.paint.get("fill-opacity");
  	const layerOpacity = layer.paint.get("fill-layer-opacity");
@@ -193,6 +198,8 @@ index 978bcadd8e5ff1cef5c65e1973313ada4f3d584b..4a731366485e8c2b37dfefe106436215
 -	if (layerOpacity < 1) {
 +	if (layerOpacity < 1 || layerBlend !== "normal" || layerBlur > 0) {
  		if (painter.renderPass !== "translucent") return;
++		// [strassenraumkarte patch] The offscreen pass costs full-screen draws — skip it when no visible tile has features for this layer.
++		if (!coords.some((coord) => tileManager.getTile(coord).getBucket(layer))) return;
  		const results = prepareDrawLayerOpacity(painter, layer, coords, !!painter.style.map.terrain);
  		drawFillAndOutline(painter, tileManager, layer, coords, renderOptions);
 -		drawLayerOpacity(painter, layerOpacity, results, layer);
@@ -200,7 +207,7 @@ index 978bcadd8e5ff1cef5c65e1973313ada4f3d584b..4a731366485e8c2b37dfefe106436215
  		return;
  	}
  	const pattern = layer.paint.get("fill-pattern");
-@@ -18189,6 +18303,8 @@ var Painter = class Painter {
+@@ -18189,6 +18307,8 @@ var Painter = class Painter {
  		}
  		this.layerOpacityFbo?.destroy();
  		this.layerOpacityFbo = null;
