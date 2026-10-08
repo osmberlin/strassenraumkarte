@@ -38,5 +38,9 @@
     "sharp": "^0.35.3",
     "typescript": "^5",
     "vite": "^6"
+  },
+  "patchedDependencies": {
+    "maplibre-gl@6.0.0": "patches/maplibre-gl@6.0.0.patch",
+    "@maplibre/maplibre-gl-style-spec@26.2.1": "patches/@maplibre%2Fmaplibre-gl-style-spec@26.2.1.patch"
   }
 }

@@ -6,6 +6,7 @@ import type {
 
 import {
   HIGHWAY_BLUR,
+  HIGHWAY_SURFACE_PATTERNS,
   PATH_ACCESS_AISLE,
   PATH_CASING_DARK,
   PATH_CASING_LIGHT,
@@ -17,7 +18,7 @@ import {
   TACTILE,
 } from '../colors'
 import { highwayInnerBlur } from '../effects'
-import { highwayAreaFillMatch, withOsmBucket } from '../expr'
+import { highwayAreaFillMatch, surfacePatternLayer, withOsmBucket } from '../expr'
 import { metresToPixels, metresToPixelsFromProp } from '../metres'
 import { OSM_LAYER_BUCKETS, styleLayerId, type OsmLayerBucketId } from '../order'
 import { bridgeRailwayLayersForBucket } from './landscape'
@@ -398,23 +399,13 @@ export function streetLayers(): LayerSpecification[] {
     )
 
     // Surface textures from the packed sprite (MapUnit widths baked @ z18; rotation dropped, G0.4).
-    for (const [surface, pattern, opacity] of [
-      ['asphalt', 'surface/asphalt', 0.06],
-      ['concrete', 'surface/concrete', 0.35],
-      ['concrete:plates', 'surface/concrete', 0.35],
-      ['paving_stones', 'surface/paving_stones', 0.1],
-      ['sett', 'surface/sett', 0.12],
-    ] as const) {
-      layers.push({
-        id: styleLayerId('highway_area', `pattern-${surface.replace(':', '-')}`, b),
-        type: 'fill',
-        ...withOsmBucket('highway_area', 15, b, f(['==', ['get', 'surface'], surface])),
-        paint: {
-          'fill-pattern': pattern,
-          'fill-opacity': opacity,
-        },
-      })
-    }
+    const surfaces = surfacePatternLayer(HIGHWAY_SURFACE_PATTERNS)
+    layers.push({
+      id: styleLayerId('highway_area', 'pattern', b),
+      type: 'fill',
+      ...withOsmBucket('highway_area', 15, b, surfaces.filter),
+      paint: surfaces.paint,
+    })
   }
 
   return layers

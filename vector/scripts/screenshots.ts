@@ -15,13 +15,23 @@ import { PNG } from 'pngjs'
 import { COMPARE_LOCATIONS } from '../locations'
 
 const ROOT = path.resolve(import.meta.dir, '..')
-const OUT = path.join(ROOT, 'compare-output')
+// SHOT_OUT lets before/after runs live side by side (e.g. compare-output/before).
+const OUT = path.resolve(ROOT, process.env.SHOT_OUT ?? 'compare-output')
 const BASE = process.env.PREVIEW_URL ?? 'http://127.0.0.1:5177'
 const VIEWPORT = { width: 1280, height: 800 }
 
 async function readPng(file: string): Promise<PNG> {
   const buf = Buffer.from(await Bun.file(file).arrayBuffer())
   return PNG.sync.read(buf)
+}
+
+function cropRgba(img: PNG, width: number, height: number): Buffer {
+  if (img.width === width && img.height === height) return img.data
+  const out = Buffer.alloc(width * height * 4)
+  for (let y = 0; y < height; y++) {
+    img.data.copy(out, y * width * 4, y * img.width * 4, (y * img.width + width) * 4)
+  }
+  return out
 }
 
 async function main() {
@@ -42,14 +52,15 @@ async function main() {
   }[] = []
 
   for (const loc of COMPARE_LOCATIONS) {
-    const url = `${BASE}/?compare=1&mode=side-by-side&location=${loc.id}`
+    // Explicit panes: the default also shows the Rust raster pane, which would be nth(1).
+    const url = `${BASE}/?compare=1&mode=side-by-side&panes=qgis,vector&location=${loc.id}`
     console.log(`[shot] ${loc.id} ← ${url}`)
     await page.goto(url, { waitUntil: 'networkidle', timeout: 60_000 })
     await page.waitForTimeout(2500)
 
     const panes = page.locator('.compare-pane')
     const count = await panes.count()
-    if (count < 2) throw new Error(`expected 2 panes at ${loc.id}, got ${count}`)
+    if (count !== 2) throw new Error(`expected 2 panes at ${loc.id}, got ${count}`)
 
     const rasterPath = path.join(OUT, `${loc.id}-raster.png`)
     const vectorPath = path.join(OUT, `${loc.id}-vector.png`)
@@ -58,14 +69,15 @@ async function main() {
     await panes.nth(0).screenshot({ path: rasterPath })
     await panes.nth(1).screenshot({ path: vectorPath })
 
+    // Panes can differ by a pixel (flex rounding) — compare the common top-left area.
     const imgA = await readPng(rasterPath)
     const imgB = await readPng(vectorPath)
     const width = Math.min(imgA.width, imgB.width)
     const height = Math.min(imgA.height, imgB.height)
     const diff = new PNG({ width, height })
     const mismatched = pixelmatch(
-      imgA.data,
-      imgB.data,
+      cropRgba(imgA, width, height),
+      cropRgba(imgB, width, height),
       diff.data,
       width,
       height,

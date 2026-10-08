@@ -1,5 +1,6 @@
 /**
- * Named comparison viewpoints over the Neukölln starter bbox.
+ * Named comparison viewpoints over the Nord-Neukölln starter bbox
+ * (13.386–13.440 E, 52.466–52.493 N) — keep them inside the tile extent.
  * Chosen via density queries (trees / buildings / parking) + water + intersection.
  */
 export type CompareLocation = {
@@ -23,34 +24,42 @@ export const COMPARE_LOCATIONS: CompareLocation[] = [
   {
     id: 'dense-trees',
     label: 'Dense trees',
-    longitude: 13.42598,
-    latitude: 52.46216,
+    longitude: 13.412,
+    latitude: 52.484,
     zoom: 18,
-    note: 'Highest tree count in a 0.002° cell',
+    note: 'Hasenheide — highest tree count in a 0.002° cell',
   },
   {
     id: 'dense-housing',
     label: 'Dense housing',
-    longitude: 13.43528,
-    latitude: 52.46679,
+    longitude: 13.429,
+    latitude: 52.477,
     zoom: 17,
-    note: 'Highest building count in a 0.002° cell',
+    note: 'Schillerkiez — highest building count in a 0.002° cell',
   },
   {
     id: 'parking-street',
-    label: 'Parking street',
-    longitude: 13.43338,
-    latitude: 52.4692,
+    label: 'Residential street',
+    longitude: 13.4265,
+    latitude: 52.476,
+    zoom: 19,
+    note: 'Weisestraße — kerbs, parking, street furniture at overzoom',
+  },
+  {
+    id: 'playground',
+    label: 'Playground',
+    longitude: 13.42956,
+    latitude: 52.47692,
     zoom: 18,
-    note: 'Dense parking / parking_space areas',
+    note: 'Largest playground polygon — sand, equipment, fences',
   },
   {
     id: 'park-water',
-    label: 'Park / water edge',
-    longitude: 13.46847,
-    latitude: 52.44942,
-    zoom: 16,
-    note: 'Largest dissolved water body centroid',
+    label: 'Park / water / pitches',
+    longitude: 13.4168,
+    latitude: 52.4798,
+    zoom: 17,
+    note: 'Hasenheide pond and sports pitches',
   },
 ]
 

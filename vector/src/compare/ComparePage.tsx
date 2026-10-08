@@ -28,7 +28,7 @@ import {
 } from '../../locations'
 import type { MapParam } from '../lib/mapParam'
 import { installMissingStyleImageResolver } from '../lib/missing-style-images'
-import { pmtilesSourceUrl } from '../maplibre-setup'
+import { mapLib, pmtilesSourceUrl } from '../maplibre-setup'
 import { emptyBaseStyle } from '../style/build-style'
 import { SOURCE_ID, absoluteSpriteUrl } from '../style/source'
 import { qgisLayerSpecs } from '../style/qgis'
@@ -308,6 +308,7 @@ export function ComparePage({
           <div className="compare-pane">
             <div className="compare-label">Raster (QGIS)</div>
             <Map
+              mapLib={mapLib}
               id="compare-raster"
               style={{ width: '100%', height: '100%' }}
               {...shared}
@@ -336,6 +337,7 @@ export function ComparePage({
           <div className="compare-pane">
             <div className="compare-label">Raster (Rust full-approx)</div>
             <Map
+              mapLib={mapLib}
               id="compare-rust"
               style={{ width: '100%', height: '100%' }}
               {...shared}
@@ -363,6 +365,7 @@ export function ComparePage({
           <div className="compare-pane">
             <div className="compare-label">Vector</div>
             <Map
+              mapLib={mapLib}
               id="compare-vector"
               style={{ width: '100%', height: '100%' }}
               {...shared}
@@ -396,6 +399,7 @@ export function ComparePage({
           >
             <div className="compare-label">Raster (QGIS)</div>
             <Map
+              mapLib={mapLib}
               id="compare-raster"
               style={{ width: '100%', height: '100%' }}
               {...shared}
@@ -431,6 +435,7 @@ export function ComparePage({
           >
             <div className="compare-label">Raster (Rust full-approx)</div>
             <Map
+              mapLib={mapLib}
               id="compare-rust"
               style={{ width: '100%', height: '100%' }}
               {...shared}
@@ -478,6 +483,7 @@ export function ComparePage({
           >
             <div className="compare-label">Vector</div>
             <Map
+              mapLib={mapLib}
               id="compare-vector"
               style={{ width: '100%', height: '100%' }}
               {...shared}

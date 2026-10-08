@@ -1,0 +1,189 @@
+diff --git a/node_modules/maplibre-gl/.bun-tag-6d74fb340781969a b/.bun-tag-6d74fb340781969a
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/dist/maplibre-gl-dev.mjs b/dist/maplibre-gl-dev.mjs
+index 978bcadd8e5ff1cef5c65e1973313ada4f3d584b..176b6632445c31bdcb1dce7804751973a4379f22 100644
+--- a/dist/maplibre-gl-dev.mjs
++++ b/dist/maplibre-gl-dev.mjs
+@@ -10320,6 +10320,26 @@ ColorMode.alphaBlended = new ColorMode([ONE, ONE_MINUS_SRC_ALPHA], Color.transpa
+ 	true,
+ 	true
+ ]);
++/**
++* [strassenraumkarte patch] `{fill,line}-layer-blend` compositing modes.
++* The layer is rendered to the layer-opacity scratch FBO (premultiplied alpha) and
++* composited with one of these blend functions, so the mode applies to the layer
++* as a whole (QGIS layer blend mode), not per feature.
++*   multiply: S·D + D·(1 − Sa)      screen: S + D·(1 − S)      plus: S + D
++*/
++const DST_COLOR = 774;
++const ONE_MINUS_SRC_COLOR = 769;
++const allChannels = [
++	true,
++	true,
++	true,
++	true
++];
++ColorMode.layerBlend = {
++	multiply: new ColorMode([DST_COLOR, ONE_MINUS_SRC_ALPHA], Color.transparent, allChannels),
++	screen: new ColorMode([ONE, ONE_MINUS_SRC_COLOR], Color.transparent, allChannels),
++	plus: new ColorMode([ONE, ONE], Color.transparent, allChannels)
++};
+ //#endregion
+ //#region src/webgl/cull_face_mode.ts
+ const FRONT = 1028;
+@@ -16577,14 +16597,15 @@ function bindLayerOpacity(painter, width, height) {
+ 	fbo.height = height;
+ 	painter.context.bindFramebuffer.set(fbo.framebuffer);
+ }
+-function drawLayerOpacity(painter, opacity, prepareDrawLayerOpacityResult, layer) {
++function drawLayerOpacity(painter, opacity, prepareDrawLayerOpacityResult, layer, blend) {
+ 	const context = painter.context;
+ 	const gl = context.gl;
+ 	context.bindFramebuffer.set(prepareDrawLayerOpacityResult.compositeTarget);
+ 	context.viewport.set(prepareDrawLayerOpacityResult.compositeViewport);
+ 	context.activeTexture.set(gl.TEXTURE0);
+ 	gl.bindTexture(gl.TEXTURE_2D, painter.layerOpacityFbo.colorAttachment.get());
+-	painter.useProgram("layerOpacity").draw(context, gl.TRIANGLES, DepthMode.disabled, StencilMode.disabled, painter.colorModeForRenderPass(), CullFaceMode.disabled, layerOpacityUniformValues(opacity, 0), null, null, layer.id, painter.viewportBuffer, painter.quadTriangleIndexBuffer, painter.viewportSegments, layer.paint, painter.transform.zoom);
++	const colorMode = !painter._showOverdrawInspector && ColorMode.layerBlend[blend] || painter.colorModeForRenderPass();
++	painter.useProgram("layerOpacity").draw(context, gl.TRIANGLES, DepthMode.disabled, StencilMode.disabled, colorMode, CullFaceMode.disabled, layerOpacityUniformValues(opacity, 0), null, null, layer.id, painter.viewportBuffer, painter.quadTriangleIndexBuffer, painter.viewportSegments, layer.paint, painter.transform.zoom);
+ 	painter.currentStencilSource = void 0;
+ }
+ //#endregion
+@@ -16642,12 +16663,13 @@ function drawLine(painter, tileManager, layer, coords, renderOptions) {
+ 	const opacity = layer.paint.get("line-opacity");
+ 	const width = layer.paint.get("line-width");
+ 	const layerOpacity = layer.paint.get("line-layer-opacity");
++	const layerBlend = layer.paint.get("line-layer-blend");
+ 	if (opacity.constantOr(1) === 0 || width.constantOr(1) === 0 || layerOpacity === 0) return;
+ 	const useTerrain = !!painter.style.map.terrain;
+-	if (layerOpacity < 1) {
++	if (layerOpacity < 1 || layerBlend !== "normal") {
+ 		const results = prepareDrawLayerOpacity(painter, layer, coords, useTerrain);
+ 		drawLineTiles(painter, tileManager, layer, coords, renderOptions, useTerrain);
+-		drawLayerOpacity(painter, layerOpacity, results, layer);
++		drawLayerOpacity(painter, layerOpacity, results, layer, layerBlend);
+ 		return;
+ 	}
+ 	drawLineTiles(painter, tileManager, layer, coords, renderOptions, useTerrain);
+@@ -16755,12 +16777,13 @@ function drawFill(painter, tileManager, layer, coords, renderOptions) {
+ 	const color = layer.paint.get("fill-color");
+ 	const opacity = layer.paint.get("fill-opacity");
+ 	const layerOpacity = layer.paint.get("fill-layer-opacity");
++	const layerBlend = layer.paint.get("fill-layer-blend");
+ 	if (opacity.constantOr(1) === 0 || layerOpacity === 0) return;
+-	if (layerOpacity < 1) {
++	if (layerOpacity < 1 || layerBlend !== "normal") {
+ 		if (painter.renderPass !== "translucent") return;
+ 		const results = prepareDrawLayerOpacity(painter, layer, coords, !!painter.style.map.terrain);
+ 		drawFillAndOutline(painter, tileManager, layer, coords, renderOptions);
+-		drawLayerOpacity(painter, layerOpacity, results, layer);
++		drawLayerOpacity(painter, layerOpacity, results, layer, layerBlend);
+ 		return;
+ 	}
+ 	const pattern = layer.paint.get("fill-pattern");
+diff --git a/dist/maplibre-gl-shared-dev.mjs b/dist/maplibre-gl-shared-dev.mjs
+index ffc0e9591a62f8dfce92b6091ad8454a631a3e3e..d4715020de29e79f9b1622df67774c1320ad132a 100644
+--- a/dist/maplibre-gl-shared-dev.mjs
++++ b/dist/maplibre-gl-shared-dev.mjs
+@@ -4564,6 +4564,17 @@ const latest = {
+ 			},
+ 			"property-type": "data-driven"
+ 		},
++		"fill-layer-blend": {
++			"type": "enum",
++			"values": {
++				"normal": {},
++				"multiply": {},
++				"screen": {},
++				"plus": {}
++			},
++			"default": "normal",
++			"property-type": "data-constant"
++		},
+ 		"fill-layer-opacity": {
+ 			"type": "number",
+ 			"default": 1,
+@@ -4766,6 +4777,17 @@ const latest = {
+ 			},
+ 			"property-type": "data-driven"
+ 		},
++		"line-layer-blend": {
++			"type": "enum",
++			"values": {
++				"normal": {},
++				"multiply": {},
++				"screen": {},
++				"plus": {}
++			},
++			"default": "normal",
++			"property-type": "data-constant"
++		},
+ 		"line-layer-opacity": {
+ 			"type": "number",
+ 			"default": 1,
+@@ -18682,6 +18704,7 @@ const getPaint$4 = () => paint$4 = paint$4 || new Properties({
+ 	"fill-antialias": new DataConstantProperty(latest["paint_fill"]["fill-antialias"], "fill-antialias"),
+ 	"fill-opacity": new DataDrivenProperty(latest["paint_fill"]["fill-opacity"], "fill-opacity"),
+ 	"fill-layer-opacity": new DataConstantProperty(latest["paint_fill"]["fill-layer-opacity"], "fill-layer-opacity"),
++	"fill-layer-blend": new DataConstantProperty(latest["paint_fill"]["fill-layer-blend"], "fill-layer-blend"),
+ 	"fill-color": new DataDrivenProperty(latest["paint_fill"]["fill-color"], "fill-color"),
+ 	"fill-outline-color": new DataDrivenProperty(latest["paint_fill"]["fill-outline-color"], "fill-outline-color"),
+ 	"fill-translate": new DataConstantProperty(latest["paint_fill"]["fill-translate"], "fill-translate"),
+@@ -21613,6 +21636,7 @@ let paint$2;
+ const getPaint$2 = () => paint$2 = paint$2 || new Properties({
+ 	"line-opacity": new DataDrivenProperty(latest["paint_line"]["line-opacity"], "line-opacity"),
+ 	"line-layer-opacity": new DataConstantProperty(latest["paint_line"]["line-layer-opacity"], "line-layer-opacity"),
++	"line-layer-blend": new DataConstantProperty(latest["paint_line"]["line-layer-blend"], "line-layer-blend"),
+ 	"line-color": new DataDrivenProperty(latest["paint_line"]["line-color"], "line-color"),
+ 	"line-translate": new DataConstantProperty(latest["paint_line"]["line-translate"], "line-translate"),
+ 	"line-translate-anchor": new DataConstantProperty(latest["paint_line"]["line-translate-anchor"], "line-translate-anchor"),
+diff --git a/dist/maplibre-gl.d.ts b/dist/maplibre-gl.d.ts
+index 67834dd09c8a0814db12c930c6352561dd58cd1e..b4ed591acf341f48c4f0f91bee249750a20844be 100644
+--- a/dist/maplibre-gl.d.ts
++++ b/dist/maplibre-gl.d.ts
+@@ -3051,6 +3051,7 @@ type FillPaintProps = {
+   "fill-antialias": DataConstantProperty<boolean>;
+   "fill-opacity": DataDrivenProperty<number>;
+   "fill-layer-opacity": DataConstantProperty<number>;
++  "fill-layer-blend": DataConstantProperty<"normal" | "multiply" | "screen" | "plus">;
+   "fill-color": DataDrivenProperty<Color>;
+   "fill-outline-color": DataDrivenProperty<Color>;
+   "fill-translate": DataConstantProperty<[number, number]>;
+@@ -3061,6 +3062,7 @@ type FillPaintPropsPossiblyEvaluated = {
+   "fill-antialias": boolean;
+   "fill-opacity": PossiblyEvaluatedPropertyValue<number>;
+   "fill-layer-opacity": number;
++  "fill-layer-blend": "normal" | "multiply" | "screen" | "plus";
+   "fill-color": PossiblyEvaluatedPropertyValue<Color>;
+   "fill-outline-color": PossiblyEvaluatedPropertyValue<Color>;
+   "fill-translate": [number, number];
+@@ -3343,6 +3345,7 @@ type LineLayoutPropsPossiblyEvaluated = {
+ type LinePaintProps = {
+   "line-opacity": DataDrivenProperty<number>;
+   "line-layer-opacity": DataConstantProperty<number>;
++  "line-layer-blend": DataConstantProperty<"normal" | "multiply" | "screen" | "plus">;
+   "line-color": DataDrivenProperty<Color>;
+   "line-translate": DataConstantProperty<[number, number]>;
+   "line-translate-anchor": DataConstantProperty<"map" | "viewport">;
+@@ -3357,6 +3360,7 @@ type LinePaintProps = {
+ type LinePaintPropsPossiblyEvaluated = {
+   "line-opacity": PossiblyEvaluatedPropertyValue<number>;
+   "line-layer-opacity": number;
++  "line-layer-blend": "normal" | "multiply" | "screen" | "plus";
+   "line-color": PossiblyEvaluatedPropertyValue<Color>;
+   "line-translate": [number, number];
+   "line-translate-anchor": "map" | "viewport";
+diff --git a/package.json b/package.json
+index d3680c38ad0fcb24c54d28cd906d8719d7404643..5a178f9ac444172b8b7aeb2edd0d9b2cd2ba674e 100644
+--- a/package.json
++++ b/package.json
+@@ -19,7 +19,7 @@
+   "exports": {
+     ".": {
+       "types": "./dist/maplibre-gl.d.ts",
+-      "import": "./dist/maplibre-gl.mjs"
++      "import": "./dist/maplibre-gl-dev.mjs"
+     },
+     "./dist/*": "./dist/*",
+     "./package.json": "./package.json"

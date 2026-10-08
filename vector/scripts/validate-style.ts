@@ -14,7 +14,7 @@ const style = buildStyle({
 const errors = validateStyleMin(style)
 if (errors.length > 0) {
   for (const err of errors) {
-    console.error(String(err))
+    console.error(err.message)
   }
   process.exit(1)
 }

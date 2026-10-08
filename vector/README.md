@@ -28,7 +28,8 @@ Compare (QGIS · Rust · Vector): http://127.0.0.1:5177/?compare=1&location=inte
 Side-by-side lays panes in one horizontal row. Toggle QGIS / Rust / Vector in the header (synced to `?panes=`). Swipe/blend overlay one raster vs vector.
 
 ```bash
-bun run screenshots   # needs dev (+ raster server) → compare-output/index.html
+bun run screenshots   # needs dev → compare-output/index.html (QGIS vs vector; SHOT_OUT=… for a named run)
+bun run scripts/montage.ts <out-dir> qgis=<run>/raster before=<run>/vector after=<run>/vector
 bun run e2e           # console-clean Playwright across compare locations
 bun run check         # type-check + validate-style + unit tests
 ```
@@ -66,9 +67,17 @@ QGIS MapUnit sizes use `@mercator_scale`. MapLibre paints CSS px on 512 tiles:
 | innerShadow | negative `line-offset` + `line-blur` | banded vs continuous |
 | outerGlow | two stacked blurred outlines | join artefacts if too wide |
 | Shapeburst / gradients | 2–3 inward blurred `line` bands (`shore_m`) | roof shape skipped (experimental magma/#990003); water depth green ramp omitted; shoreline banded |
-| RasterFill textures | `fill-pattern` from sprite | no per-feature rotation / ground-metre scale (G1 surface table) |
+| RasterFill textures (Multiply) | `fill-pattern` from sprite + `fill-layer-blend: multiply` (patch) | no per-feature rotation / ground-metre scale (G1 surface table) |
 | pitch_markings SvgMarker | `symbol` + packed `pitches/*` | uniform `icon-size` from `dist_long`; no independent aspect-fit |
 | SvgMarker traffic signs | `setMissingStyleImageResolver` | icons only when style requests them |
+
+## Renderer patches and gaps
+
+MapLibre is patched locally (`patches/`, applied by `bun install`) — see [docs/maplibre-patches.md](../docs/maplibre-patches.md) for the workflow and pitfalls, [docs/maplibre-style-gaps.md](../docs/maplibre-style-gaps.md) for what is still missing, and [docs/maplibre-progress/](../docs/maplibre-progress/README.md) for before/after screenshots.
+
+| Patch | Style property |
+| --- | --- |
+| layer blend modes | `fill-layer-blend`, `line-layer-blend`: `multiply` / `screen` / `plus` |
 
 ## Style modules
 

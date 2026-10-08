@@ -30,7 +30,7 @@ import {
   type MapParam,
 } from './lib/mapParam'
 import { installMissingStyleImageResolver } from './lib/missing-style-images'
-import { pmtilesSourceUrl } from './maplibre-setup'
+import { mapLib, pmtilesSourceUrl } from './maplibre-setup'
 import { emptyBaseStyle } from './style/build-style'
 import { basicLayerSpecs } from './style/basic'
 import { SOURCE_ID, absoluteSpriteUrl } from './style/source'
@@ -225,6 +225,7 @@ function MapCanvas({
 
   return (
     <Map
+      mapLib={mapLib}
       id={MAP_ID}
       style={{ width: '100%', height: '100%' }}
       mapStyle={BASE_STYLE}

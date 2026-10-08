@@ -19,6 +19,7 @@ import {
   landuseFillMatch,
   pitchFillCase,
   pitchMarkingIcon,
+  surfacePatternLayer,
 } from '../expr'
 import { metresToPixels } from '../metres'
 import { landscapeLayers } from './landscape'
@@ -30,29 +31,20 @@ function f(expr: ExpressionSpecification): FilterSpecification {
   return expr as FilterSpecification
 }
 
-/** Push shared surface `fill-pattern` layers for landuse / pitch. */
+/** Shared multiplied surface texture layer for landuse / pitch (QGIS layer blend Multiply). */
 function pushSurfacePatterns(
   layers: LayerSpecification[],
   idPrefix: string,
   sourceLayer: string,
   minzoom: number,
 ): void {
-  for (const group of SURFACE_PATTERNS) {
-    const role = `pattern-${group.pattern.replaceAll('/', '-')}`
-    layers.push({
-      id: `${idPrefix}-${role}`,
-      type: 'fill',
-      ...base(
-        sourceLayer,
-        minzoom,
-        f(['in', ['get', 'surface'], ['literal', [...group.surfaces]]]),
-      ),
-      paint: {
-        'fill-pattern': group.pattern,
-        'fill-opacity': group.opacity,
-      },
-    })
-  }
+  const { filter, paint } = surfacePatternLayer(SURFACE_PATTERNS)
+  layers.push({
+    id: `${idPrefix}-pattern`,
+    type: 'fill',
+    ...base(sourceLayer, minzoom, filter),
+    paint,
+  })
 }
 
 /** icon-size so a PITCH_ICON_PIXELS raster covers `metres` on the ground. */

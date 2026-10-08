@@ -114,6 +114,17 @@ export const SURFACE_PATTERNS: readonly SurfacePattern[] = [
   { surfaces: ['woodchips'], pattern: 'woodchips', opacity: 0.1 },
 ] as const
 
+/**
+ * QGIS `highway_area` RasterFill categories (drawSource effect, Multiply).
+ * Same textures as above, different alphas.
+ */
+export const HIGHWAY_SURFACE_PATTERNS: readonly SurfacePattern[] = [
+  { surfaces: ['asphalt'], pattern: 'surface/asphalt', opacity: 0.06 },
+  { surfaces: ['concrete', 'concrete:plates'], pattern: 'surface/concrete', opacity: 0.35 },
+  { surfaces: ['paving_stones'], pattern: 'surface/paving_stones', opacity: 0.1 },
+  { surfaces: ['sett'], pattern: 'surface/sett', opacity: 0.12 },
+] as const
+
 /** QGIS `pitch` fill CASE fallback. */
 export const PITCH_FILL_DEFAULT = '#d1d7c6'
 export const SANDPIT_FILL = '#e3e6c0'

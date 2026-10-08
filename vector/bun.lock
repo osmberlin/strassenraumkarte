@@ -27,6 +27,10 @@
       },
     },
   },
+  "patchedDependencies": {
+    "maplibre-gl@6.0.0": "patches/maplibre-gl@6.0.0.patch",
+    "@maplibre/maplibre-gl-style-spec@26.2.1": "patches/@maplibre%2Fmaplibre-gl-style-spec@26.2.1.patch",
+  },
   "packages": {
     "@emnapi/runtime": ["@emnapi/runtime@1.11.3", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-Xz4Tpyki7XyrpbUK1jR1AhdAdaXyhhY4lZ3neLodmhpuWfy2PAQN5B46sAiU4liOXGLkHypn/qU+jvfWSCYYLA=="],
 

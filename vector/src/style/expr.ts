@@ -1,9 +1,13 @@
 /**
  * Shared MapLibre expression helpers for QGIS-faithful paints.
  */
-import type { ExpressionSpecification, FilterSpecification } from '@maplibre/maplibre-gl-style-spec'
+import type {
+  ExpressionSpecification,
+  FillLayerSpecification,
+  FilterSpecification,
+} from '@maplibre/maplibre-gl-style-spec'
 
-import { LANDUSE_FILL } from './colors'
+import { LANDUSE_FILL, type SurfacePattern } from './colors'
 import { SOURCE_ID } from './source'
 import type { OsmLayerBucketId } from './order'
 import { osmLayerFilter } from './order'
@@ -205,4 +209,32 @@ export function highwayAreaFillMatch(): ExpressionSpecification {
 
 export function coalesceWidth(fallbackM: number): ExpressionSpecification {
   return ['coalesce', ['get', 'width'], fallbackM] as ExpressionSpecification
+}
+
+/**
+ * One multiplied texture layer for a `surface` → pattern table (QGIS RasterFill
+ * with Multiply). A single layer per table keeps it to one offscreen composite
+ * (`fill-layer-blend`, see docs/maplibre-patches.md) instead of one per surface.
+ */
+export function surfacePatternLayer(
+  groups: readonly SurfacePattern[],
+): { filter: FilterSpecification; paint: NonNullable<FillLayerSpecification['paint']> } {
+  const surface: ExpressionSpecification = ['get', 'surface']
+  const pattern: unknown[] = ['match', surface]
+  const opacity: unknown[] = ['match', surface]
+  for (const group of groups) {
+    pattern.push([...group.surfaces], group.pattern)
+    opacity.push([...group.surfaces], group.opacity)
+  }
+  // Fallbacks are unreachable behind the filter but required by `match`.
+  pattern.push(groups[0]!.pattern)
+  opacity.push(0)
+  return {
+    filter: ['in', surface, ['literal', groups.flatMap((g) => [...g.surfaces])]] as FilterSpecification,
+    paint: {
+      'fill-pattern': pattern as ExpressionSpecification,
+      'fill-opacity': opacity as ExpressionSpecification,
+      'fill-layer-blend': 'multiply',
+    },
+  }
 }
