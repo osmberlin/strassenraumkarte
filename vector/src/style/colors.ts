@@ -76,7 +76,7 @@ export const FOREST_CLASSES = ["forest","scrub","shrub","shrubbery","trees","woo
  * (G0.4); rotation and per-zoom scale still dropped.
  */
 export type SurfacePattern = {
-  /** OSM `surface` values that share this pattern + opacity. */
+  /** Attribute values (`surface`, or `class` for landuse) that share this pattern + opacity. */
   surfaces: readonly string[]
   /** Sprite id (from `bun run sprite`). */
   pattern: string
@@ -111,6 +111,47 @@ export const SURFACE_PATTERNS: readonly SurfacePattern[] = [
   { surfaces: ['grass'], pattern: 'grass', opacity: 0.06 },
   { surfaces: ['paving_stones'], pattern: 'surface/paving_stones', opacity: 0.07 },
   { surfaces: ['sett'], pattern: 'surface/sett', opacity: 0.12 },
+  { surfaces: ['woodchips'], pattern: 'woodchips', opacity: 0.1 },
+] as const
+
+/**
+ * QGIS `landuse` RasterFill per `class` (layer blend Normal). grass / gravel / sand are
+ * pixel-sized in QGIS (texture px = screen px); the others have ground-metre widths.
+ * `flowerbed` also carries the grass texture in QGIS — only the stronger one is kept;
+ * `reef`'s second (wetland) texture is dropped.
+ */
+export const LANDUSE_CLASS_PATTERNS: readonly SurfacePattern[] = [
+  {
+    surfaces: [
+      'allotments', 'bbq', 'biergarten', 'cemetery', 'dog_park', 'garden', 'grass',
+      'greenery', 'park', 'recreation_ground', 'tree_pit', 'village_green',
+    ],
+    pattern: 'grass',
+    opacity: 0.06,
+  },
+  {
+    surfaces: [
+      'forest', 'grassland', 'heath', 'meadow', 'orchard', 'plant_nursery', 'shrub',
+      'shrubbery', 'trees', 'tundra', 'vineyard', 'wood',
+    ],
+    pattern: 'grass',
+    opacity: 0.09,
+  },
+  {
+    surfaces: [
+      'bare_rock', 'gravel', 'landfill', 'quarry', 'railway', 'rock', 'scree', 'blockfield',
+      'shingle',
+    ],
+    pattern: 'gravel',
+    opacity: 0.08,
+  },
+  { surfaces: ['basin', 'beach', 'dune', 'salt_pond', 'sand'], pattern: 'sand', opacity: 0.08 },
+  { surfaces: ['flowerbed'], pattern: 'flowerbed', opacity: 0.25 },
+  {
+    surfaces: ['glacier', 'reef', 'shoal', 'swimming_pool', 'mud'],
+    pattern: 'water',
+    opacity: 0.2,
+  },
   { surfaces: ['woodchips'], pattern: 'woodchips', opacity: 0.1 },
 ] as const
 

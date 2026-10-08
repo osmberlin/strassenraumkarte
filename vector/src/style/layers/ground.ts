@@ -6,6 +6,7 @@ import type {
 
 import {
   FOREST_CLASSES,
+  LANDUSE_CLASS_PATTERNS,
   SANDPIT_FILL,
   SURFACE_PATTERNS,
   WATER_FILL,
@@ -100,6 +101,18 @@ export function groundLayers(): LayerSpecification[] {
       'fill-color': landuseFillMatch(),
       'fill-opacity': 1,
     },
+  })
+
+  // Class textures of the QGIS landuse symbols (grass on lawns and woods, gravel, sand, …).
+  const classTextures = surfacePatternLayer(LANDUSE_CLASS_PATTERNS, {
+    property: 'class',
+    blend: 'normal',
+  })
+  layers.push({
+    id: 'landuse-class-pattern',
+    type: 'fill',
+    ...base('landuse', 15, classTextures.filter),
+    paint: classTextures.paint,
   })
 
   // QGIS landuse rule swimming_pool: SimpleFill + innerShadow (#a396d9, blur 4 MapUnits, multiply).

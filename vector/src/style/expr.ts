@@ -212,16 +212,18 @@ export function coalesceWidth(fallbackM: number): ExpressionSpecification {
 }
 
 /**
- * One multiplied texture layer for a `surface` → pattern table (QGIS RasterFill
- * with Multiply). A single layer per table keeps it to one offscreen composite
- * (`fill-layer-blend`, see docs/maplibre-patches.md) instead of one per surface.
+ * One texture layer for an attribute → pattern table (QGIS RasterFill categories).
+ * A single layer per table keeps a blended one to one offscreen composite
+ * (`fill-layer-blend`, see docs/maplibre-patches.md) instead of one per value.
  */
 export function surfacePatternLayer(
   groups: readonly SurfacePattern[],
+  options: { property?: string; blend?: 'normal' | 'multiply' } = {},
 ): { filter: FilterSpecification; paint: NonNullable<FillLayerSpecification['paint']> } {
-  const surface: ExpressionSpecification = ['get', 'surface']
-  const pattern: unknown[] = ['match', surface]
-  const opacity: unknown[] = ['match', surface]
+  const { property = 'surface', blend = 'multiply' } = options
+  const value: ExpressionSpecification = ['get', property]
+  const pattern: unknown[] = ['match', value]
+  const opacity: unknown[] = ['match', value]
   for (const group of groups) {
     pattern.push([...group.surfaces], group.pattern)
     opacity.push([...group.surfaces], group.opacity)
@@ -230,11 +232,11 @@ export function surfacePatternLayer(
   pattern.push(groups[0]!.pattern)
   opacity.push(0)
   return {
-    filter: ['in', surface, ['literal', groups.flatMap((g) => [...g.surfaces])]] as FilterSpecification,
+    filter: ['in', value, ['literal', groups.flatMap((g) => [...g.surfaces])]] as FilterSpecification,
     paint: {
       'fill-pattern': pattern as ExpressionSpecification,
       'fill-opacity': opacity as ExpressionSpecification,
-      'fill-layer-blend': 'multiply',
+      ...(blend === 'normal' ? {} : { 'fill-layer-blend': blend }),
     },
   }
 }

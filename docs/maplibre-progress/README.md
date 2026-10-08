@@ -13,6 +13,9 @@ The QGIS raster tiles are the reference.
 | [04-flattened-trees-and-water](./04-flattened-trees-and-water/README.md) | `symbol-layer-opacity` for tree crowns, baked crown shadows, pool and water edges |
 | [05-road-marking-dashes](./05-road-marking-dashes/README.md) | Dash lengths in ground metres, marking opacity; notes on MapLibre vs QGIS dashes |
 | [06-scale-gates-labels-playground](./06-scale-gates-labels-playground/README.md) | Scale→zoom off-by-one, QGIS label colours, playground and marking colour fixes |
+| [07-landuse-textures](./07-landuse-textures/README.md) | Grass, gravel, sand and other class textures on landuse |
+| [08-hairline-coverage](./08-hairline-coverage/README.md) | Patch: sub-pixel lines fade by coverage instead of staying sharp |
+| [09-baseline-vs-now](./09-baseline-vs-now/README.md) | Summary: QGIS · start · now, with the difference numbers |
 
 ## Adding a step
 

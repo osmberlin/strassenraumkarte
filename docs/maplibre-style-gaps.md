@@ -49,6 +49,15 @@ change or can be done in style/sprite/ETL.
 | Layer opacity ≠ 1 (~100 raw) | markings 0.67, tree crown 0.25, … | `fill-layer-opacity` / `line-layer-opacity` (MapLibre ≥ 6) or per-feature opacity | Low. Symbol layers: **patched**, `symbol-layer-opacity` (step 04) |
 | Label buffer, curved labels | all labels | `text-halo-*`, `symbol-placement: line` | Low (DejaVu → Open Sans) |
 
+### Found while porting (not in the original list)
+
+| Gap | Effect | Status |
+|---|---|---|
+| Sub-pixel lines are drawn ~3× too strong | Building-part edges, roof lines and path casings look crisp and pixelated | **Patched** (step 08): alpha follows true coverage |
+| Symbol layers have no layer opacity | Overlapping tree crowns stack up dark | **Patched** (step 04): `symbol-layer-opacity` |
+| Dash phase restarts at tile edges | A dash can be cut or doubled where tiles meet | Open; not noticeable at the compare locations |
+| A per-feature effect cannot interleave with its own layer | Roof-on-roof shadows between building parts are missing | Open; trees solved by baking the shadow into the sprite |
+
 ### Not used in the project
 
 GeometryGenerator (0), blur effect (0), label shadows and backgrounds (0), label callouts

@@ -178,3 +178,19 @@ shadow falls on the trees drawn before it) cannot be a separate layer. Bake it i
 instead — see `shadow` in `src/style/sprite-icons.ts`.
 
 `patches/tools/apply-symbol-layer-opacity.py` made the edits.
+
+### Sub-pixel line coverage (no style property)
+
+MapLibre draws a line narrower than one device pixel as a one-pixel ramp peaking at
+`w/2 + 0.5` alpha — `(w/2 + 0.5)²` px of ink instead of `w`. A 0.1 px hairline comes out three
+times too strong and reads as a crisp, aliased edge. QGIS (like any coverage rasteriser) puts
+down 0.1 px.
+
+The patch multiplies the alpha of such lines by `w / (w/2 + 0.5)²` in all five line fragment
+shaders (`line`, `lineSDF`, `linePattern`, `lineGradient`, `lineGradientSDF`). Untouched: lines
+of one pixel or more, lines with `line-blur`, lines with `line-gap-width`.
+
+It is global and has no switch. If a thin line must stay visible, give it a width of at least
+one pixel at that zoom instead of relying on the old floor.
+
+`patches/tools/apply-hairline-coverage.py` made the edit.
