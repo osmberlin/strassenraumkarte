@@ -230,232 +230,288 @@
     "height": 27,
     "pixelRatio": 0.296875
   },
-  "amenity/mobility_hub": {
+  "shapes/equilateral_triangle-landscape": {
     "x": 901,
+    "y": 0,
+    "width": 26,
+    "height": 26,
+    "pixelRatio": 0.40625
+  },
+  "amenity/mobility_hub": {
+    "x": 927,
     "y": 0,
     "width": 24,
     "height": 24,
     "pixelRatio": 0.375
   },
   "amenity/mobility_hub_Jelbi": {
-    "x": 925,
+    "x": 951,
     "y": 0,
     "width": 24,
     "height": 24,
     "pixelRatio": 0.375
   },
   "public_transport/s-train": {
-    "x": 949,
+    "x": 975,
     "y": 0,
     "width": 24,
     "height": 24,
     "pixelRatio": 0.375
   },
   "amenity/recycling_container": {
-    "x": 973,
+    "x": 999,
     "y": 0,
     "width": 22,
     "height": 22,
     "pixelRatio": 0.34375
   },
   "public_transport/subway": {
-    "x": 995,
-    "y": 0,
+    "x": 0,
+    "y": 174,
     "width": 22,
     "height": 22,
     "pixelRatio": 0.34375
   },
   "tourism/guidepost": {
-    "x": 0,
+    "x": 22,
     "y": 174,
     "width": 20,
     "height": 20,
     "pixelRatio": 0.3125
   },
   "amenity/bicycle_rental": {
-    "x": 20,
+    "x": 42,
     "y": 174,
     "width": 20,
     "height": 19,
     "pixelRatio": 0.3125
   },
   "amenity/toilets": {
-    "x": 40,
+    "x": 62,
     "y": 174,
     "width": 18,
     "height": 18,
     "pixelRatio": 0.28125
   },
   "tourism/artwork": {
-    "x": 58,
+    "x": 80,
     "y": 174,
     "width": 18,
     "height": 18,
     "pixelRatio": 0.28125
   },
   "historic/memorial": {
-    "x": 76,
+    "x": 98,
     "y": 174,
     "width": 13,
     "height": 17,
     "pixelRatio": 0.203125
   },
   "amenity/small_electric_vehicle": {
-    "x": 89,
+    "x": 111,
     "y": 174,
     "width": 20,
     "height": 16,
     "pixelRatio": 0.3125
   },
   "amenity/recycling": {
-    "x": 109,
+    "x": 131,
     "y": 174,
     "width": 15,
     "height": 15,
     "pixelRatio": 0.234375
   },
   "traffic_signs/street_name_sign": {
-    "x": 124,
+    "x": 146,
     "y": 174,
     "width": 15,
     "height": 15,
     "pixelRatio": 0.234375
   },
   "traffic_signs/symbols/footway": {
-    "x": 139,
+    "x": 161,
     "y": 174,
     "width": 8,
     "height": 15,
     "pixelRatio": 0.125
   },
   "traffic_signs/symbols/footway-yellow": {
-    "x": 147,
+    "x": 169,
     "y": 174,
     "width": 8,
     "height": 15,
     "pixelRatio": 0.125
   },
   "amenity/bicycle": {
-    "x": 155,
+    "x": 177,
     "y": 174,
     "width": 20,
     "height": 14,
     "pixelRatio": 0.3125
   },
   "rock/rock01": {
-    "x": 175,
+    "x": 197,
     "y": 174,
     "width": 11,
     "height": 14,
     "pixelRatio": 0.171875
   },
   "amenity/post_box_green": {
-    "x": 186,
+    "x": 208,
     "y": 174,
     "width": 13,
     "height": 13,
     "pixelRatio": 0.203125
   },
   "amenity/post_box_yellow": {
-    "x": 199,
+    "x": 221,
     "y": 174,
     "width": 13,
     "height": 13,
     "pixelRatio": 0.203125
   },
   "amenity/telephone": {
-    "x": 212,
+    "x": 234,
     "y": 174,
     "width": 13,
     "height": 13,
     "pixelRatio": 0.203125
   },
   "tourism/information": {
-    "x": 225,
+    "x": 247,
     "y": 174,
     "width": 13,
     "height": 13,
     "pixelRatio": 0.203125
   },
   "amenity/cargo_bike": {
-    "x": 238,
+    "x": 260,
     "y": 174,
     "width": 24,
     "height": 12,
     "pixelRatio": 0.375
   },
   "amenity/bench": {
-    "x": 262,
+    "x": 284,
     "y": 174,
     "width": 19,
     "height": 11,
     "pixelRatio": 0.296875
   },
   "leisure/picnic_table": {
-    "x": 281,
+    "x": 303,
     "y": 174,
     "width": 19,
     "height": 11,
     "pixelRatio": 0.296875
   },
   "amenity/waste_basket": {
-    "x": 300,
+    "x": 322,
     "y": 174,
     "width": 9,
     "height": 11,
     "pixelRatio": 0.140625
   },
   "traffic_signs/DE/222": {
-    "x": 309,
+    "x": 331,
     "y": 174,
     "width": 10,
     "height": 10,
     "pixelRatio": 0.15625
   },
   "traffic_signs/DE/222-10": {
-    "x": 319,
+    "x": 341,
     "y": 174,
     "width": 10,
     "height": 10,
     "pixelRatio": 0.15625
   },
   "traffic_signs/symbols/wheelchair": {
-    "x": 329,
+    "x": 351,
     "y": 174,
     "width": 8,
     "height": 10,
     "pixelRatio": 0.125
   },
   "traffic_signs/symbols/wheelchair-yellow": {
-    "x": 337,
+    "x": 359,
     "y": 174,
     "width": 8,
     "height": 10,
     "pixelRatio": 0.125
   },
   "man_made/manhole": {
-    "x": 345,
+    "x": 367,
+    "y": 174,
+    "width": 8,
+    "height": 8,
+    "pixelRatio": 0.125
+  },
+  "shapes/circle-bollard": {
+    "x": 375,
+    "y": 174,
+    "width": 8,
+    "height": 8,
+    "pixelRatio": 0.125
+  },
+  "shapes/circle-separation_bollard": {
+    "x": 383,
+    "y": 174,
+    "width": 8,
+    "height": 8,
+    "pixelRatio": 0.125
+  },
+  "shapes/circle-separation_flex_post": {
+    "x": 391,
+    "y": 174,
+    "width": 8,
+    "height": 8,
+    "pixelRatio": 0.125
+  },
+  "shapes/filled_arrowhead-guard_stone": {
+    "x": 399,
+    "y": 174,
+    "width": 8,
+    "height": 8,
+    "pixelRatio": 0.125
+  },
+  "shapes/half_square-vertical_panel": {
+    "x": 407,
+    "y": 174,
+    "width": 8,
+    "height": 8,
+    "pixelRatio": 0.125
+  },
+  "shapes/triangle-marking": {
+    "x": 415,
+    "y": 174,
+    "width": 8,
+    "height": 8,
+    "pixelRatio": 0.125
+  },
+  "shapes/triangle-marking-yellow": {
+    "x": 423,
     "y": 174,
     "width": 8,
     "height": 8,
     "pixelRatio": 0.125
   },
   "amenity/bench_backrest_no": {
-    "x": 353,
+    "x": 431,
     "y": 174,
     "width": 19,
     "height": 6,
     "pixelRatio": 0.296875
   },
   "traffic_signs/symbols/bicycle": {
-    "x": 372,
+    "x": 450,
     "y": 174,
     "width": 8,
     "height": 5,
     "pixelRatio": 0.125
   },
   "traffic_signs/symbols/bicycle-yellow": {
-    "x": 380,
+    "x": 458,
     "y": 174,
     "width": 8,
     "height": 5,

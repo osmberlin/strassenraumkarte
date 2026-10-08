@@ -13,7 +13,7 @@ import type {
 
 import { base } from '../expr'
 import { metresToPixels } from '../metres'
-import { iconSizeFromMetres } from '../sprite-icons'
+import { SHAPE_ICON, iconSizeFromMetres, shapeIconSizeFromMetres, shapeOffset } from '../sprite-icons'
 
 /** QGIS entrance minScale 3000 (≈ z16.6) — clamped to the detail tiles' minzoom 17. */
 const ENTRANCE_MINZ = 17
@@ -40,25 +40,25 @@ export function foregroundLayers(): LayerSpecification[] {
 
   // --- feature_node (foreground) — deliberate port of "Kopie" ---
 
-  // guard_stone — filled arrowhead → ▶ rotated by direction−90
+  // guard_stone — SimpleMarker filled_arrowhead 0.5 m (apex at the marker centre, pointing
+  // along +x), angle "direction" − 90, offset 0.25 m forward: the base sits on the node.
   layers.push({
     id: 'feature_node-fg-guard-stone',
     type: 'symbol',
     ...base('feature_node', FG_MINZ, f(clsEq('guard_stone'))),
     layout: {
-      'text-field': '▶',
-      'text-size': metresToPixels(0.5),
-      'text-rotate': [
+      'icon-image': SHAPE_ICON.guardStone,
+      'icon-size': shapeIconSizeFromMetres(0.5),
+      'icon-rotate': [
         '-',
         ['coalesce', ['get', 'direction'], 90],
         90,
       ] as ExpressionSpecification,
-      'text-rotation-alignment': 'map',
-      'text-allow-overlap': true,
-      'text-ignore-placement': true,
-      'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
+      'icon-offset': [shapeOffset(0.5), 0],
+      'icon-rotation-alignment': 'map',
+      'icon-allow-overlap': true,
+      'icon-ignore-placement': true,
     },
-    paint: { 'text-color': '#808080' },
   })
 
   // information (not guidepost — guidepost stays middleground)

@@ -67,6 +67,12 @@ When bumping `maplibre-gl`, the patch has to be re-applied by hand against the n
   differences were port mistakes: a building footprint layer QGIS does not have, dash arrays
   scaled by line width, an inverted shadow angle, swimming pools styled as plain landuse. The
   unzipped `.qgs` XML answers these in minutes.
+- **Never use Unicode symbols as `text-field` stand-ins for markers.** The glyph PBFs only
+  contain what the font has; a missing character renders nothing and raises no error. Use a
+  sprite icon.
+- **Close-set icons along a line need `text-size: 0.01`** in the layout. MapLibre derives a
+  minimum spacing from the text size even without text and silently widens `symbol-spacing`
+  below about 57 px.
 - **`*-layer-*` properties cost a full-screen pass per layer.** Merge features into one layer
   with `match` expressions instead of one layer per class.
 

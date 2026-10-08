@@ -9,7 +9,15 @@ import { metreOffsetTranslate } from '../effects'
 import { OSM_LAYER_BUCKETS, styleLayerId, type OsmLayerBucketId } from '../order'
 import { base, withOsmBucket } from '../expr'
 import { metresToPixels, metresToPixelsFromProp, scaleToZoom } from '../metres'
-import { TREE_ICON, iconSizeFromMetres, markingIconSuffix } from '../sprite-icons'
+import {
+  SHAPE_ICON,
+  TREE_ICON,
+  iconSizeFromMetres,
+  markerLineLayout,
+  markingIconSuffix,
+  shapeIconSizeFromMetres,
+  shapeOffset,
+} from '../sprite-icons'
 import { furnitureLayersForBucket } from './furniture'
 import { patternLayers } from './patterns'
 
@@ -28,6 +36,9 @@ const ROAD_MARKING_WIDTHS_M = [0.1, 0.12, 0.15, 0.2, 0.25, 0.3, 0.5] as const
 const ROAD_MARKING_WAY_OPACITY = 0.67
 
 const MARKING_REF_WIDTH_M = 0.12
+
+/** QGIS layer opacity of `separation`. */
+const SEPARATION_OPACITY = 0.67
 
 /** QGIS road markings / separation have no scale gate — match archive minzoom. */
 const MARKING_MINZ = 15
@@ -54,6 +65,14 @@ function isDoubleStroke(): ExpressionSpecification {
 
 function isSharksTeeth(): ExpressionSpecification {
   return ['==', ['get', 'stroke'], 'sharks_teeth'] as ExpressionSpecification
+}
+
+/** Sharks-tooth marker size = first `dasharray` element (m); 0.5 when unset or unknown. */
+function sharksToothSizeM(): ExpressionSpecification {
+  const bySize: unknown[] = ['match', ['get', 'dasharray']]
+  for (const dash of ROAD_MARKING_DASHARRAYS) bySize.push(dash, Number(dash.split(';')[0]))
+  bySize.push(0.5)
+  return bySize as ExpressionSpecification
 }
 
 function isZigzagPattern(): ExpressionSpecification {
@@ -380,26 +399,23 @@ export function markingFurnitureLayers(): LayerSpecification[] {
     // --- road_marking_way ---
     // Order: specific strokes first conceptually; MapLibre filters are exclusive.
 
-    // sharks_teeth — MarkerLine triangles @ ~0.75 m → symbol along line (▼ stand-in)
+    // sharks_teeth — MarkerLine of `triangle` markers, angle 180 (apex to the right of the
+    // line direction), fill = "colour". QGIS takes size (first dash), interval (sum) and
+    // offset along the line (second dash) from "dasharray"; the interval is fixed here to the
+    // only value the pipeline writes (`dasharray_stop_line` 0.5;0.25). minzoom 16: interval ≥ 1 px.
     layers.push({
       id: styleLayerId('road_marking_way', 'sharks-teeth', b),
       type: 'symbol',
-      ...withOsmBucket(
-        'road_marking_way',
-        MARKING_MINZ, b, f(isSharksTeeth())),
+      ...withOsmBucket('road_marking_way', 16, b, f(isSharksTeeth())),
       layout: {
-        'symbol-placement': 'line',
-        'symbol-spacing': metresToPixels(0.75),
-        'text-field': '▼',
-        'text-size': metresToPixels(0.5),
-        'text-allow-overlap': true,
-        'text-ignore-placement': true,
-        'text-rotation-alignment': 'map',
-        'text-pitch-alignment': 'map',
+        ...markerLineLayout(0.75),
+        'icon-image': ['concat', SHAPE_ICON.sharksTooth, markingIconSuffix()],
+        'icon-size': shapeIconSizeFromMetres(sharksToothSizeM()),
+        'icon-rotate': 180,
+        // Marker offset 0,−size/4: a quarter of the tooth lies before the line, the rest beyond.
+        'icon-offset': [0, -shapeOffset(0.25)],
       },
-      paint: {
-        'text-color': markingColor(),
-      },
+      paint: { 'icon-opacity': ROAD_MARKING_WAY_OPACITY },
     })
 
     // double line — two offsets ± width/1.25
@@ -526,37 +542,49 @@ export function markingFurnitureLayers(): LayerSpecification[] {
     })
 
     // --- separation ---
-    // bollard / flex_post / vertical_panel: MarkerLine @ 2 m → symbol-placement line
-    for (const [kind, color, sizeM] of [
-      ['bollard', '#505050', 0.35],
-      ['flex_post', '#a0a0a0', 0.3],
-      ['vertical_panel', '#505050', 0.35],
+    // bollard / flex_post: MarkerLine every 2 m of circles 0.35 / 0.3 m with a 0.1 m outline.
+    for (const [kind, icon, sizeM] of [
+      ['bollard', SHAPE_ICON.separationBollard, 0.35],
+      ['flex_post', SHAPE_ICON.separationFlexPost, 0.3],
     ] as const) {
       layers.push({
         id: styleLayerId('separation', kind, b),
         type: 'symbol',
         ...withOsmBucket(
-        'separation',
-        MARKING_MINZ,
+          'separation',
+          MARKING_MINZ,
           b,
           f(['in', kind, ['coalesce', ['get', 'separation'], '']]),
         ),
         layout: {
-          'symbol-placement': 'line',
-          'symbol-spacing': metresToPixels(2),
-          'text-field': '●',
-          'text-size': metresToPixels(sizeM),
-          'text-allow-overlap': true,
-          'text-ignore-placement': true,
-          'text-rotation-alignment': 'map',
+          ...markerLineLayout(2),
+          'icon-image': icon,
+          'icon-size': shapeIconSizeFromMetres(sizeM),
         },
-        paint: {
-          'text-color': color,
-          'text-halo-color': '#ededed',
-          'text-halo-width': metresToPixels(0.1),
-        },
+        paint: { 'icon-opacity': SEPARATION_OPACITY },
       })
     }
+
+    // vertical_panel: MarkerLine every 2 m of `half_square` markers 0.35 m (a bar 0.175 m
+    // along × 0.35 m across the line), color 80,80,80, outline 237,237,237 @ 0.1 m.
+    layers.push({
+      id: styleLayerId('separation', 'vertical_panel', b),
+      type: 'symbol',
+      ...withOsmBucket(
+        'separation',
+        MARKING_MINZ,
+        b,
+        f(['in', 'vertical_panel', ['coalesce', ['get', 'separation'], '']]),
+      ),
+      layout: {
+        ...markerLineLayout(2),
+        'icon-image': SHAPE_ICON.verticalPanel,
+        'icon-size': shapeIconSizeFromMetres(0.35),
+        // Marker offset 0.0875 m (a quarter of the size) along the line.
+        'icon-offset': [shapeOffset(0.25), 0],
+      },
+      paint: { 'icon-opacity': SEPARATION_OPACITY },
+    })
 
     // bump — HashLine 2 m → along-line dash approximation (same compromise as G4 steps)
     layers.push({

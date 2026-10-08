@@ -13,10 +13,18 @@ import type {
 import { layerShadow } from '../effects'
 import { base, withOsmBucket } from '../expr'
 import { metresToPixels } from '../metres'
-import { iconSizeFromMetres } from '../sprite-icons'
+import {
+  SHAPE_ICON,
+  iconSizeFromMetres,
+  markerLineLayout,
+  shapeIconSizeFromMetres,
+  shapeOffset,
+} from '../sprite-icons'
 import { styleLayerId, type OsmLayerBucketId } from '../order'
 
 const LANDSCAPE_BROWN = '#965220'
+/** QGIS layer opacity of `landscape_way`. */
+const LANDSCAPE_WAY_OPACITY = 0.5
 const BRIDGE_FILL = '#dddddd'
 const RAIL_ACTIVE = '#808080'
 const RAIL_DISUSED = '#8ea08e'
@@ -93,8 +101,10 @@ function tieWidthM(): ExpressionSpecification {
 export function landscapeLayers(): LayerSpecification[] {
   const layers: LayerSpecification[] = []
 
-  // Cliff / embankment / earth_bank — brown line + triangle ticks.
-  // Length threshold 20 m: split layers (symbol-spacing is not data-driven).
+  // Cliff / embankment / earth_bank — brown line + MarkerLine of equilateral triangles
+  // (angle 180: apex to the right of the line direction, i.e. downhill). QGIS switches width,
+  // interval, marker size and line offset at $length 20 m; `symbol-spacing` is not
+  // data-driven, hence two layer pairs. Layer opacity 0.5 is applied per line / tick.
   const landscapeClasses = ['cliff', 'embankment', 'earth_bank'] as const
   const shortFilter = f([
     'all',
@@ -107,9 +117,10 @@ export function landscapeLayers(): LayerSpecification[] {
     ['>=', ['coalesce', ['get', 'length'], 0], 20],
   ])
 
-  for (const [role, filter, widthM, spacingM, tickM] of [
-    ['short', shortFilter, 0.3, 1.2, 0.8],
-    ['long', longFilter, 0.6, 2.4, 1.6],
+  // tickMinz: first zoom at which the interval is ≥ 1 px (`markerLineLayout`).
+  for (const [role, filter, widthM, spacingM, tickM, tickMinz] of [
+    ['short', shortFilter, 0.3, 1.2, 0.8, 16],
+    ['long', longFilter, 0.6, 2.4, 1.6, 15],
   ] as const) {
     layers.push({
       id: `landscape_way-line-${role}`,
@@ -119,40 +130,37 @@ export function landscapeLayers(): LayerSpecification[] {
       paint: {
         'line-color': LANDSCAPE_BROWN,
         'line-width': metresToPixels(widthM),
+        'line-opacity': LANDSCAPE_WAY_OPACITY,
       },
     })
     layers.push({
       id: `landscape_way-ticks-${role}`,
       type: 'symbol',
-      ...base('landscape_way', 15, filter),
+      ...base('landscape_way', tickMinz, filter),
       layout: {
-        'symbol-placement': 'line',
-        'symbol-spacing': metresToPixels(spacingM),
-        'text-field': '▲',
-        'text-size': metresToPixels(tickM),
-        'text-allow-overlap': true,
-        'text-ignore-placement': true,
-        'text-rotation-alignment': 'map',
-        'text-pitch-alignment': 'map',
-        'text-keep-upright': false,
+        ...markerLineLayout(spacingM),
+        'icon-image': SHAPE_ICON.landscapeTriangle,
+        'icon-size': shapeIconSizeFromMetres(tickM),
+        'icon-rotate': 180,
+        // MarkerLine offset = line width (0.3 / 0.6 m) to the right = 3/8 of the marker size.
+        'icon-offset': [0, -shapeOffset(0.375)],
       },
-      paint: { 'text-color': LANDSCAPE_BROWN },
+      paint: { 'icon-opacity': LANDSCAPE_WAY_OPACITY },
     })
   }
 
-  // Peak — QGIS uses a hospital SVG placeholder; triangle stand-in.
+  // Peak — QGIS has a placeholder (stock hospital SVG, black α 0.2, 1.5 m); drawn as a
+  // brown triangle of that size instead.
   layers.push({
     id: 'landscape_node-peak',
     type: 'symbol',
     ...base('landscape_node', 15, f(['==', ['get', 'class'], 'peak'])),
     layout: {
-      'text-field': '▲',
-      'text-size': metresToPixels(1.5),
-      'text-allow-overlap': true,
-      'text-ignore-placement': true,
-      'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
+      'icon-image': SHAPE_ICON.landscapeTriangle,
+      'icon-size': shapeIconSizeFromMetres(1.5),
+      'icon-allow-overlap': true,
+      'icon-ignore-placement': true,
     },
-    paint: { 'text-color': LANDSCAPE_BROWN },
   })
 
   // Rock / stone — packed rock01 (QGIS RasterMarker, 1 m wide); rotation from export.

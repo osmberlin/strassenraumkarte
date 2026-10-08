@@ -17,6 +17,7 @@ The QGIS raster tiles are the reference.
 | [08-hairline-coverage](./08-hairline-coverage/README.md) | Patch: sub-pixel lines fade by coverage instead of staying sharp |
 | [09-baseline-vs-now](./09-baseline-vs-now/README.md) | Summary: QGIS · start · now, with the difference numbers |
 | [10-furniture-shadows-and-outlines](./10-furniture-shadows-and-outlines/README.md) | Patch: `fill-shadow-*`; parking spaces, 1 px outlines and inner-shadow filter fixed |
+| [11-marker-rows](./11-marker-rows/README.md) | Bollard rows, embankment ticks and separation markers that rendered nothing |
 
 ## Adding a step
 

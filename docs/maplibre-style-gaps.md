@@ -88,8 +88,7 @@ patch. Tracked here until fixed.
 
 - [ ] OSM `layer` buckets are not interleaved: all street buckets are emitted before all
       marking/furniture buckets, so ground-level markings paint over bridges (`qgis.ts`).
-- [ ] Glyph stand-ins (▲ ▼ ▶ ●) render nothing — the glyph PBFs do not contain them. Affects
-      cliffs, peaks, sharks teeth, bollard rows, guard stones.
+- [x] Glyph stand-ins (▲ ▼ ▶ ●) rendered nothing — replaced by sprite icons / round-cap dashes (step 11). Sharks teeth, guard stones, peaks and flex posts are unverified (no data in the extent).
 - [x] Runtime icons are squeezed into 64×64 squares and SVG `param(fill)` is not substituted
       (arrows render black and ~3× too wide).
 - [x] Tree crowns are flat blurred circles; QGIS uses the `symbols/trees/*.png` raster markers.

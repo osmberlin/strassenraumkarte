@@ -14,7 +14,12 @@ import type {
 import { shadowPaint, type LayerShadowOptions } from '../effects'
 import { withOsmBucket } from '../expr'
 import { metresToPixels } from '../metres'
-import { iconSizeFromMetres } from '../sprite-icons'
+import {
+  SHAPE_ICON,
+  iconSizeFromMetres,
+  markerLineLayout,
+  shapeIconSizeFromMetres,
+} from '../sprite-icons'
 import { styleLayerId, type OsmLayerBucketId } from '../order'
 
 /** Most furniture stays z17 (tippecanoe). Playground has no QGIS scale gate → z15. */
@@ -293,29 +298,51 @@ function pushLine(
   })
 }
 
+/** QGIS MarkerLine: one packed `symbols:shapes/*` icon every `spacingM` along the line. */
 function pushMarkerLine(
   layers: LayerSpecification[],
   sourceLayer: string,
   role: string,
   bucketId: OsmLayerBucketId,
   filter: FilterSpecification,
-  opts: { color: string; diameterM: number; spacingM: number },
+  opts: { icon: string; sizeM: number; spacingM: number },
 ): void {
   layers.push({
     id: styleLayerId(sourceLayer, role, bucketId),
     type: 'symbol',
     ...withOsmBucket(sourceLayer, MINZ, bucketId, filter),
     layout: {
-      'symbol-placement': 'line',
-      'symbol-spacing': metresToPixels(opts.spacingM),
-      'text-field': '●',
-      'text-size': metresToPixels(opts.diameterM),
-      'text-allow-overlap': true,
-      'text-ignore-placement': true,
-      'text-rotation-alignment': 'map',
+      ...markerLineLayout(opts.spacingM),
+      'icon-image': opts.icon,
+      'icon-size': shapeIconSizeFromMetres(opts.sizeM),
     },
+  })
+}
+
+/**
+ * QGIS MarkerLine of touching round markers (interval ≈ diameter), too dense for symbols:
+ * a zero-length dash with round caps is a dot of the line width. `line-dasharray` counts in
+ * line widths, so the gap is interval / diameter and the ground spacing holds at every zoom.
+ * The dots are not perfect circles and deform at vertices — use `pushMarkerLine` for sparse
+ * rows where that shows.
+ */
+function pushDotLine(
+  layers: LayerSpecification[],
+  sourceLayer: string,
+  role: string,
+  bucketId: OsmLayerBucketId,
+  filter: FilterSpecification,
+  opts: { color: string | ExpressionSpecification; diameterM: number; spacingM: number },
+): void {
+  layers.push({
+    id: styleLayerId(sourceLayer, role, bucketId),
+    type: 'line',
+    ...withOsmBucket(sourceLayer, MINZ, bucketId, filter),
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
-      'text-color': opts.color,
+      'line-color': opts.color,
+      'line-width': metresToPixels(opts.diameterM),
+      'line-dasharray': [0, opts.spacingM / opts.diameterM],
     },
   })
 }
@@ -508,13 +535,21 @@ export function furnitureLayersForBucket(bucketId: OsmLayerBucketId): LayerSpeci
     widthM: 0.2,
     dash: [2, 2],
   })
+  // bollard: circle 0.4 m, color 80,80,80, interval 1.5 m.
   pushMarkerLine(layers, 'barrier_way', 'bollard', b, barrierEq('bollard'), {
-    color: '#505050',
-    diameterM: 0.4,
-    spacingM: 2,
+    icon: SHAPE_ICON.bollard,
+    sizeM: 0.4,
+    spacingM: 1.5,
   })
-  pushMarkerLine(layers, 'barrier_way', 'palisade', b, barrierEq('palisade'), {
-    color: '#656565',
+  // palisade: circle 0.2 m every 0.2 m; fill #909090 below 1 m height, else #505050
+  // (`height` is not in the barrier_way export yet → always the else branch).
+  pushDotLine(layers, 'barrier_way', 'palisade', b, barrierEq('palisade'), {
+    color: [
+      'case',
+      ['<', ['to-number', ['coalesce', ['get', 'height'], 99], 99], 1],
+      '#909090',
+      '#505050',
+    ] as ExpressionSpecification,
     diameterM: 0.2,
     spacingM: 0.2,
   })
