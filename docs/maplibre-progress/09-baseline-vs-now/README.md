@@ -5,12 +5,12 @@ No new change; this folder is the summary view.
 
 | Location | Difference to QGIS at the start | Now |
 |---|---|---|
-| Intersection, z18 | 11.8 % | 2.3 % |
+| Intersection, z18 | 11.8 % | 2.7 % |
 | Dense trees, z18 | 69.5 % | 1.6 % |
-| Dense housing, z17 | 18.1 % | 4.4 % |
-| Residential street, z19 | 11.4 % | 1.7 % |
-| Playground, z18 | 17.8 % | 3.8 % |
-| Park / pools, z17 | 21.4 % | 2.7 % |
+| Dense housing, z17 | 18.1 % | 5.1 % |
+| Residential street, z19 | 11.4 % | 1.9 % |
+| Playground, z18 | 17.8 % | 4.1 % |
+| Park / pools, z17 | 21.4 % | 3.3 % |
 
 The number is the share of pixels that pixelmatch flags (threshold 0.1) between the QGIS raster
 pane and the vector pane; the map controls in the QGIS pane account for about 0.2 %.

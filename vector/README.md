@@ -82,7 +82,7 @@ MapLibre is patched locally (`patches/`, applied by `bun install`) — see [docs
 | layer blend modes | `fill-layer-blend`, `line-layer-blend`: `multiply` / `screen` / `plus` |
 | layer blur | `fill-layer-blur`, `line-layer-blur`: Gaussian blur radius in px (drop shadows via `layerShadow`) |
 | symbol layer opacity | `symbol-layer-opacity`: flatten, then fade (tree crowns) |
-| hairline coverage | none — lines below 1 px fade by their true width |
+| sub-pixel line ink | none — lines below 1 px get the ink QGIS gives them (`scripts/line-ink.ts` measures it) |
 | layer blur mode | `fill-layer-blur-mode`: `inner-edge` (inner shadow) / `inner-core` |
 
 ## Style modules

@@ -53,7 +53,7 @@ change or can be done in style/sprite/ETL.
 
 | Gap | Effect | Status |
 |---|---|---|
-| Sub-pixel lines are drawn ~3× too strong | Building-part edges, roof lines and path casings look crisp and pixelated | **Patched** (step 08): alpha follows true coverage |
+| Sub-pixel lines are drawn ~3× too strong | Building-part edges, roof lines and path casings look crisp and pixelated | **Patched** (step 08): ink fitted to QGIS, `w·(2 − w)` |
 | Symbol layers have no layer opacity | Overlapping tree crowns stack up dark | **Patched** (step 04): `symbol-layer-opacity` |
 | Dash phase restarts at tile edges | A dash can be cut or doubled where tiles meet | Open; not noticeable at the compare locations |
 | A per-feature effect cannot interleave with its own layer | Roof-on-roof shadows between building parts are missing | Open; trees solved by baking the shadow into the sprite |

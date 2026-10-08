@@ -1,5 +1,6 @@
 import type {
   ExpressionSpecification,
+  FilterSpecification,
   LayerSpecification,
 } from '@maplibre/maplibre-gl-style-spec'
 
@@ -19,7 +20,7 @@ const PARTS_SORT_KEY = [
 ] as ExpressionSpecification
 
 /**
- * Buildings: shadows → parts (sorted by height) → lines.
+ * Buildings: shadows → parts (sorted by height, no outline — as in QGIS) → lines.
  *
  * QGIS has no footprint layer: the pink is `building_parts` at α 0.7 over its own
  * shadow and `building_shade`, which is what gives roofs their darker tone
@@ -72,19 +73,6 @@ export function buildingLayers(): LayerSpecification[] {
   })
 
   layers.push({
-    id: 'building-parts-outline',
-    type: 'line',
-    ...partsBase,
-    layout: {
-      'line-sort-key': PARTS_SORT_KEY,
-    },
-    paint: {
-      'line-color': '#e8c8c8',
-      'line-width': metresToPixels(0.015),
-    },
-  })
-
-  layers.push({
     id: 'building-roof-shape',
     type: 'fill',
     ...base('building', 15),
@@ -96,8 +84,31 @@ export function buildingLayers(): LayerSpecification[] {
     },
   })
 
+  // footline_covered: solid #cacaca 0.2 m under a dashed #808080 0.1 m (0.45 m on / off).
+  const covered = { ...linesBase, filter: ['==', ['get', 'class'], 'footline_covered'] as FilterSpecification }
+  layers.push(
+    {
+      id: 'building-lines-footline_covered-base',
+      type: 'line',
+      ...covered,
+      layout: { 'line-cap': 'square', 'line-join': 'bevel' },
+      paint: { 'line-color': '#cacaca', 'line-width': metresToPixels(0.2) },
+    },
+    {
+      id: 'building-lines-footline_covered',
+      type: 'line',
+      ...covered,
+      layout: { 'line-cap': 'butt', 'line-join': 'bevel' },
+      paint: {
+        'line-color': BUILDING_LINES,
+        'line-width': metresToPixels(0.1),
+        // dash lengths are in line widths: 0.45 m / 0.1 m
+        'line-dasharray': [4.5, 4.5],
+      },
+    },
+  )
+
   for (const [cls, metres] of [
-    ['footline_covered', 0.2],
     ['footline_uncovered', 0.05],
     ['part_outline', 0.02],
     ['roof_edge', 0.04],
@@ -108,10 +119,10 @@ export function buildingLayers(): LayerSpecification[] {
       type: 'line',
       ...linesBase,
       filter: ['==', ['get', 'class'], cls],
+      layout: { 'line-cap': 'square', 'line-join': 'bevel' },
       paint: {
         'line-color': BUILDING_LINES,
         'line-width': metresToPixels(metres),
-        ...(cls === 'footline_covered' ? { 'line-dasharray': [2, 2] } : {}),
       },
     })
   }

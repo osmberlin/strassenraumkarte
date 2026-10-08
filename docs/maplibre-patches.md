@@ -179,18 +179,29 @@ instead — see `shadow` in `src/style/sprite-icons.ts`.
 
 `patches/tools/apply-symbol-layer-opacity.py` made the edits.
 
-### Sub-pixel line coverage (no style property)
+### Sub-pixel line ink (no style property)
 
 MapLibre draws a line narrower than one device pixel as a one-pixel ramp peaking at
-`w/2 + 0.5` alpha — `(w/2 + 0.5)²` px of ink instead of `w`. A 0.1 px hairline comes out three
-times too strong and reads as a crisp, aliased edge. QGIS (like any coverage rasteriser) puts
-down 0.1 px.
+`w/2 + 0.5` alpha — `(w/2 + 0.5)²` px of ink, never below 0.25 px. Hairlines of 0.05 px come out
+crisp and several times too strong.
 
-The patch multiplies the alpha of such lines by `w / (w/2 + 0.5)²` in all five line fragment
+The patch rescales the alpha of such lines so the ink is `w·(2 − w)`, in all five line fragment
 shaders (`line`, `lineSDF`, `linePattern`, `lineGradient`, `lineGradientSDF`). Untouched: lines
 of one pixel or more, lines with `line-blur`, lines with `line-gap-width`.
 
-It is global and has no switch. If a thin line must stay visible, give it a width of at least
-one pixel at that zoom instead of relying on the old floor.
+The curve is fitted to QGIS output, not derived from theory. Plain geometric coverage
+(`ink = w`) was tried first and is visibly too faint: QGIS puts down about twice that for
+0.05–0.5 px lines. To re-check or re-fit:
+
+```bash
+SHOT_OUT=compare-output/ink bun run screenshots
+bun run scripts/line-ink.ts ink dense-housing intersection parking-street
+```
+
+It prints the median ink per line class for the QGIS pane and the vector pane. The numbers
+that led to the current curve are in `docs/maplibre-progress/08-hairline-coverage/README.md`.
+
+It is global and has no switch. If a thin line must stay strong, give it a width of at least
+one pixel at that zoom.
 
 `patches/tools/apply-hairline-coverage.py` made the edit.
