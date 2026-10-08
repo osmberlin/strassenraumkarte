@@ -87,6 +87,7 @@ patch. Tracked here until fixed.
 - [ ] Texture scale is baked for z18 only. (`@2x` textures are now resampled from the source.)
 - [ ] Effect helpers (glows only — shadows are patched): blurred lines peak at half the stated opacity and inner effects peak
       inside the polygon instead of at its edge.
-- [ ] Dash lengths scale with the data-driven line width (`detail.ts`).
+- [x] Dash lengths scale with the data-driven line width (`detail.ts`).
+- [ ] Dash phase restarts at tile edges (MapLibre limitation, see progress step 05).
 - [x] `/symbols/*` is only served by the dev server, not by `vite preview` or a build.
 - [ ] Unused sprites (`forest`, `gravel`, `flowerbed`). (`water` is used now.)

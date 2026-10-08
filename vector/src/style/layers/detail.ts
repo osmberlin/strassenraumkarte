@@ -14,12 +14,18 @@ import { furnitureLayersForBucket } from './furniture'
 import { patternLayers } from './patterns'
 
 /**
- * Distinct `dasharray` metre pairs from PostGIS (`params.sql` + live sample).
- * MapLibre cannot data-drive `line-dasharray`, so each value is its own layer.
- * Values are ground metres (`a;b`); converted to MapLibre units as a/w, b/w
- * with reference width 0.12 m (QGIS default marking width).
+ * Distinct `dasharray` metre pairs from PostGIS (`params.sql` + live sample), `a;b` in
+ * ground metres. QGIS draws them as fixed ground lengths; MapLibre measures
+ * `line-dasharray` in line widths, so each pair is divided by the feature's width
+ * (data-driven `match` over the widths that occur — see `markingDashArray`).
  */
 const ROAD_MARKING_DASHARRAYS = ['0.5;0.25', '1;1', '3;3', '5;1'] as const
+
+/** Marking widths (m) present in the data; anything else falls back to the reference width. */
+const ROAD_MARKING_WIDTHS_M = [0.1, 0.12, 0.15, 0.2, 0.25, 0.3, 0.5] as const
+
+/** QGIS layer opacity of `road_marking_way` (lines of one layer barely overlap → per feature). */
+const ROAD_MARKING_WAY_OPACITY = 0.67
 
 const MARKING_REF_WIDTH_M = 0.12
 
@@ -82,17 +88,35 @@ function dashIsNull(): ExpressionSpecification {
   ] as ExpressionSpecification
 }
 
-function dashEquals(value: string): ExpressionSpecification {
-  return ['==', ['get', 'dasharray'], value] as ExpressionSpecification
+function dashIsSet(): ExpressionSpecification {
+  return ['in', ['get', 'dasharray'], ['literal', [...ROAD_MARKING_DASHARRAYS]]] as ExpressionSpecification
 }
 
 /** Metre dash pair → MapLibre dasharray (multiples of line width). */
-function dashToMapLibre(dash: string, refWidthM = MARKING_REF_WIDTH_M): [number, number] {
+function dashToMapLibre(dash: string, widthM: number): [number, number] {
   const [aRaw, bRaw] = dash.split(';')
   const a = Number(aRaw)
   const b = Number(bRaw ?? aRaw)
-  const w = refWidthM > 0 ? refWidthM : MARKING_REF_WIDTH_M
-  return [a / w, b / w]
+  return [a / widthM, b / widthM]
+}
+
+/** Per-feature dash array so dashes keep their ground length whatever the line width. */
+function markingDashArray(): ExpressionSpecification {
+  const byDash: unknown[] = ['match', ['get', 'dasharray']]
+  for (const dash of ROAD_MARKING_DASHARRAYS) {
+    // `match` labels must be integers → key on the width in centimetres.
+    const byWidth: unknown[] = [
+      'match',
+      ['round', ['*', ['coalesce', ['get', 'width'], MARKING_REF_WIDTH_M], 100]],
+    ]
+    for (const w of ROAD_MARKING_WIDTHS_M) {
+      byWidth.push(Math.round(w * 100), ['literal', dashToMapLibre(dash, w)])
+    }
+    byWidth.push(['literal', dashToMapLibre(dash, MARKING_REF_WIDTH_M)])
+    byDash.push(dash, byWidth)
+  }
+  byDash.push(['literal', [1, 0]])
+  return byDash as ExpressionSpecification
 }
 
 function markingColor(): ExpressionSpecification {
@@ -139,21 +163,17 @@ function pushMarkingLine(
   opts: {
     join?: 'miter' | 'bevel' | 'round'
     offsetM?: ExpressionSpecification
-    dash?: string | null
-  } = {},
+    dashed: boolean
+  },
 ): void {
-  const dashFilter =
-    opts.dash == null || opts.dash === ''
-      ? dashIsNull()
-      : dashEquals(opts.dash)
   layers.push({
     id: styleLayerId('road_marking_way', role, bucketId),
     type: 'line',
     ...withOsmBucket(
-        'road_marking_way',
-        MARKING_MINZ,
+      'road_marking_way',
+      MARKING_MINZ,
       bucketId,
-      f(['all', extra, dashFilter] as ExpressionSpecification),
+      f(['all', extra, opts.dashed ? dashIsSet() : dashIsNull()] as ExpressionSpecification),
     ),
     layout: {
       'line-cap': 'butt',
@@ -161,9 +181,10 @@ function pushMarkingLine(
     },
     paint: {
       'line-color': markingColor(),
+      'line-opacity': ROAD_MARKING_WAY_OPACITY,
       'line-width': markingWidthPx(),
       ...(opts.offsetM ? { 'line-offset': opts.offsetM } : {}),
-      ...(opts.dash ? { 'line-dasharray': dashToMapLibre(opts.dash) } : {}),
+      ...(opts.dashed ? { 'line-dasharray': markingDashArray() } : {}),
     },
   })
 }
@@ -187,17 +208,8 @@ function pushWayDashVariants(
     offsetM?: ExpressionSpecification
   } = {},
 ): void {
-  pushMarkingLine(layers, bucketId, `${roleBase}-solid`, extra, {
-    ...opts,
-    dash: null,
-  })
-  for (const dash of ROAD_MARKING_DASHARRAYS) {
-    const slug = dash.replace(';', '_')
-    pushMarkingLine(layers, bucketId, `${roleBase}-dash-${slug}`, extra, {
-      ...opts,
-      dash,
-    })
-  }
+  pushMarkingLine(layers, bucketId, `${roleBase}-solid`, extra, { ...opts, dashed: false })
+  pushMarkingLine(layers, bucketId, `${roleBase}-dashed`, extra, { ...opts, dashed: true })
 }
 
 /**
