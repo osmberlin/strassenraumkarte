@@ -6,6 +6,7 @@
  * (dirs are relative to compare-output/; output is JPEG so the montages can be
  * committed under docs/maplibre-progress/ without bloating the repo)
  */
+import { existsSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 
@@ -30,6 +31,14 @@ const LABEL_H = 28
 
 await mkdir(outDir, { recursive: true })
 for (const loc of COMPARE_LOCATIONS) {
+  // Locations added later have no screenshot in older runs — skip instead of failing.
+  const missing = columns.find(
+    (c) => !existsSync(path.join(ROOT, c.dir, `${loc.id}-${c.suffix}.png`)),
+  )
+  if (missing) {
+    console.log(`[montage] skip ${loc.id} (no ${missing.dir}/${loc.id}-${missing.suffix}.png)`)
+    continue
+  }
   const tiles = await Promise.all(
     columns.map(async (c) => {
       const img = sharp(path.join(ROOT, c.dir, `${loc.id}-${c.suffix}.png`))
