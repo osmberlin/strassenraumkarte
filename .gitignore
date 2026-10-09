@@ -103,3 +103,6 @@ vector/.tsbuildinfo-*
 vector/test-results/
 vector/compare-output/**
 !vector/compare-output/.gitkeep
+
+# macOS
+.DS_Store

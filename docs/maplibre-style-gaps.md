@@ -19,28 +19,29 @@ highway-stack layers seven times (six OSM `layer` buckets plus a hidden template
 the whole XML, **unique** counts each layer name once. Only enabled symbol layers and effects
 are counted.
 
-## Priority list
+## Status
 
-Ranked by visual impact on the map. "Patch" says whether closing the gap needs a renderer
-change or can be done in style/sprite/ETL.
+Ranked by visual impact on the map. Steps refer to
+[maplibre-progress/](./maplibre-progress/README.md); patches to
+[maplibre-patches.md](./maplibre-patches.md).
 
-| # | Gap | QGIS usage (raw / unique) | Today in `vector/` | Loss | Fix route |
-|---|---|---|---|---|---|
-| 1 | **Drop shadow** (offset + Gaussian blur, multiplied) | 77 / 23 — `feature_polygon` 49, `bridge_shade`, `feature_way`, `landuse` 7 each, tree crown, `building_shade`, `building_parts`, scrub, trunk | `layerShadow` (blurred, multiplied layer) for buildings; old `dropShadow` helper (translated fill + blurred line) for forest and bridges; none for `feature_polygon` | High → **done** for buildings (step 02), forest, bridges, trees (sprite, step 04) and `feature_polygon` furniture (`fill-shadow-*`, step 10) | **Patched**: `fill-layer-blur` + multiply |
-| 2 | **Multiply / Screen blend** | Layer blend Multiply on `landuse surface`, `pitch surface`; Multiply inside the effect stack of `highway_area` textures (35 / 5); Screen on `roof shape`; every shadow composites with Multiply | ~~plain alpha-over~~ → **done**, `fill-layer-blend` patch | Medium | **Patched** (step 01) |
-| 3 | **Texture rotation and ground-metre scale** (RasterFill `angle`, `width` in map units) | 133 / 96 RasterFill; 7 unique data-defined angles, 38 data-defined widths | ~~Sprite baked at the z18 ground width, rotation dropped~~ → **done**, `fill-pattern-reference-zoom` + `fill-pattern-rotate` (step 12) | Low: rotated textures restart at tile edges; no mipmaps below the reference zoom | **Patched** |
-| 4 | **Parametric pattern fills** (LinePatternFill / PointPatternFill, rotated per feature) | 44 / 8 and 15 / 3 — `road_marking_polygon`, construction, playground, dog park | Baked hatch sprites; road-marking hatching is flat white | Medium–high on restriction markings | ETL (generate hatch lines) or SDF pattern + rotation patch |
-| 5 | **HashLine** (perpendicular ticks) | 42 / 6 — steps, railway ties, road markings, separation | `line-dasharray` along the line | Medium | Style: `line-pattern` sprite, or ETL ticks |
-| 6 | **MarkerLine** (markers at a ground-metre interval, offset) | 59 / 11 — `barrier_way`, `landscape_way`, `road_marking_way`, separation, tactile paving | `symbol-placement: line` + `symbol-spacing`; several markers are glyph stand-ins that do not render | Medium | Style: sprite icons / round-cap dashes; ETL points for exact spacing |
-| 7 | **Inner shadow / glows** | innerShadow 60 / 11 (49 are the `z14…z20` carriageway blur layers), outerGlow 7, innerGlow 1 | innerShadow: **done**, `fill-layer-blur-mode: inner-edge` (step 03). Glows still offset blurred lines | Low | **Patched** for inner shadows; glows can move to the same mode |
-| 8 | **Shapeburst / gradient fills** | ShapeburstFill 4 (water shoreline 3 m, water depth, roof shape ×2), GradientFill 3 (roof shape) | Three inward blurred bands for the shoreline; depth ramp and roof shape omitted | Low for water; roof shading absent | **Patch** (distance-to-edge) or bake in ETL |
+| # | Gap | QGIS usage (raw / unique) | How the port handles it now | What remains |
+|---|---|---|---|---|
+| 1 | **Drop shadow** (offset + Gaussian blur, multiplied) | 77 / 23 — `feature_polygon` 49, `bridge_shade`, `feature_way`, `landuse` 7 each, tree crown, `building_shade`, `building_parts`, scrub, trunk | **Patched.** `fill-layer-blur` + multiply (`layerShadow`) for buildings, forest, bridges (step 02); `fill-shadow-*` on the casting layer for street furniture (step 10); tree crown shadows baked into the sprite (step 04) | A shadow cannot fall on features of its own layer: no roof-on-roof shadows between building parts. `feature_way` shadows not ported |
+| 2 | **Multiply / Screen blend** | Layer blend Multiply on `landuse surface`, `pitch surface`; Multiply in the effect stack of `highway_area` textures (35 / 5); Screen on `roof shape`; every shadow | **Patched.** `fill-layer-blend` / `line-layer-blend` (step 01) | Only `multiply`, `screen`, `plus` |
+| 3 | **Texture rotation and ground-metre scale** (RasterFill `angle`, `width` in map units) | 133 / 96 RasterFill; 7 unique data-defined angles, 38 data-defined widths | **Patched.** `fill-pattern-reference-zoom` + `fill-pattern-rotate` (step 12) | Rotated textures restart at tile edges; no mipmaps below the reference zoom |
+| 4 | **Parametric pattern fills** (LinePatternFill / PointPatternFill, rotated per feature) | 44 / 8 and 15 / 3 — `road_marking_polygon`, construction, playground, dog park | Baked hatch sprites for construction, outdoor seating, dog park. **Road-marking hatching, cross-hatching and chessboards are flat white** | **Open** — the most visible remaining street difference. Route: hatch lines from SQL, or a line pattern with `fill-pattern-rotate` |
+| 5 | **HashLine** (perpendicular ticks) | 42 / 6 — steps, railway ties, road markings, separation | `line-dasharray` along the line | **Open.** Route: tick geometry from SQL, or a `line-pattern` sprite |
+| 6 | **MarkerLine** (markers at a ground-metre interval, offset) | 59 / 11 — `barrier_way`, `landscape_way`, `road_marking_way`, separation, tactile paving | Sprite icons along the line with QGIS size, colour and interval; palisades as round-cap dashes (step 11) | Marker phase (`offset_along_line`) cannot be set and restarts at tile edges; retaining-wall ticks and tactile `cross2` not ported; sharks teeth, guard stones, flex posts unverified (no data in the extent) |
+| 7 | **Inner shadow / glows** | innerShadow 60 / 11 (49 are the `z14…z20` carriageway layers), outerGlow 7, innerGlow 1 | **Patched** for inner shadows: `fill-layer-blur-mode: inner-edge` (step 03) on carriageways, water, pools, sandpits | Glows are still offset blurred lines. The layer is flattened first, so shared edges between touching road polygons are not shaded (QGIS shades each feature) |
+| 8 | **Shapeburst / gradient fills** | ShapeburstFill 4 (water shoreline, water depth, roof shape ×2), GradientFill 3 (roof shape) | Water: white shoreline fade and blue depth tint via `inner-edge` / `inner-core` (step 04). Roofs: one flat mid-ramp colour, screened | **Open** for roofs: no lighter roof centre |
 
 ### Solved well enough by workarounds
 
 | QGIS feature | Usage | Workaround | Loss |
 |---|---|---|---|
 | Ground-metre sizing (`@mercator_scale`, 2705×) | everywhere | `metresToPixels`: exact base-2 zoom interpolation at φ = 52.48° | None for Berlin |
-| SvgMarker (185 / 35) and RasterMarker (25 / 7) | icons, pitch markings, tree crowns, rocks | Sprite atlas + runtime image resolver, `icon-rotate` | Low once the asset handling is fixed (aspect ratio, `param(fill)`, resolution) |
+| SvgMarker (185 / 35) and RasterMarker (25 / 7) | icons, pitch markings, tree crowns, rocks | Build-time symbol sprite with real aspect ratio and QGIS colours; runtime resolver only for traffic signs; `icon-rotate` | Low. Compound markers (street lamp with arm, half-disc gates) are simplified; parked cars have no data |
 | Fill outline width (40 data-defined) | SimpleFill | Separate `line` layer | None visually; more layers |
 | Line casing | stacked SimpleLine | Two `line` layers | None visually |
 | Per-feature line offset (26 data-defined) | SimpleLine | `line-offset` (data-driven) | None |
@@ -81,22 +82,33 @@ Checked with `gh` on 2026-10-08.
 | Variable line offset | [style-spec#1498](https://github.com/maplibre/maplibre-style-spec/issues/1498) | Open |
 | SVG / colour-font icons | [style-spec#1615](https://github.com/maplibre/maplibre-style-spec/issues/1615), [#1605](https://github.com/maplibre/maplibre-style-spec/issues/1605) | Open |
 
-## Port bugs that are not MapLibre gaps
+## Port bugs that were not MapLibre gaps
 
-Found in the 2026-10-08 code review; they hurt fidelity as much as the gaps above and need no
-patch. Tracked here until fixed.
+Found by reading the QGIS project against the port. They hurt fidelity as much as the gaps
+above and needed no patch.
+
+Fixed:
+
+- Tree crowns were flat blurred circles; icons were squeezed into squares and rendered black
+  (SVG `param(fill)`) — step 03.
+- Dash lengths scaled with the line width; markings were at 100 % instead of 67 % — step 05.
+- QGIS scale gates were converted without the 512 px tile offset (everything one zoom late);
+  street labels were deliberately high-contrast — step 06.
+- A building footprint layer and a building-part outline that QGIS does not have — steps 02, 08.
+- Landuse class textures (grass, gravel, sand, …) were missing — step 07.
+- Parking spaces painted as carriageway; the carriageway edge shade on every road polygon; a
+  full-strength 1 px outline on every furniture polygon — step 10.
+- Marker rows drawn with Unicode characters that the glyph files do not contain — step 11.
+- `/symbols/*` only served by the dev server; `@2x` textures upscaled from the 1× buffer.
+
+Open:
 
 - [ ] OSM `layer` buckets are not interleaved: all street buckets are emitted before all
       marking/furniture buckets, so ground-level markings paint over bridges (`qgis.ts`).
-- [x] Glyph stand-ins (▲ ▼ ▶ ●) rendered nothing — replaced by sprite icons / round-cap dashes (step 11). Sharks teeth, guard stones, peaks and flex posts are unverified (no data in the extent).
-- [x] Runtime icons are squeezed into 64×64 squares and SVG `param(fill)` is not substituted
-      (arrows render black and ~3× too wide).
-- [x] Tree crowns are flat blurred circles; QGIS uses the `symbols/trees/*.png` raster markers.
-- [x] Texture scale is baked for z18 only → ground-sized at every zoom (step 12).
-- [ ] Effect helpers (glows only — shadows are patched): blurred lines peak at half the stated opacity and inner effects peak
-      inside the polygon instead of at its edge.
-- [x] Dash lengths scale with the data-driven line width (`detail.ts`).
-- [x] QGIS scale gates were converted to zoom without the 512 px tile offset (one zoom late).
-- [ ] Dash phase restarts at tile edges (MapLibre limitation, see progress step 05).
-- [x] `/symbols/*` is only served by the dev server, not by `vite preview` or a build.
-- [ ] Unused sprites (`forest`, `gravel`, `flowerbed`). (`water` is used now.)
+- [ ] Glow helpers: blurred lines peak at half the stated opacity and inside the polygon
+      instead of at its edge.
+- [ ] Street labels at z18: ours show at 50 %, QGIS shows none — the label opacity expression
+      needs re-reading.
+- [ ] Dashed path edges are heavier than in QGIS.
+- [ ] Capacity ("2x") and `ref` labels on street furniture are not ported.
+- [ ] Unused sprite `forest`.
