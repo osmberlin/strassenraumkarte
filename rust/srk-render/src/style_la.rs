@@ -354,12 +354,15 @@ fn draw_trees(ctx: &mut Ctx, pm: &mut Pixmap, woods: &[&Polygon<f64>]) -> Result
         "",
     )?;
     let mut crowns: Vec<Crown> = Vec::new();
+    let mut forest: Vec<Crown> = Vec::new();
     for t in &trees {
         let (x, y) = ctx.px(t.geom.0);
+        let in_wood = woods.iter().any(|p| point_in_polygon(t.geom.0, p));
         let key = if t.class.is_empty() { t.id } else { t.class.bytes().fold(7i64, |h, b| h.wrapping_mul(31).wrapping_add(i64::from(b))) };
         let variant = if t.sub == "needleleaved" { 3 } else { (rand01(key, 5) * 3.0) as u8 };
         let colour = hex(crown_palette()[(rand01(key, 9) * 6.0) as usize % 6]);
-        crowns.push(Crown { x, y, r: ctx.m(t.num.clamp(2.0, 18.0) / 2.0), variant, colour, seed: t.id });
+        let c = Crown { x, y, r: ctx.m(t.num.clamp(2.0, 18.0) / 2.0), variant, colour, seed: t.id };
+        if in_wood { forest.push(c) } else { crowns.push(c) }
     }
     // woodland: world-anchored scatter of crowns inside forest polygons
     if !woods.is_empty() {
@@ -370,7 +373,7 @@ fn draw_trees(ctx: &mut Ctx, pm: &mut Pixmap, woods: &[&Polygon<f64>]) -> Result
             }
             let (x, y) = ctx.extent.map_to_px(wx, wy);
             let seed = ((wx * 7.0) as i64) ^ ((wy * 13.0) as i64);
-            crowns.push(Crown {
+            forest.push(Crown {
                 x,
                 y,
                 r: ctx.m(3.2 + 2.2 * f64::from(r)),
@@ -382,7 +385,7 @@ fn draw_trees(ctx: &mut Ctx, pm: &mut Pixmap, woods: &[&Polygon<f64>]) -> Result
     }
     // shadows first (multiply), then crowns big → small
     let mut pb = PathBuilder::new();
-    for c in &crowns {
+    for c in crowns.iter().chain(forest.iter()) {
         let o = c.r * 0.35;
         pb.push_circle(c.x + o, c.y + o * 0.8, c.r);
     }
@@ -392,14 +395,24 @@ fn draw_trees(ctx: &mut Ctx, pm: &mut Pixmap, woods: &[&Polygon<f64>]) -> Result
         blur_layer(&mut layer, (ctx.m(0.6).max(1.5)) as usize);
         draw_layer(pm, &layer, 0.26, BlendMode::Multiply);
     }
+    // woodland: crowns drawn opaque into their own layer (overlaps do not darken), then the
+    // layer goes on at reduced opacity → one even canopy with visible crown structure
+    if !forest.is_empty() {
+        let mut layer = new_layer(ctx);
+        forest.sort_by(|a, b| a.y.total_cmp(&b.y));
+        for c in &forest {
+            draw_crown(&mut layer, c, 2.0);
+        }
+        draw_layer(pm, &layer, 0.8, BlendMode::SourceOver);
+    }
     crowns.sort_by(|a, b| b.r.total_cmp(&a.r));
     for c in &crowns {
-        draw_crown(pm, c);
+        draw_crown(pm, c, 1.0);
     }
     Ok(())
 }
 
-fn draw_crown(pm: &mut Pixmap, c: &Crown) {
+fn draw_crown(pm: &mut Pixmap, c: &Crown, k: f32) {
     let dark = shade(c.colour, 0.72);
     let w = (c.r * 0.06).clamp(0.5, 1.2);
     let phase = rand01(c.seed, 1) * 6.28;
@@ -407,14 +420,14 @@ fn draw_crown(pm: &mut Pixmap, c: &Crown) {
         // board canonical: translucent disc, thin ring, centre dot
         0 => {
             if let Some(p) = PathBuilder::from_circle(c.x, c.y, c.r) {
-                fill(pm, &p, &sphere_paint(c, 0.55), None);
+                fill(pm, &p, &sphere_paint(c, (0.55 * k).min(1.0)), None);
                 line(pm, &p, &paint(with_alpha(dark, 0.8)), &stroke(w), None);
             }
         }
         // radial branches
         1 => {
             if let Some(p) = PathBuilder::from_circle(c.x, c.y, c.r) {
-                fill(pm, &p, &paint(with_alpha(c.colour, 0.42)), None);
+                fill(pm, &p, &paint(with_alpha(c.colour, 0.42 * k)), None);
                 line(pm, &p, &paint(with_alpha(dark, 0.6)), &stroke(w * 0.8), None);
             }
             let n = 7 + (rand01(c.seed, 6) * 4.0) as i32;
@@ -432,7 +445,7 @@ fn draw_crown(pm: &mut Pixmap, c: &Crown) {
         2 => {
             let pts = scallop_pts(c.x, c.y, c.r, 9 + (rand01(c.seed, 7) * 5.0) as u32, 0.12, phase);
             if let Some(p) = pts_path(&pts, true) {
-                fill(pm, &p, &sphere_paint(c, 0.62), None);
+                fill(pm, &p, &sphere_paint(c, (0.62 * k).min(1.0)), None);
                 line(pm, &p, &paint(with_alpha(dark, 0.8)), &stroke(w), None);
             }
         }
@@ -447,7 +460,7 @@ fn draw_crown(pm: &mut Pixmap, c: &Crown) {
                 })
                 .collect();
             if let Some(p) = pts_path(&pts, true) {
-                fill(pm, &p, &paint(with_alpha(shade(c.colour, 0.85), 0.6)), None);
+                fill(pm, &p, &paint(with_alpha(shade(c.colour, 0.85), 0.6 * k)), None);
                 line(pm, &p, &paint(with_alpha(dark, 0.85)), &stroke(w), None);
             }
         }
