@@ -31,7 +31,8 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
     let mut ctx = Ctx { client, prep, extent, z, margin_m: 40.0 };
     apply_grain(&ctx, &mut pm, None, 90.0, 3, 0.045, 1);
 
-    let lw = ctx.m(0.16).clamp(0.6, 1.6); // base pen width
+    // base pen width; a little heavier when zoomed out so blocks still read
+    let lw = ctx.m(0.16).clamp(if z <= 17 { 0.85 } else { 0.7 }, 1.6);
     // Which category gets the accent ink: playground (default) | bench | tree | none
     let accent_cat = std::env::var("SRK_ACCENT").unwrap_or_else(|_| "playground".into());
 

@@ -225,9 +225,13 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
         let r = rand01(f.id, 3);
         let landmark = matches!(f.class.as_str(), "church" | "chapel" | "cathedral" | "public" | "civic" | "school");
         let small = polygon_area_m2(&f.geom) < 300.0;
+        let outbuilding = matches!(f.class.as_str(), "garage" | "garages" | "shed" | "roof" | "carport" | "hut" | "service" | "transformer_tower");
+        let home = matches!(f.class.as_str(), "house" | "detached" | "semidetached_house" | "terrace" | "residential" | "chalet" | "allotment_house" | "bungalow" | "yes");
         let col = if landmark {
             "#F5F4EF"
-        } else if small && r < 0.14 {
+        } else if outbuilding {
+            "#DEDBD3"
+        } else if small && home && r < 0.22 {
             if r < 0.08 { "#C98C7A" } else { "#B98270" }
         } else if r < 0.16 {
             "#E3E1DA"
