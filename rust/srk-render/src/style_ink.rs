@@ -43,9 +43,7 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
     let paper = hex(paper_hex());
     pm.fill(paper);
     let mut ctx = Ctx { client, prep, extent, z, margin_m: 40.0 };
-    if !white_paper() {
-        apply_grain(&ctx, &mut pm, None, 90.0, 3, 0.045, 1);
-    }
+
 
     // base pen width; a little heavier when zoomed out so blocks still read
     let lw = ctx.m(0.16).clamp(if z <= 17 { 0.85 } else { 0.7 }, 1.6);
@@ -186,6 +184,25 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
         line(&mut pm, &p, &paint(ink(0.75)), &stroke(lw * 0.7), None);
     }
 
+    // ---- railways: double line with cross ties (old-map railway sign)
+    for (pts, main) in railway_lines(&mut ctx)? {
+        let w = ctx.m(if main { 1.6 } else { 1.1 }).max(3.0);
+        if let Some(p) = pts_path(&pts, false) {
+            line(&mut pm, &p, &paint(ink(0.95)), &stroke(w + lw * 1.6), None);
+            line(&mut pm, &p, &paint(paper), &stroke(w), None);
+        }
+        let mut ties = PathBuilder::new();
+        for (x, y, a) in along(&pts, ctx.m(if main { 2.4 } else { 3.6 }).max(6.0), 1.0) {
+            let (nx, ny) = (-a.sin(), a.cos());
+            let h = w * 0.5 + lw;
+            ties.move_to(x - nx * h, y - ny * h);
+            ties.line_to(x + nx * h, y + ny * h);
+        }
+        if let Some(p) = ties.finish() {
+            line(&mut pm, &p, &paint(ink(0.9)), &stroke(lw * 0.9), None);
+        }
+    }
+
     // ---- streets: carriageway outline + sparse stipple, paths as double lines
     let areas = ctx.polygons(
         r#"osm_id AS id, "area:highway" AS class, class AS sub, 0::float8 AS num"#,
@@ -203,6 +220,12 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
         })
         .map(|f| &f.geom)
         .collect();
+    // carriageways occlude what lies below (rails under a bridge)
+    for g in &road {
+        if let Some(p) = poly_path(&ctx, g) {
+            fill(&mut pm, &p, &paint(paper), None);
+        }
+    }
     stipple(&ctx, &mut pm, &road, zcell(z, 1.1), 0.35, ink(0.55), 49);
     for g in &road {
         if let Some(p) = wobbly_poly(&ctx, g, 0.5) {
@@ -400,6 +423,10 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
                 repeat_px: 560.0,
             },
         )?;
+    }
+    // paper: large blotches + fine grain over everything (ink sits in the paper, fills don't hide it)
+    if !white_paper() {
+        apply_grain(&ctx, &mut pm, None, 90.0, 3, 0.045, 1);
     }
     apply_grain(&ctx, &mut pm, None, 0.5, 1, 0.03, 2);
     Ok(pm)

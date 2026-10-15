@@ -178,6 +178,8 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
         }
     }
 
+    draw_railways(&mut ctx, &mut pm)?;
+
     // ---- streets
     let areas = ctx.polygons(
         r#"osm_id AS id, "area:highway" AS class, class AS sub, 0::float8 AS num"#,
@@ -650,4 +652,42 @@ fn sphere_paint(c: &Crown, alpha: f32) -> tiny_skia::Paint<'static> {
         p.shader = sh;
     }
     p
+}
+
+/// Railways sit below streets and bridges, so they are drawn before the street layer.
+fn draw_railways(ctx: &mut Ctx, pm: &mut Pixmap) -> Result<()> {
+    // railways: gravel bed, two rails, sleepers from z18
+    for (pts, main) in railway_lines(ctx)? {
+        let Some(p) = pts_path(&pts, false) else { continue };
+        let bed = ctx.m(if main { 3.4 } else { 2.6 }).max(2.0);
+        line(pm, &p, &paint(hex("#D3CDBF")), &stroke(bed), None);
+        if ctx.z >= 18 {
+            let mut sl = PathBuilder::new();
+            for (x, y, a) in along(&pts, ctx.m(0.65).max(2.0), 0.0) {
+                let (nx, ny) = (-a.sin(), a.cos());
+                let h = bed * 0.38;
+                sl.move_to(x - nx * h, y - ny * h);
+                sl.line_to(x + nx * h, y + ny * h);
+            }
+            if let Some(sp) = sl.finish() {
+                line(pm, &sp, &paint(with_alpha(hex("#9A9384"), 0.8)), &stroke(ctx.m(0.25).max(0.6)), None);
+            }
+        }
+        let gauge = ctx.m(0.72).max(1.0);
+        for side in [-1.0f32, 1.0] {
+            let off: Vec<(f32, f32)> = pts
+                .windows(2)
+                .flat_map(|w| {
+                    let (dx, dy) = (w[1].0 - w[0].0, w[1].1 - w[0].1);
+                    let l = (dx * dx + dy * dy).sqrt().max(1e-3);
+                    let (nx, ny) = (-dy / l * gauge * side, dx / l * gauge * side);
+                    [(w[0].0 + nx, w[0].1 + ny), (w[1].0 + nx, w[1].1 + ny)]
+                })
+                .collect();
+            if let Some(rp) = pts_path(&off, false) {
+                line(pm, &rp, &paint(hex("#6C6B5A")), &stroke(ctx.m(0.12).max(0.6)), None);
+            }
+        }
+    }
+    Ok(())
 }
