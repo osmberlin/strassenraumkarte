@@ -67,14 +67,17 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
     let mut cemeteries = Vec::new();
     for f in &landuse {
         match f.class.as_str() {
-            "grass" | "park" | "greenery" | "garden" | "recreation_ground" | "village_green" | "dog_park" | "cemetery"
+            "cemetery" => {
+                lawns.push(&f.geom);
+                cemeteries.push(f.geom.clone());
+            }
+            "grass" | "park" | "greenery" | "garden" | "recreation_ground" | "village_green" | "dog_park"
             | "allotments" | "meadow" => lawns.push(&f.geom),
             "scrub" | "flowerbed" | "tree_pit" => shrubs.push(&f.geom),
             "sand" | "bare_ground" | "ground" | "woodchips" | "gravel" | "fitness_station" => sands.push(&f.geom),
             "playground" => playgrounds.push(&f.geom),
             "forest" | "wood" => woods.push(&f.geom),
             "swimming_pool" => pools.push(f.geom.clone()),
-            "cemetery" => cemeteries.push(f.geom.clone()),
             _ => {}
         }
     }

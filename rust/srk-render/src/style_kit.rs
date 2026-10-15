@@ -7,7 +7,7 @@ use anyhow::Result;
 use geo_types::{Coord, Geometry, LineString, Point, Polygon};
 use postgres::Client;
 use tiny_skia::{
-    BlendMode, Color, FillRule, Mask, Paint, Path, PathBuilder, Pixmap, Stroke, StrokeDash,
+    BlendMode, Color, FillRule, Mask, Paint, Path, PathBuilder, Pixmap, Stroke,
     Transform,
 };
 
@@ -274,13 +274,6 @@ pub fn paint_blend(color: Color, mode: BlendMode) -> Paint<'static> {
 
 pub fn stroke(width: f32) -> Stroke {
     Stroke { width, line_cap: tiny_skia::LineCap::Round, line_join: tiny_skia::LineJoin::Round, ..Default::default() }
-}
-
-pub fn dashed(width: f32, on: f32, off: f32) -> Stroke {
-    let mut s = stroke(width);
-    s.line_cap = tiny_skia::LineCap::Butt;
-    s.dash = StrokeDash::new(vec![on, off], 0.0);
-    s
 }
 
 pub fn fill(pm: &mut Pixmap, path: &Path, p: &Paint, mask: Option<&Mask>) {
