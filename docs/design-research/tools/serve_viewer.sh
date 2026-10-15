@@ -19,7 +19,7 @@ export DB_PORT=${DB_PORT:-5433} PGPASSWORD=${PGPASSWORD:-postgres}
 render() { # variant preset [accent] [extra env]
   rm -rf "${OUT:?}/$1"
   env ${4:-} SRK_ACCENT=${3:-playground} "$BIN" --bbox "$BBOX" --zmin 16 --zmax 19 --layers "$2" \
-    --metatile 4 --gutter 1 --workers 6 --format webp --out "$OUT/$1" --quiet 2>&1 | grep '^timing' || true
+    --metatile 4 --gutter 1 --workers 3 --format webp --out "$OUT/$1" --quiet 2>&1 | grep '^timing' || true
 }
 
 if [[ -z ${SKIP_RENDER:-} ]]; then
