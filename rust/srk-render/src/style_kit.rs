@@ -126,8 +126,18 @@ impl Ctx<'_> {
 
     /// Ground metres → pixels at this zoom/latitude (Web Mercator stretch included).
     pub fn m(&self, metres: f64) -> f32 {
-        let scale = crate::tile::mercator_scale(self.extent.bounds);
-        self.extent.metres_to_px(metres * scale)
+        self.extent.metres_to_px(metres * self.ref_scale())
+    }
+
+    /// 1/cos(φ) at the centre of the z10 tile that contains this extent. Using the extent's own
+    /// centre would make sizes (and hatch spacing) differ slightly between metatile layouts.
+    pub fn ref_scale(&self) -> f64 {
+        let b = self.extent.bounds;
+        let cy = (b.miny + b.maxy) / 2.0;
+        let tile = 2.0 * crate::tile::ORIGIN_SHIFT / 1024.0;
+        let y = ((cy + crate::tile::ORIGIN_SHIFT) / tile).floor() * tile + tile / 2.0 - crate::tile::ORIGIN_SHIFT;
+        let lat = (2.0 * (y / 6_378_137.0).exp().atan() - std::f64::consts::FRAC_PI_2).to_degrees();
+        1.0 / lat.to_radians().cos()
     }
 
     pub fn px(&self, c: Coord<f64>) -> (f32, f32) {
@@ -367,28 +377,28 @@ pub fn mask_of(ctx: &Ctx, polys: &[&Polygon<f64>]) -> Option<Mask> {
     Some(mask)
 }
 
-/// Parallel hatch lines over the whole render buffer at `angle_deg`, phase anchored to the world.
+/// Parallel hatch lines covering the pixel box (x0,y0)-(x1,y1) at `angle_deg`.
+/// Line positions are anchored to the world (f64), so every tile/metatile draws the same lines.
 pub fn hatch_path(ctx: &Ctx, spacing_px: f32, angle_deg: f32, x0: f32, y0: f32, x1: f32, y1: f32) -> Option<Path> {
-    let a = angle_deg.to_radians();
+    let a = f64::from(angle_deg).to_radians();
     let (dx, dy) = (a.cos(), a.sin());
     let (nx, ny) = (-dy, dx);
-    // world-anchored phase: project the world origin of the buffer onto the normal
-    let mpp = ctx.extent.metres_per_px() as f32;
-    let ox = (ctx.extent.bounds.minx as f32 / mpp).rem_euclid(spacing_px * 1000.0);
-    let oy = (-(ctx.extent.bounds.maxy as f32) / mpp).rem_euclid(spacing_px * 1000.0);
-    let phase = (ox * nx + oy * ny).rem_euclid(spacing_px);
-    let cx = (x0 + x1) / 2.0;
-    let cy = (y0 + y1) / 2.0;
-    let r = ((x1 - x0).powi(2) + (y1 - y0).powi(2)).sqrt() / 2.0 + spacing_px;
-    let base = (cx * nx + cy * ny + phase) .rem_euclid(spacing_px);
+    let sp = f64::from(spacing_px);
+    let mpp = ctx.extent.metres_per_px();
+    // pixel p belongs to a line when p·n ≡ offset (mod sp)
+    let offset = (-(ctx.extent.bounds.minx * nx - ctx.extent.bounds.maxy * ny) / mpp).rem_euclid(sp);
+    let (cx, cy) = (f64::from(x0 + x1) / 2.0, f64::from(y0 + y1) / 2.0);
+    let r = f64::from(((x1 - x0).powi(2) + (y1 - y0).powi(2)).sqrt() / 2.0 + spacing_px);
+    let c = cx * nx + cy * ny;
+    let k0 = ((c - r - offset) / sp).floor() as i64;
+    let k1 = ((c + r - offset) / sp).ceil() as i64;
     let mut pb = PathBuilder::new();
-    let mut t = -r - base;
-    while t <= r {
-        let px = cx + nx * t;
-        let py = cy + ny * t;
-        pb.move_to(px - dx * r, py - dy * r);
-        pb.line_to(px + dx * r, py + dy * r);
-        t += spacing_px;
+    for k in k0..=k1 {
+        let t = offset + k as f64 * sp;
+        // foot point of the line closest to the box centre
+        let (fx, fy) = (cx + nx * (t - c), cy + ny * (t - c));
+        pb.move_to((fx - dx * r) as f32, (fy - dy * r) as f32);
+        pb.line_to((fx + dx * r) as f32, (fy + dy * r) as f32);
     }
     pb.finish()
 }

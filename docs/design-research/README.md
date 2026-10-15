@@ -56,6 +56,13 @@ DB_PORT=5433 PGPASSWORD=postgres rust/srk-render/target/release/srk-render \
 
 Code: [`style_la.rs`](../../rust/srk-render/src/style_la.rs), [`style_ink.rs`](../../rust/srk-render/src/style_ink.rs), shared helpers (queries, world noise, masks, hatching, wobble, blur, labels) in [`style_kit.rs`](../../rust/srk-render/src/style_kit.rs).
 
+## Gotchas (learned the hard way)
+
+- **Seamless tiles need world-anchored *everything*.** Noise, scatter and hatch phase from world coordinates is not enough: any size derived from the *render extent* drifts between metatile layouts. `ctx.m()` first used `mercator_scale(extent)` (centre latitude of the buffer); a 4×4 metatile has a slightly different centre than a single tile, so hatch spacing differed by a fraction of a pixel and 22 % of the ink pixels changed. Fix: `Ctx::ref_scale()` takes 1/cos φ at the centre of the **z10 tile** containing the extent. Also compute hatch phase in `f64` — world positions in pixels are ~10⁸ and `f32` loses whole pixels.
+- Check it with `tools/seam_check.sh <layers>` (metatile 1 vs 4); healthy is < 0.1 % mean.
+- `srk-render` links two `tiny-skia` versions (ours and resvg's). Render SVG (labels) into a `resvg::tiny_skia::Pixmap` and copy the bytes over (`Pixmap::from_vec`).
+- `building:part` polygons lie on top of their building; draw them as lines only or they double every roof (and the church).
+
 ## How to work on an exploration
 
 1. Read the exploration's README (mission statement first) and its research notes.
