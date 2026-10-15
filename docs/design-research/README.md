@@ -56,6 +56,8 @@ DB_PORT=5433 PGPASSWORD=postgres rust/srk-render/target/release/srk-render \
 
 Interactive: `docs/design-research/tools/serve_viewer.sh` renders LA, ink (accent playgrounds / benches / trees) and the Rust baseline for the Schillerkiez (z16–19, ~2 min) into `tmp/design-tiles/` and serves a small Leaflet viewer on <http://127.0.0.1:8017/> with one layer per variant (`SKIP_RENDER=1` to serve existing tiles).
 
+Print sheet: `python3 docs/design-research/tools/map_sheet.py ink|la <stitched map.png> <out.jpg> --zoom 17` adds frame, title (cartouche / title block), compass rose / north arrow and scale bar → `*/map-sheet-schillerkiez.jpg`.
+
 Code: [`style_la.rs`](../../rust/srk-render/src/style_la.rs), [`style_ink.rs`](../../rust/srk-render/src/style_ink.rs), shared helpers (queries, world noise, masks, hatching, wobble, blur, labels) in [`style_kit.rs`](../../rust/srk-render/src/style_kit.rs).
 
 ## Gotchas (learned the hard way)
