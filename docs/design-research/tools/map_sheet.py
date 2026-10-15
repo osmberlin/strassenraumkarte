@@ -45,7 +45,7 @@ def spaced(draw, xy, text, fnt, fill, spacing, anchor="mm"):
 
 
 def ink_sheet(m, args):
-    ink, paper = (43, 38, 32), (241, 231, 207)
+    ink, paper = ((21, 21, 21), (251, 250, 246)) if args.white else ((43, 38, 32), (241, 231, 207))
     pad, frame = 120, 34
     W, H = m.width + 2 * pad, m.height + 2 * pad + 40
     sheet = Image.new("RGB", (W, H), paper)
@@ -145,6 +145,7 @@ if __name__ == "__main__":
     ap.add_argument("--title", default="Schillerkiez")
     ap.add_argument("--subtitle", default="Neukölln · aus OpenStreetMap gezeichnet")
     ap.add_argument("--paces", action="store_true", help="label the ink scale bar in paces (fantasy touch)")
+    ap.add_argument("--white", action="store_true", help="ink sheet on white paper (for SRK_INK_PAPER=white maps)")
     a = ap.parse_args()
     m = Image.open(a.map).convert("RGB")
     out = (ink_sheet if a.style == "ink" else la_sheet)(m, a)
