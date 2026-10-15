@@ -200,12 +200,23 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
         "highway WHERE type = 'path'",
         "ORDER BY COALESCE(layer,0), osm_id",
     )?;
+    // park paths (not sidewalks/crossings) get a fine edge: all edges first, then all fills, so
+    // junctions merge cleanly
+    let is_park_path = |f: &Feature<geo_types::LineString<f64>>| f.sub != "sidewalk" && f.sub != "crossing" && f.class != "cycleway";
+    if z >= 17 {
+        for f in paths.iter().filter(|f| is_park_path(f)) {
+            let w = if f.num > 0.0 { f.num } else { 1.8 };
+            if let Some(path) = line_path(&ctx, &f.geom) {
+                line(&mut pm, &path, &paint(with_alpha(hex("#B8AE94"), 0.8)), &stroke(ctx.m(w).max(0.8) + 1.2), None);
+            }
+        }
+    }
     for f in &paths {
         let w = if f.num > 0.0 { f.num } else if f.class == "cycleway" { 1.6 } else { 1.8 };
         let col = match f.class.as_str() {
             "cycleway" => CYCLE,
             "footway" | "pedestrian" | "steps" if f.sub == "sidewalk" || f.sub == "crossing" => SIDEWALK,
-            _ => "#DCD3BC",
+            _ => "#E2DAC4",
         };
         if let Some(path) = line_path(&ctx, &f.geom) {
             line(&mut pm, &path, &paint(hex(col)), &stroke(ctx.m(w).max(0.8)), None);

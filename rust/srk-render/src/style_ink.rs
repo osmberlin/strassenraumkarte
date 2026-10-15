@@ -388,7 +388,7 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
                 family: "Hoefler Text",
                 italic: true,
                 weight: 400,
-                size_px: if z >= 19 { 17.0 } else { 14.0 },
+                size_px: match z { 20.. => 21.0, 19 => 17.0, _ => 14.0 },
                 letter_spacing_em: 0.06,
                 uppercase: false,
                 fill: ink_hex(),
