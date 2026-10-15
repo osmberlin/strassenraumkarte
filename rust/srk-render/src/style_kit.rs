@@ -547,6 +547,8 @@ pub fn draw_street_labels(ctx: &mut Ctx, pm: &mut Pixmap, st: &LabelStyle) -> Re
     let labels = ctx.lines_full("0::bigint AS id, name AS class, class AS sub, 0::float8 AS num", "label_highway WHERE name IS NOT NULL", "")?;
     let mut defs = String::new();
     let mut texts = String::new();
+    // dual carriageways come as two parallel label lines: keep one label per name and place
+    let mut placed: Vec<(String, f32, f32)> = Vec::new();
     for (i, f) in labels.iter().enumerate() {
         let mut pts = line_pts(ctx, &f.geom);
         if pts.len() < 2 {
@@ -581,14 +583,57 @@ pub fn draw_street_labels(ctx: &mut Ctx, pm: &mut Pixmap, st: &LabelStyle) -> Re
             if a - est / 2.0 < 0.0 || a + est / 2.0 > total {
                 continue;
             }
+            let (ax, ay) = point_at(&pts, a);
+            if placed.iter().any(|(n, x, y)| *n == name && (x - ax).powi(2) + (y - ay).powi(2) < (est * 1.2).powi(2)) {
+                continue;
+            }
+            placed.push((name.clone(), ax, ay));
             texts.push_str(&format!(
                 "<text><textPath href=\"#l{i}\" startOffset=\"{a:.1}\" text-anchor=\"middle\">{}</textPath></text>",
                 xml_escape(&name)
             ));
         }
     }
+    render_svg_text(ctx, pm, &defs, &texts, st);
+    Ok(())
+}
+
+/// Names of large named areas (parks, cemeteries, recreation grounds …), horizontal, centred on
+/// `ST_PointOnSurface` of the whole polygon (world-stable). `min_area_px`: smallest area that gets a name.
+pub fn draw_area_labels(ctx: &mut Ctx, pm: &mut Pixmap, st: &LabelStyle, min_area_px: f64, max_size_px: f32) -> Result<()> {
+    let mpp = ctx.extent.metres_per_px();
+    let from = r#"(SELECT osm_id, name, class, ST_Area(geom) AS a, ST_PointOnSurface(geom) AS geom
+                  FROM landuse
+                  WHERE name IS NOT NULL
+                    AND class IN ('park', 'recreation_ground', 'cemetery', 'garden', 'village_green', 'allotments', 'meadow', 'forest', 'wood')
+                    AND geom && ST_MakeEnvelope($1::float8, $2::float8, $3::float8, $4::float8, 3857)) q"#;
+    let pts = ctx.points("osm_id AS id, name AS class, NULL::text AS sub, a::float8 AS num", from, "")?;
+    let mut texts = String::new();
+    for f in &pts {
+        let area_px = f.num / (mpp * mpp);
+        if area_px < min_area_px {
+            continue;
+        }
+        let (x, y) = ctx.px(f.geom.0);
+        let name = if st.uppercase { f.class.to_uppercase() } else { f.class.clone() };
+        let size = (st.size_px * (area_px / min_area_px).powf(0.12) as f32).min(max_size_px);
+        let est = name.chars().count() as f32 * size * (0.6 + st.letter_spacing_em);
+        if f64::from(est) > area_px.sqrt() * 1.8 {
+            continue;
+        }
+        texts.push_str(&format!(
+            "<text x=\"{x:.1}\" y=\"{y:.1}\" font-size=\"{size:.1}\" letter-spacing=\"{ls:.2}\" text-anchor=\"middle\">{}</text>",
+            xml_escape(&name),
+            ls = st.letter_spacing_em * size
+        ));
+    }
+    render_svg_text(ctx, pm, "", &texts, st);
+    Ok(())
+}
+
+fn render_svg_text(ctx: &Ctx, pm: &mut Pixmap, defs: &str, texts: &str, st: &LabelStyle) {
     if texts.is_empty() {
-        return Ok(());
+        return;
     }
     let (w, h) = (ctx.extent.width_px, ctx.extent.height_px);
     let svg = format!(
@@ -611,15 +656,14 @@ pub fn draw_street_labels(ctx: &mut Ctx, pm: &mut Pixmap, st: &LabelStyle) -> Re
         Ok(t) => t,
         Err(e) => {
             eprintln!("warn: label svg: {e}");
-            return Ok(());
+            return;
         }
     };
-    let Some(mut layer) = resvg::tiny_skia::Pixmap::new(w, h) else { return Ok(()) };
+    let Some(mut layer) = resvg::tiny_skia::Pixmap::new(w, h) else { return };
     resvg::render(&tree, resvg::tiny_skia::Transform::identity(), &mut layer.as_mut());
     if let Some(ours) = tiny_skia::IntSize::from_wh(w, h).and_then(|sz| Pixmap::from_vec(layer.take(), sz)) {
         pm.draw_pixmap(0, 0, ours.as_ref(), &tiny_skia::PixmapPaint::default(), Transform::identity(), None);
     }
-    Ok(())
 }
 
 /// Approximate gaussian blur of a premultiplied layer: three box-blur passes per axis.
@@ -717,4 +761,18 @@ pub fn pitch_marking_path(ctx: &mut Ctx) -> Result<Option<Path>> {
         }
     }
     Ok(pb.finish())
+}
+
+/// Point at arc length `s` along a pixel polyline.
+pub fn point_at(pts: &[(f32, f32)], s: f32) -> (f32, f32) {
+    let mut acc = 0.0;
+    for w in pts.windows(2) {
+        let len = ((w[1].0 - w[0].0).powi(2) + (w[1].1 - w[0].1).powi(2)).sqrt();
+        if acc + len >= s && len > 0.0 {
+            let t = (s - acc) / len;
+            return (w[0].0 + (w[1].0 - w[0].0) * t, w[0].1 + (w[1].1 - w[0].1) * t);
+        }
+        acc += len;
+    }
+    *pts.last().unwrap_or(&(0.0, 0.0))
 }

@@ -48,6 +48,7 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
     let mut playgrounds = Vec::new();
     let mut woods = Vec::new();
     let mut pools = Vec::new();
+    let mut cemeteries = Vec::new();
     for f in &landuse {
         match f.class.as_str() {
             "grass" | "park" | "greenery" | "garden" | "recreation_ground" | "village_green" | "dog_park" | "cemetery"
@@ -57,6 +58,7 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
             "playground" => playgrounds.push(&f.geom),
             "forest" | "wood" => woods.push(&f.geom),
             "swimming_pool" => pools.push(f.geom.clone()),
+            "cemetery" => cemeteries.push(f.geom.clone()),
             _ => {}
         }
     }
@@ -94,6 +96,22 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
         }
         if let Some(p) = pb.finish() {
             line(&mut pm, &p, &paint(ink(0.6)), &stroke(lw * 0.6), Some(&mask));
+        }
+    }
+    // cemeteries: small scattered crosses (on top of the lawn texture)
+    let cem: Vec<&Polygon<f64>> = cemeteries.iter().collect();
+    if let Some(mask) = mask_of(&ctx, &cem).filter(|_| !cem.is_empty()) {
+        let mut pb = PathBuilder::new();
+        let s = ctx.m(zcell(z, 0.9)).max(2.5);
+        for (x, y, _) in world_scatter(&ctx, zcell(z, 4.0), 0.55, 61) {
+            let (px, py) = ctx.extent.map_to_px(x, y);
+            pb.move_to(px, py - s);
+            pb.line_to(px, py + s * 0.8);
+            pb.move_to(px - s * 0.5, py - s * 0.35);
+            pb.line_to(px + s * 0.5, py - s * 0.35);
+        }
+        if let Some(p) = pb.finish() {
+            line(&mut pm, &p, &paint(ink(0.8)), &stroke(lw * 0.8), Some(&mask));
         }
     }
     // sand: stipple
@@ -302,6 +320,24 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
         }
     }
 
+    draw_area_labels(
+        &mut ctx,
+        &mut pm,
+        &LabelStyle {
+            family: "Hoefler Text",
+            italic: false,
+            weight: 400,
+            size_px: 15.0,
+            letter_spacing_em: 0.32,
+            uppercase: true,
+            fill: INK,
+            halo: PAPER,
+            halo_px: 3.5,
+            repeat_px: 0.0,
+        },
+        40_000.0,
+        30.0,
+    )?;
     if z >= 16 {
         draw_street_labels(
             &mut ctx,
