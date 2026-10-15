@@ -46,6 +46,7 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
     let mut sands = Vec::new();
     let mut playgrounds = Vec::new();
     let mut woods = Vec::new();
+    let mut pools = Vec::new();
     for f in &landuse {
         match f.class.as_str() {
             "grass" | "park" | "greenery" | "garden" | "recreation_ground" | "village_green" | "dog_park" | "cemetery"
@@ -54,14 +55,15 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
             "sand" | "bare_ground" | "ground" | "woodchips" | "gravel" | "fitness_station" => sands.push(&f.geom),
             "playground" => playgrounds.push(&f.geom),
             "forest" | "wood" => woods.push(&f.geom),
+            "swimming_pool" => pools.push(f.geom.clone()),
             _ => {}
         }
     }
     // lawn: grass tufts + thin edge
     if let Some(mask) = mask_of(&ctx, &lawns) {
         let mut pb = PathBuilder::new();
-        let h = ctx.m(zcell(z, 0.7)).max(2.0);
-        for (x, y, r) in world_scatter(&ctx, zcell(z, 3.2), 0.55, 41) {
+        let h = ctx.m(zcell(z, 0.8)).max(2.4);
+        for (x, y, r) in world_scatter(&ctx, zcell(z, 3.6), 0.38, 41) {
             let (px, py) = ctx.extent.map_to_px(x, y);
             let s = h * (0.7 + 0.6 * r);
             for (dx, lean) in [(-0.45f32, -0.35f32), (0.0, 0.0), (0.45, 0.35)] {
@@ -98,8 +100,8 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
 
     // ---- water: wavy hatch + ripple lines following the shore
     let water = ctx.polygons("0::bigint AS id, NULL::text AS class, NULL::text AS sub, 0::float8 AS num", "water_body_dissolved", "")?;
-    if !water.is_empty() {
-        let ws: Vec<&Polygon<f64>> = water.iter().map(|f| &f.geom).collect();
+    if !water.is_empty() || !pools.is_empty() {
+        let ws: Vec<&Polygon<f64>> = water.iter().map(|f| &f.geom).chain(pools.iter()).collect();
         if let Some(mask) = mask_of(&ctx, &ws) {
             for d in [ctx.m(3.0), ctx.m(1.8), ctx.m(0.8)] {
                 for g in &ws {

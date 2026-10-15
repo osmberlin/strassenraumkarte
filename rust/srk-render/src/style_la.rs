@@ -165,6 +165,33 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
         }
     }
 
+    // ---- paving joints (z19+): ticks across sidewalks, fine grid on pedestrian areas
+    if z >= 19 {
+        let joint = paint(with_alpha(hex("#B9B5AA"), 0.55));
+        let mut pb = PathBuilder::new();
+        for f in paths.iter().filter(|f| f.sub == "sidewalk") {
+            let w = ctx.m(if f.num > 0.0 { f.num } else { 1.8 }) * 0.5;
+            let pts = line_pts(&ctx, &f.geom);
+            for (x, y, a) in along(&pts, ctx.m(1.5).max(4.0), 0.0) {
+                let (nx, ny) = (-a.sin(), a.cos());
+                pb.move_to(x - nx * w, y - ny * w);
+                pb.line_to(x + nx * w, y + ny * w);
+            }
+        }
+        if let Some(p) = pb.finish() {
+            line(&mut pm, &p, &joint, &stroke(0.5), None);
+        }
+        let ped: Vec<&Polygon<f64>> = areas.iter().filter(|f| matches!(f.class.as_str(), "pedestrian" | "footway")).map(|f| &f.geom).collect();
+        if let Some(mask) = mask_of(&ctx, &ped).filter(|_| !ped.is_empty()) {
+            let (w, h) = (ctx.extent.width_px as f32, ctx.extent.height_px as f32);
+            for ang in [0.0f32, 90.0] {
+                if let Some(p) = hatch_path(&ctx, ctx.m(1.2).max(4.0), ang, 0.0, 0.0, w, h) {
+                    line(&mut pm, &p, &paint(with_alpha(hex("#B9B5AA"), 0.4)), &stroke(0.5), Some(&mask));
+                }
+            }
+        }
+    }
+
     // ---- buildings: hard SE shadow, white volume, crisp outline, rare red roof
     let buildings = ctx.polygons(
         r#"osm_id AS id, COALESCE(building, 'yes') AS class, "building:part" AS sub,
