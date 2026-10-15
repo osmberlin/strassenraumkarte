@@ -102,16 +102,18 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
     // shrubs: small scribbled loops
     if let Some(mask) = mask_of(&ctx, &shrubs) {
         let mut pb = PathBuilder::new();
-        for (x, y, r) in world_scatter(&ctx, zcell(z, 1.4), 0.8, 43) {
+        // small open "c" loops (bush scribbles), sparse enough that the bed stays light
+        for (x, y, r) in world_scatter(&ctx, zcell(z, 2.0), 0.6, 43) {
             let (px, py) = ctx.extent.map_to_px(x, y);
-            let rr = ctx.m(zcell(z, 0.45 + 0.3 * f64::from(r))).max(1.2);
+            let rr = ctx.m(zcell(z, 0.5 + 0.3 * f64::from(r))).max(1.4);
             let pts = scallop_pts(px, py, rr, 5, 0.25, r * 6.0);
-            if let Some(p) = pts_path(&pts, true) {
+            let open = &pts[..pts.len() * 3 / 4];
+            if let Some(p) = pts_path(open, false) {
                 pb.push_path(&p);
             }
         }
         if let Some(p) = pb.finish() {
-            line(&mut pm, &p, &paint(ink(0.6)), &stroke(lw * 0.6), Some(&mask));
+            line(&mut pm, &p, &paint(ink(0.5)), &stroke(lw * 0.55), Some(&mask));
         }
     }
     // cemeteries: small scattered crosses (on top of the lawn texture)
