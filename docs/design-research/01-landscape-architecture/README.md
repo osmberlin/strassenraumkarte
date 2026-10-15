@@ -20,17 +20,25 @@ What this means in one sentence per element:
 
 ## Implemented so far (Rust)
 
+![Richardplatz and Körnerpark](current-ef.jpg)
+
+More: [`showcase-z17.jpg`](showcase-z17.jpg) / [`showcase-z18.jpg`](showcase-z18.jpg) (whole Schillerkiez), [`map-sheet-schillerkiez.jpg`](map-sheet-schillerkiez.jpg) (as a plan sheet with title block, north arrow and scale bar), iterations in [`steps/`](steps/).
+
 | Element | Implementation |
 | --- | --- |
 | Paper / ground | `#EAE9E3`, fine world-anchored paper grain |
 | Lawn, meadow | `#CBD4BC` / `#C2C5A6`, large-scale watercolour mottling, darker bled rim along the edges |
-| Shrub beds, tree pits | `#B5B39C` with dabs and a darker edge |
-| Woodland | crowns scattered on a world grid inside forest polygons |
-| Streets | carriageway `#C9C5BA` with kerb line, sidewalks `#F1F0EB` with joint ticks (z19+), pedestrian areas with a fine joint grid (z19+), cycleways `#D3A796`, parking bays with white lines, road markings pulled towards grey |
-| Buildings | `building` (not the dissolved parts): white `#FBFAF7` (some `#E3E1DA`), crisp `#4E4D46` outline, blurred SE shadow scaled by height, parts as faint lines, red (`#C98C7A`/`#B98270`) only on small stand-alone buildings |
-| Trees | one symbol per genus: disc + ring + centre dot, radial branches, scalloped two-tone; star for conifers. Translucent khaki/sage palette, blurred SE shadow, size from `diameter_crown` |
-| Details | hedges, walls, fences, benches, bins, lamps, bicycle stands, play equipment (white structures) |
-| Labels | street names in Avenir Next Medium, spaced capitals, from z17 |
+| Shrub beds, tree pits | `#BDBBA4` with soft dabs and a darker edge |
+| Water | `#A9BEBD`, blurred darker band along the banks (watercolour depth), crisp bank line |
+| Woodland | crowns on a world grid + mapped trees inside woods, drawn opaque into one layer and composited at 80 % → even canopy |
+| Streets | carriageway `#C9C5BA` with kerb line, sidewalks `#F1F0EB` with joint ticks (z19+), pedestrian areas with a joint grid (z19+), cycleways `#D3A796`, parking bays with white lines, road markings pulled towards grey |
+| Buildings | white `#FBFAF7`, crisp `#4E4D46` outline, blurred SE shadow scaled by height, `building:part` as faint lines; outbuildings light grey; red (`#C98C7A`/`#B98270`) only on ~¼ of small homes |
+| Trees | one symbol per genus: shaded disc + ring + centre dot, radial branches, scalloped; star for conifers. Translucent, NW-lit radial gradient, blurred SE shadow, size from `diameter_crown` |
+| Pitches | procedural white line markings from `pitch_markings` |
+| Details | hedges, walls, fences, embankment combs, benches, bins, lamps, bicycle stands, play equipment |
+| Labels | street names (Avenir Next Medium, spaced caps, z17+), area names (Avenir Next Demi Bold, spaced caps) |
+
+Variant: `SRK_LA_PALETTE=vivid` — saturated greens of modern competition plans for lawns, beds and crowns (see [step 11](steps/11-vivid-palette-variant/)).
 
 ## Style attributes
 

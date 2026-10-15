@@ -17,6 +17,10 @@ The two guiding questions:
 
 ## Implemented so far (Rust)
 
+![Richardplatz and Körnerpark](current-ef.jpg)
+
+More: [`showcase-z17.jpg`](showcase-z17.jpg) / [`showcase-z18.jpg`](showcase-z18.jpg) (whole Schillerkiez), [`map-sheet-schillerkiez.jpg`](map-sheet-schillerkiez.jpg) (as a book-endpaper sheet with cartouche, compass rose and scale bar), iterations in [`steps/`](steps/).
+
 **Decision on houses (2026-10-15):** no oblique view for ordinary buildings — dense rows would collide. Instead each building is a plan footprint with
 1. roof hatching along the slope (perpendicular to the long axis of `ST_OrientedEnvelope`),
 2. a ridge line where the footprint is roughly rectangular (area / envelope > 0.72),
@@ -28,14 +32,22 @@ Only landmarks (`church`, `chapel`, `cathedral`: one spire on their smallest pol
 | Element | Implementation |
 | --- | --- |
 | Paper | `#F1E7CF`, large blotches + fine grain (world-anchored) |
-| Ink | `#2B2620`; all outlines get a slight world-anchored wobble |
+| Ink | `#2B2620`; all outlines get a slight world-anchored wobble; pen slightly heavier at z ≤ 17 |
 | Streets | carriageway outline + sparse stipple; park paths as double lines; sidewalks are the paper between kerb and house |
-| Lawn / shrubs / sand | grass tufts / small loops / stipple, densities constant across zoom (`zcell`) |
+| Lawn / shrubs / sand | grass tufts / open scribbles / stipple, densities constant across zoom (`zcell`) |
 | Water (incl. pools) | heavy bank line, three shore ripples, short wave strokes |
+| Forest | one cloud silhouette: heavy outline of all crowns, paper fill on top, light inner arcs and shading |
+| Slopes | hachures on embankments and cliffs (alternating long/short strokes downhill) |
 | Fences / walls / hedges | `+-+-` ticks / heavy line / chain of loops |
-| Trees | upright scalloped crown, trunk, shading strokes, ground tick; conifers as stacked triangles; woodland = dense crowns |
+| Cemeteries | scattered small crosses |
+| Trees | upright scalloped / round / tall crowns (by OSM id), trunk, shading strokes, ground tick; conifers as stacked triangles |
+| Pitches | procedural line markings from `pitch_markings` |
 | Accent | `SRK_ACCENT=playground` (default), `bench`, `tree`, `none` — vermilion `#C8452C` for outline, 45° hatch, light wash and glyphs (swing, slide, spring rider, climbing frame) |
-| Labels | street names in Hoefler Text Italic with paper halo, from z16 |
+| Labels | street names (Hoefler Text Italic, paper halo, z16+), area names (Hoefler Text spaced capitals) |
+
+Variants:
+- `SRK_INK_OBLIQUE=freestanding` — free-standing buildings and landmarks are lifted into an oblique view (roof shifted north, south walls with windows); rows stay plan. See [step 11](steps/11-oblique-freestanding/). **Candidate for the default.**
+- `SRK_INK_PAPER=white` — black ink on white for print / two-colour printing. See [step 15](steps/15-paper-variant/).
 
 ## Plan vs. pseudo-3D
 
