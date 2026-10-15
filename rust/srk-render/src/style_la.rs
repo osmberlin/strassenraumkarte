@@ -268,17 +268,17 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
         let Some(path) = poly_path(&ctx, &f.geom) else { continue };
         let r = rand01(f.id, 3);
         let landmark = matches!(f.class.as_str(), "church" | "chapel" | "cathedral" | "public" | "civic" | "school");
-        let small = polygon_area_m2(&f.geom) < 300.0;
+        let area = polygon_area_m2(&f.geom);
         let outbuilding = matches!(f.class.as_str(), "garage" | "garages" | "shed" | "roof" | "carport" | "hut" | "service" | "transformer_tower");
-        let home = matches!(f.class.as_str(), "house" | "detached" | "semidetached_house" | "terrace" | "residential" | "chalet" | "allotment_house" | "bungalow" | "yes");
+        let home = matches!(f.class.as_str(), "house" | "detached" | "semidetached_house" | "terrace" | "residential" | "chalet" | "allotment_house" | "bungalow");
+        // red roofs: an accent on small homes only (unknown `building=yes` only when tiny)
+        let red = !landmark && ((home && area < 250.0) || (f.class == "yes" && area < 120.0)) && r < 0.25;
         let col = if landmark {
             "#F5F4EF"
         } else if outbuilding {
             "#DEDBD3"
-        } else if small && home && r < 0.22 {
-            if r < 0.08 { "#C98C7A" } else { "#B98270" }
-        } else if r < 0.16 {
-            "#E3E1DA"
+        } else if red {
+            if r < 0.15 { "#C98C7A" } else { "#B98270" }
         } else {
             BUILDING
         };
