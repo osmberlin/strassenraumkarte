@@ -16,6 +16,9 @@ mod palette;
 mod pitch_markings;
 mod profile;
 mod sql_cache;
+mod style_ink;
+mod style_kit;
+mod style_la;
 mod svg_stamps;
 mod textures;
 mod tile;
@@ -34,7 +37,7 @@ use clap::Parser;
 use postgres::{Client, Config, NoTls};
 use serde::Serialize;
 
-use layers::{render_full_approx, render_highway_area, LayerPreset, TableCache};
+use layers::{render_full_approx, render_highway_area, render_style, LayerPreset, TableCache};
 use pitch_markings::PitchMarkingCatalog;
 use profile::{StageProfile, StageTimers};
 use sql_cache::PreparedCache;
@@ -297,6 +300,17 @@ fn render_one_metatile(
                 timers,
             )
         }
+        LayerPreset::La | LayerPreset::Ink => render_style(
+            client,
+            prep_cache,
+            mt,
+            &shared.out_dir,
+            &shared.format_ext,
+            quiet,
+            shared.preset,
+            shared.webp_quality,
+            timers,
+        ),
     }
 }
 

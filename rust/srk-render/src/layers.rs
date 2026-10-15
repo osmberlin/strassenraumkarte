@@ -39,6 +39,10 @@ fn opt_f32(row: &postgres::Row, col: &str) -> Option<f32> {
 pub enum LayerPreset {
     HighwayArea,
     FullApprox,
+    /// Design research: landscape-architecture plan.
+    La,
+    /// Design research: fantasy-book ink map.
+    Ink,
 }
 
 impl LayerPreset {
@@ -54,8 +58,14 @@ impl LayerPreset {
         if names.len() == 1 && (names[0] == "full-approx" || names[0] == "full_approx") {
             return Ok(Self::FullApprox);
         }
+        if names.len() == 1 && names[0] == "la" {
+            return Ok(Self::La);
+        }
+        if names.len() == 1 && names[0] == "ink" {
+            return Ok(Self::Ink);
+        }
         anyhow::bail!(
-            "supported --layers: highway_area | full-approx (got {:?})",
+            "supported --layers: highway_area | full-approx | la | ink (got {:?})",
             layers
         )
     }
@@ -181,6 +191,30 @@ fn write_meta_cores(
             save_tile(&core, &path, quality, timers)?;
             written += 1;
         }
+    }
+    Ok(written)
+}
+
+/// Design-research presets (`la`, `ink`): own paint stacks in `style_la` / `style_ink`.
+pub fn render_style(
+    client: &mut Client,
+    prep_cache: &mut PreparedCache,
+    mt: MetaTile,
+    out_dir: &std::path::Path,
+    format_ext: &str,
+    quiet: bool,
+    preset: LayerPreset,
+    webp_quality: f32,
+    timers: &mut Option<&mut StageTimers>,
+) -> Result<usize> {
+    let extent = RenderExtent::for_metatile(&mt);
+    let pixmap = match preset {
+        LayerPreset::La => crate::style_la::render(client, prep_cache, extent, mt.z)?,
+        _ => crate::style_ink::render(client, prep_cache, extent, mt.z)?,
+    };
+    let written = write_meta_cores(&mt, &pixmap, out_dir, format_ext, webp_quality, timers)?;
+    if !quiet {
+        eprintln!("rendered metatile z{} cores {}x{}-{}x{} → {} tiles ({:?})", mt.z, mt.x0, mt.y0, mt.x1, mt.y1, written, preset);
     }
     Ok(written)
 }
