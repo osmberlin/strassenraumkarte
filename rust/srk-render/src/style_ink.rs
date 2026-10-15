@@ -393,7 +393,12 @@ fn stipple(ctx: &Ctx, pm: &mut Pixmap, polys: &[&Polygon<f64>], cell_m: f64, den
 
 fn draw_buildings(ctx: &mut Ctx, pm: &mut Pixmap, lw: f32) -> Result<()> {
     let sql_from = r#"(
-        SELECT b.osm_id, b.building, b."building:part", b.geom,
+        SELECT b.osm_id, b.building, b.geom,
+          CASE WHEN b."building:part" IS NOT NULL THEN 'part'
+               ELSE (NOT EXISTS (SELECT 1 FROM building o WHERE o.osm_id <> b.osm_id AND o."building:part" IS NULL
+                                 AND ST_DWithin(o.geom, b.geom, 0.8)))::text
+                    || ';' || COALESCE(b.height, b."building:levels" * 3.0, 9)::text
+          END AS kind,
           CASE WHEN ST_Distance(e.p1, e.p2) >= ST_Distance(e.p2, e.p3)
                THEN degrees(ST_Azimuth(e.p1, e.p2)) ELSE degrees(ST_Azimuth(e.p2, e.p3)) END AS axis,
           CASE WHEN ST_Area(b.geom) / NULLIF(ST_Area(e.oe), 0) > 0.72 THEN
@@ -412,7 +417,7 @@ fn draw_buildings(ctx: &mut Ctx, pm: &mut Pixmap, lw: f32) -> Result<()> {
         WHERE b.geom && ST_MakeEnvelope($1::float8, $2::float8, $3::float8, $4::float8, 3857)
       ) bb"#;
     let buildings = ctx.polygons(
-        r#"osm_id AS id, COALESCE(building, 'yes') AS class, "building:part" AS sub, COALESCE(axis, 0)::float8 AS num,
+        r#"osm_id AS id, COALESCE(building, 'yes') AS class, kind AS sub, COALESCE(axis, 0)::float8 AS num,
            ST_AsBinary(ridge) AS wkb2"#,
         sql_from,
         "",
@@ -421,7 +426,7 @@ fn draw_buildings(ctx: &mut Ctx, pm: &mut Pixmap, lw: f32) -> Result<()> {
     let mut order: Vec<(f32, usize)> = buildings
         .iter()
         .enumerate()
-        .filter(|(_, f)| f.sub.is_empty())
+        .filter(|(_, f)| f.sub != "part")
         .map(|(i, f)| {
             let pts = poly_rings_px(ctx, &f.geom).into_iter().next().unwrap_or_default();
             (bbox_px(&pts).3, i)
@@ -429,16 +434,38 @@ fn draw_buildings(ctx: &mut Ctx, pm: &mut Pixmap, lw: f32) -> Result<()> {
         .collect();
     order.sort_by(|a, b| a.0.total_cmp(&b.0));
     let fh = ctx.m(1.7).clamp(3.0, 14.0); // facade band height
+    // Variant: SRK_INK_OBLIQUE=freestanding lifts free-standing buildings into an oblique view
+    // (roof shifted north by a stylised height, south walls visible); rows and blocks stay plan.
+    let oblique = std::env::var("SRK_INK_OBLIQUE").map(|v| v == "freestanding").unwrap_or(false) && ctx.z >= 17;
+    let mut lifts: std::collections::HashMap<i64, f32> = std::collections::HashMap::new();
     let hatch_sp = ctx.m(0.7).clamp(2.6, 6.0);
     for (_, i) in order {
         let f = &buildings[i];
         let landmark = matches!(f.class.as_str(), "church" | "chapel" | "cathedral");
-        let Some(roof) = poly_path(ctx, &f.geom) else { continue };
+        let mut kind = f.sub.split(';');
+        let free = kind.next() == Some("true");
+        let height_m: f64 = kind.next().and_then(|h| h.parse().ok()).unwrap_or(9.0);
+        let lift = if oblique && (free || landmark) {
+            ctx.m((height_m * if landmark { 0.6 } else { 0.5 }).clamp(3.0, 18.0)).clamp(4.0, 60.0)
+        } else {
+            0.0
+        };
+        if lift > 0.0 {
+            lifts.insert(f.id, lift);
+        }
+        let Some(roof) = poly_path(ctx, &f.geom).and_then(|p| p.transform(tiny_skia::Transform::from_translate(0.0, -lift))) else { continue };
         let rings = poly_rings_px(ctx, &f.geom);
         let ext = rings.first().cloned().unwrap_or_default();
         let (x0, y0, x1, y1) = bbox_px(&ext);
-        // south facade band
-        let band = if ctx.z < 18 { 0.0 } else if landmark { fh * 2.2 } else { fh };
+        let (y0, y1) = (y0 - lift, y1 - lift);
+        let roof_mask = || {
+            let mut m = tiny_skia::Mask::new(ctx.extent.width_px, ctx.extent.height_px)?;
+            m.fill_path(&roof, tiny_skia::FillRule::EvenOdd, true, tiny_skia::Transform::identity());
+            Some(m)
+        };
+        // south facade band (plan) or full south walls (lifted)
+        let band = if lift > 0.0 { lift } else if ctx.z < 18 { 0.0 } else if landmark { fh * 2.2 } else { fh };
+        let dir = if lift > 0.0 { -1.0 } else { 1.0 };
         let mut facade = PathBuilder::new();
         let mut windows = PathBuilder::new();
         for ring in &rings {
@@ -458,22 +485,26 @@ fn draw_buildings(ctx: &mut Ctx, pm: &mut Pixmap, lw: f32) -> Result<()> {
                 if oy < 0.3 || band <= 0.0 {
                     continue;
                 }
-                let k = oy.min(1.0);
+                let k = if lift > 0.0 { 1.0 } else { oy.min(1.0) };
                 facade.move_to(ax, ay);
                 facade.line_to(bx, by);
-                facade.line_to(bx, by + band * k);
-                facade.line_to(ax, ay + band * k);
+                facade.line_to(bx, by + dir * band * k);
+                facade.line_to(ax, ay + dir * band * k);
                 facade.close();
                 let _ = ox;
-                // windows: short vertical ticks along the edge
+                // windows: short vertical ticks along the edge, one row per storey when lifted
                 let step = ctx.m(3.2).max(6.0);
-                let n = if ctx.z >= 19 { (len / step).floor() as i32 } else { 0 };
-                for j in 0..n {
-                    let t = (j as f32 + 0.5) / n as f32;
-                    let wx = ax + dx * t;
-                    let wy = ay + dy * t;
-                    windows.move_to(wx, wy + band * k * 0.28);
-                    windows.line_to(wx, wy + band * k * 0.72);
+                let n = if ctx.z >= 19 || lift > 0.0 { (len / step).floor() as i32 } else { 0 };
+                let rows = if lift > 0.0 { ((band / ctx.m(3.0).max(4.0)).round() as i32).max(1) } else { 1 };
+                for r in 0..rows {
+                    let (r0, r1) = ((r as f32 + 0.3) / rows as f32, (r as f32 + 0.7) / rows as f32);
+                    for j in 0..n {
+                        let t = (j as f32 + 0.5) / n as f32;
+                        let wx = ax + dx * t;
+                        let wy = ay + dy * t;
+                        windows.move_to(wx, wy + dir * band * k * r0);
+                        windows.line_to(wx, wy + dir * band * k * r1);
+                    }
                 }
             }
         }
@@ -490,7 +521,7 @@ fn draw_buildings(ctx: &mut Ctx, pm: &mut Pixmap, lw: f32) -> Result<()> {
             let a = (f.num as f32).to_radians();
             (-(a.cos())).atan2(a.sin()).to_degrees()
         };
-        if let Some(mask) = mask_of(ctx, &[&f.geom]) {
+        if let Some(mask) = roof_mask() {
             if let Some(h) = hatch_path(ctx, hatch_sp, axis_px + 90.0, x0 - 4.0, y0 - 4.0, x1 + 4.0, y1 + 4.0) {
                 let a = if landmark { 0.75 } else { 0.5 };
                 line(pm, &h, &paint(ink(a)), &stroke(lw * 0.55), Some(&mask));
@@ -498,7 +529,7 @@ fn draw_buildings(ctx: &mut Ctx, pm: &mut Pixmap, lw: f32) -> Result<()> {
         }
         if let Some(Geometry::LineString(_) | Geometry::MultiLineString(_)) = &f.aux {
             for l in geometry_lines(f.aux.clone().unwrap()) {
-                let rp = line_pts(ctx, &l);
+                let rp: Vec<(f32, f32)> = line_pts(ctx, &l).into_iter().map(|(x, y)| (x, y - lift)).collect();
                 // shaded roof half: the side facing away from the light (NE), cross-hatched
                 if let (Some(&(px, py)), Some(&(qx, qy))) = (rp.first(), rp.last()) {
                     let (dx, dy) = (qx - px, qy - py);
@@ -517,7 +548,7 @@ fn draw_buildings(ctx: &mut Ctx, pm: &mut Pixmap, lw: f32) -> Result<()> {
                             (qx + ux * big + nx * big, qy + uy * big + ny * big),
                             (px - ux * big + nx * big, py - uy * big + ny * big),
                         ];
-                        if let (Some(mut mask), Some(half)) = (mask_of(ctx, &[&f.geom]), pts_path(&quad, true)) {
+                        if let (Some(mut mask), Some(half)) = (roof_mask(), pts_path(&quad, true)) {
                             mask.intersect_path(&half, tiny_skia::FillRule::Winding, true, tiny_skia::Transform::identity());
                             if let Some(h) = hatch_path(ctx, hatch_sp * 1.3, axis_px, x0 - 4.0, y0 - 4.0, x1 + 4.0, y1 + 4.0) {
                                 line(pm, &h, &paint(ink(0.38)), &stroke(lw * 0.5), Some(&mask));
@@ -532,7 +563,8 @@ fn draw_buildings(ctx: &mut Ctx, pm: &mut Pixmap, lw: f32) -> Result<()> {
         }
         let mut pb = PathBuilder::new();
         for ring in &rings {
-            let pts = wobble_pts(ctx, ring, 0.45, 6.0, 7);
+            let ring: Vec<(f32, f32)> = ring.iter().map(|&(x, y)| (x, y - lift)).collect();
+            let pts = wobble_pts(ctx, &ring, 0.45, 6.0, 7);
             if let Some(p) = pts_path(&pts, true) {
                 pb.push_path(&p);
             }
@@ -542,7 +574,10 @@ fn draw_buildings(ctx: &mut Ctx, pm: &mut Pixmap, lw: f32) -> Result<()> {
         }
     }
     // building parts: thin lines on the roofs
-    for f in buildings.iter().filter(|f| !f.sub.is_empty()) {
+    for f in buildings.iter().filter(|f| f.sub == "part") {
+        if lifts.contains_key(&f.id) {
+            continue;
+        }
         if let Some(p) = poly_path(ctx, &f.geom) {
             line(pm, &p, &paint(ink(0.45)), &stroke(lw * 0.5), None);
         }
@@ -560,9 +595,10 @@ fn draw_buildings(ctx: &mut Ctx, pm: &mut Pixmap, lw: f32) -> Result<()> {
             *e = (a, ext);
         }
     }
-    for (_, (_, ext)) in seen {
+    for (id, (_, ext)) in seen {
+        let l = lifts.get(&id).copied().unwrap_or(0.0);
         let (x0, y0, x1, y1) = bbox_px(&ext);
-        draw_spire(pm, (x0 + x1) / 2.0, (y0 + y1) / 2.0 + (y1 - y0) * 0.3, ctx.m(4.5).max(10.0), lw, paper);
+        draw_spire(pm, (x0 + x1) / 2.0, (y0 + y1) / 2.0 + (y1 - y0) * 0.3 - l, ctx.m(4.5).max(10.0), lw, paper);
     }
     Ok(())
 }
