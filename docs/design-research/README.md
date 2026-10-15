@@ -40,11 +40,11 @@ docs/design-research/
 Needs the PostGIS database with processed Straßenraumkarte tables (for the scenes: the Schillerkiez bbox is enough, see below) and a release build of `srk-render`.
 
 ```bash
-# one-time: DB for the scene area (Docker stack from docker/README.md; ~1.5 min, 43 MB)
-BBOX=13.4102,52.4707,13.4370,52.4832 ./docker/run-berlin.sh
+# one-time: DB for the scene area (Docker stack from docker/README.md; ~1.5 min, < 100 MB)
+BBOX=13.4102,52.4680,13.4520,52.4832 ./docker/run-berlin.sh
 (cd rust/srk-render && cargo build --release)
 
-# the four scenes at z19 (or 16–18 as third argument) → PNG tiles + stitched scenes
+# the six scenes at z19 (or 16–18 as third argument) → PNG tiles + stitched scenes
 docs/design-research/tools/render_scenes.sh la  /tmp/la
 docs/design-research/tools/render_scenes.sh ink /tmp/ink
 SRK_ACCENT=bench docs/design-research/tools/render_scenes.sh ink /tmp/ink-bench
