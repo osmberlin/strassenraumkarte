@@ -1,8 +1,8 @@
 # Exploration 01 — Landscape-architecture plan
 
-![Today (left) vs. target picture (right) for four scenes](mockups/overview.jpg)
+![Current Rust rendering of the four scenes](current.jpg)
 
-_Left: today's rendering. Right: a mockup of the target, made by [`tools/restyle_mockup.py`](../tools/restyle_mockup.py) from the left image. It is a target picture, not an implementation; see [How the mockups were made](#how-the-mockups-were-made)._
+_Current state: rendered by `srk-render --layers la` directly from PostGIS ([`style_la.rs`](../../../rust/srk-render/src/style_la.rs)). Iterations with before/after notes are in [`steps/`](steps/). The first image-processing mockups are kept in [`mockups/`](mockups/) for comparison._
 
 ## Mission statement
 
@@ -17,6 +17,20 @@ What this means in one sentence per element:
 - **Buildings**: the "paper white" of the plan. Crisp outline, flat light fill, parts separated by thin lines, a hard shadow towards SE. Only a small share has a terracotta roof.
 - **Streets**: warm grey, quieter than today, so the green and the people's space carry the picture. Cars, markings and furniture stay, but in greys.
 - **Colour budget**: no saturated colour anywhere except small accents (red roofs, play equipment, water).
+
+## Implemented so far (Rust)
+
+| Element | Implementation |
+| --- | --- |
+| Paper / ground | `#EAE9E3`, fine world-anchored paper grain |
+| Lawn, meadow | `#CBD4BC` / `#C2C5A6`, large-scale watercolour mottling, darker bled rim along the edges |
+| Shrub beds, tree pits | `#B5B39C` with dabs and a darker edge |
+| Woodland | crowns scattered on a world grid inside forest polygons |
+| Streets | carriageway `#C9C5BA` with kerb line, sidewalks `#F1F0EB` with joint ticks (z19+), pedestrian areas with a fine joint grid (z19+), cycleways `#D3A796`, parking bays with white lines, road markings pulled towards grey |
+| Buildings | `building` (not the dissolved parts): white `#FBFAF7` (some `#E3E1DA`), crisp `#4E4D46` outline, blurred SE shadow scaled by height, parts as faint lines, red (`#C98C7A`/`#B98270`) only on small stand-alone buildings |
+| Trees | one symbol per genus: disc + ring + centre dot, radial branches, scalloped two-tone; star for conifers. Translucent khaki/sage palette, blurred SE shadow, size from `diameter_crown` |
+| Details | hedges, walls, fences, benches, bins, lamps, bicycle stands, play equipment (white structures) |
+| Labels | street names in Avenir Next Medium, spaced capitals, from z17 |
 
 ## Style attributes
 

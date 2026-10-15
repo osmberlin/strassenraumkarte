@@ -1,8 +1,8 @@
 # Exploration 02 — Fantasy-book ink map
 
-![Today (left) vs. target picture (right) for four scenes](mockups/overview.jpg)
+![Current Rust rendering of the four scenes](current.jpg)
 
-_Left: today's rendering. Right: a mockup of the target, made by [`tools/restyle_mockup.py ink`](../tools/restyle_mockup.py) from the left image. It is a target picture, not an implementation; see [How the mockups were made](#how-the-mockups-were-made). Scene B shows the accent colour on the two playgrounds._
+_Current state: rendered by `srk-render --layers ink` directly from PostGIS ([`style_ink.rs`](../../../rust/srk-render/src/style_ink.rs)). Iterations with before/after notes are in [`steps/`](steps/). The first image-processing mockups are kept in [`mockups/`](mockups/) for comparison._
 
 ## Mission statement
 
@@ -14,6 +14,28 @@ The two guiding questions:
 
 1. **What is plan, what is pseudo-3D?** (see the rules below)
 2. **How does the accent work?** One colour, one category, as line and glyph, never as a large flat fill.
+
+## Implemented so far (Rust)
+
+**Decision on houses (2026-10-15):** no oblique view for ordinary buildings — dense rows would collide. Instead each building is a plan footprint with
+1. roof hatching along the slope (perpendicular to the long axis of `ST_OrientedEnvelope`),
+2. a ridge line where the footprint is roughly rectangular (area / envelope > 0.72),
+3. a second hatch on the roof half facing away from the light (NE) → cross-hatched shade,
+4. a narrow south facade band with window ticks on every south-facing edge (band from z18, windows from z19).
+
+Only landmarks (`church`, `chapel`, `cathedral`: one spire on their smallest polygon) and trees, benches and play equipment stand upright, painted north → south.
+
+| Element | Implementation |
+| --- | --- |
+| Paper | `#F1E7CF`, large blotches + fine grain (world-anchored) |
+| Ink | `#2B2620`; all outlines get a slight world-anchored wobble |
+| Streets | carriageway outline + sparse stipple; park paths as double lines; sidewalks are the paper between kerb and house |
+| Lawn / shrubs / sand | grass tufts / small loops / stipple, densities constant across zoom (`zcell`) |
+| Water (incl. pools) | heavy bank line, three shore ripples, short wave strokes |
+| Fences / walls / hedges | `+-+-` ticks / heavy line / chain of loops |
+| Trees | upright scalloped crown, trunk, shading strokes, ground tick; conifers as stacked triangles; woodland = dense crowns |
+| Accent | `SRK_ACCENT=playground` (default), `bench`, `tree`, `none` — vermilion `#C8452C` for outline, 45° hatch, light wash and glyphs (swing, slide, spring rider, climbing frame) |
+| Labels | street names in Hoefler Text Italic with paper halo, from z16 |
 
 ## Plan vs. pseudo-3D
 
