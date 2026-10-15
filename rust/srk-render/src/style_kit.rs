@@ -673,3 +673,48 @@ pub fn draw_layer(pm: &mut Pixmap, layer: &Pixmap, opacity: f32, mode: BlendMode
 pub fn new_layer(ctx: &Ctx) -> Pixmap {
     Pixmap::new(ctx.extent.width_px, ctx.extent.height_px).expect("layer")
 }
+
+/// Procedural pitch line markings from `pitch_markings` (centre point, Mercator-metre extents,
+/// direction like the SVG stamps: long axis rotated by direction + 90°).
+pub fn pitch_marking_path(ctx: &mut Ctx) -> Result<Option<Path>> {
+    let pts = ctx.points(
+        "osm_id AS id, sport AS class, (dist_long::text || ';' || dist_short::text) AS sub, COALESCE(direction, 0)::float8 AS num",
+        "pitch_markings",
+        "",
+    )?;
+    let mut pb = PathBuilder::new();
+    for f in &pts {
+        let mut it = f.sub.split(';').map(|v| v.parse::<f64>().unwrap_or(0.0));
+        let (l, s) = (it.next().unwrap_or(0.0), it.next().unwrap_or(0.0));
+        if l <= 0.0 || s <= 0.0 {
+            continue;
+        }
+        let (cx, cy) = ctx.px(f.geom.0);
+        let hl = ctx.extent.metres_to_px(l) / 2.0 * 0.96;
+        let hs = ctx.extent.metres_to_px(s) / 2.0 * 0.94;
+        let a = (f.num as f32 + 90.0).to_radians();
+        let (ca, sa) = (a.cos(), a.sin());
+        let tr = |u: f32, v: f32| (cx + u * ca - v * sa, cy + u * sa + v * ca);
+        let mut poly = |p: &[(f32, f32)], close: bool| {
+            let q: Vec<(f32, f32)> = p.iter().map(|&(u, v)| tr(u, v)).collect();
+            if let Some(path) = pts_path(&q, close) {
+                pb.push_path(&path);
+            }
+        };
+        poly(&[(-hl, -hs), (hl, -hs), (hl, hs), (-hl, hs)], true);
+        poly(&[(0.0, -hs), (0.0, hs)], false);
+        let r = hs * 0.28;
+        let circle: Vec<(f32, f32)> = (0..32).map(|i| {
+            let t = i as f32 / 32.0 * std::f32::consts::TAU;
+            (r * t.cos(), r * t.sin())
+        }).collect();
+        poly(&circle, true);
+        let (bd, bw) = if f.class == "basketball" { (hl * 0.28, hs * 0.3) } else { (hl * 0.18, hs * 0.5) };
+        for sgn in [-1.0f32, 1.0] {
+            let x0 = sgn * hl;
+            let x1 = sgn * (hl - bd);
+            poly(&[(x0, -bw), (x1, -bw), (x1, bw), (x0, bw)], false);
+        }
+    }
+    Ok(pb.finish())
+}

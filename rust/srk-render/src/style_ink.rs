@@ -142,6 +142,10 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
         }
     }
 
+    if let Some(p) = pitch_marking_path(&mut ctx)? {
+        line(&mut pm, &p, &paint(ink(0.75)), &stroke(lw * 0.7), None);
+    }
+
     // ---- streets: carriageway outline + sparse stipple, paths as double lines
     let areas = ctx.polygons(
         r#"osm_id AS id, "area:highway" AS class, class AS sub, 0::float8 AS num"#,
@@ -593,7 +597,15 @@ fn draw_tree(ctx: &Ctx, pm: &mut Pixmap, x: f32, y: f32, r: f32, id: i64, lw: f3
         line(pm, &p, &paint(ink(0.95)), &stroke(lw * 1.2), None);
     }
     let bumps = 7 + (rand01(id, 3) * 5.0) as u32;
-    let pts = scallop_pts(cx, cy, r, bumps, 0.16, rand01(id, 4) * 6.28);
+    let shape = (rand01(id, 8) * 10.0) as u32; // 0–5 scalloped, 6–8 round, 9 tall
+    let pts: Vec<(f32, f32)> = match shape {
+        6..=8 => scallop_pts(cx, cy, r, 5, 0.05, rand01(id, 4) * 6.28),
+        9 => scallop_pts(cx, cy - r * 0.35, r, bumps, 0.12, rand01(id, 4) * 6.28)
+            .into_iter()
+            .map(|(px, py)| (cx + (px - cx) * 0.7, (cy - r * 0.35) + (py - (cy - r * 0.35)) * 1.35))
+            .collect(),
+        _ => scallop_pts(cx, cy, r, bumps, 0.16, rand01(id, 4) * 6.28),
+    };
     let pts = wobble_pts(ctx, &pts, 0.3, 4.0, id as u64);
     if let Some(p) = pts_path(&pts, true) {
         fill(pm, &p, &paint(paper), None);

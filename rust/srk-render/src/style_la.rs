@@ -91,6 +91,9 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
             line(&mut pm, &path, &paint(with_alpha(hex("#FFFFFF"), 0.8)), &stroke(ctx.m(0.12).max(0.6)), None);
         }
     }
+    if let Some(p) = pitch_marking_path(&mut ctx)? {
+        line(&mut pm, &p, &paint(with_alpha(Color::WHITE, 0.9)), &stroke(ctx.m(0.1).max(0.6)), None);
+    }
     // watercolour mottling on green + a darker, bled rim along the edges
     if let Some(mask) = mask_of(&ctx, &green) {
         let mut rim = new_layer(&ctx);
@@ -356,7 +359,7 @@ fn draw_crown(pm: &mut Pixmap, c: &Crown) {
         // board canonical: translucent disc, thin ring, centre dot
         0 => {
             if let Some(p) = PathBuilder::from_circle(c.x, c.y, c.r) {
-                fill(pm, &p, &paint(with_alpha(c.colour, 0.5)), None);
+                fill(pm, &p, &sphere_paint(c, 0.55), None);
                 line(pm, &p, &paint(with_alpha(dark, 0.8)), &stroke(w), None);
             }
         }
@@ -381,11 +384,8 @@ fn draw_crown(pm: &mut Pixmap, c: &Crown) {
         2 => {
             let pts = scallop_pts(c.x, c.y, c.r, 9 + (rand01(c.seed, 7) * 5.0) as u32, 0.12, phase);
             if let Some(p) = pts_path(&pts, true) {
-                fill(pm, &p, &paint(with_alpha(c.colour, 0.6)), None);
+                fill(pm, &p, &sphere_paint(c, 0.62), None);
                 line(pm, &p, &paint(with_alpha(dark, 0.8)), &stroke(w), None);
-            }
-            if let Some(p) = PathBuilder::from_circle(c.x - c.r * 0.22, c.y - c.r * 0.22, c.r * 0.55) {
-                fill(pm, &p, &paint(with_alpha(mix(c.colour, Color::WHITE, 0.35), 0.35)), None);
             }
         }
         // conifer: star
@@ -524,4 +524,28 @@ fn draw_details(ctx: &mut Ctx, pm: &mut Pixmap) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// Crown fill lit from the north-west: light cap fading into the base colour (spherical read).
+fn sphere_paint(c: &Crown, alpha: f32) -> tiny_skia::Paint<'static> {
+    let light = with_alpha(mix(c.colour, Color::WHITE, 0.38), alpha);
+    let base = with_alpha(c.colour, alpha);
+    let edge = with_alpha(shade(c.colour, 0.88), alpha);
+    let mut p = paint(base);
+    if let Some(sh) = tiny_skia::RadialGradient::new(
+        tiny_skia::Point::from_xy(c.x - c.r * 0.35, c.y - c.r * 0.35),
+        0.0,
+        tiny_skia::Point::from_xy(c.x, c.y),
+        c.r * 1.25,
+        vec![
+            tiny_skia::GradientStop::new(0.0, light),
+            tiny_skia::GradientStop::new(0.55, base),
+            tiny_skia::GradientStop::new(1.0, edge),
+        ],
+        tiny_skia::SpreadMode::Pad,
+        tiny_skia::Transform::identity(),
+    ) {
+        p.shader = sh;
+    }
+    p
 }
