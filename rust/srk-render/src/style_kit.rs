@@ -429,3 +429,40 @@ pub fn apply_grain(ctx: &Ctx, pm: &mut Pixmap, mask: Option<&Mask>, cell_m: f64,
         }
     }
 }
+
+/// Points every `step_px` along a pixel polyline: (x, y, direction radians).
+pub fn along(pts: &[(f32, f32)], step_px: f32, offset_px: f32) -> Vec<(f32, f32, f32)> {
+    let mut out = Vec::new();
+    let mut next = offset_px;
+    let mut acc = 0.0f32;
+    for w in pts.windows(2) {
+        let (x0, y0) = w[0];
+        let (x1, y1) = w[1];
+        let len = ((x1 - x0).powi(2) + (y1 - y0).powi(2)).sqrt();
+        if len <= 0.0 {
+            continue;
+        }
+        let a = (y1 - y0).atan2(x1 - x0);
+        while next <= acc + len {
+            let t = (next - acc) / len;
+            out.push((x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, a));
+            next += step_px;
+        }
+        acc += len;
+    }
+    out
+}
+
+pub fn line_pts(ctx: &Ctx, l: &LineString<f64>) -> Vec<(f32, f32)> {
+    l.coords().map(|c| ctx.px(*c)).collect()
+}
+
+/// Rotated rectangle path centred at (x, y).
+pub fn rect_rot(x: f32, y: f32, w: f32, h: f32, angle: f32) -> Option<Path> {
+    let (c, s) = (angle.cos(), angle.sin());
+    let pts: Vec<(f32, f32)> = [(-w / 2.0, -h / 2.0), (w / 2.0, -h / 2.0), (w / 2.0, h / 2.0), (-w / 2.0, h / 2.0)]
+        .iter()
+        .map(|&(dx, dy)| (x + dx * c - dy * s, y + dx * s + dy * c))
+        .collect();
+    pts_path(&pts, true)
+}

@@ -206,6 +206,46 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
         }
     }
 
+    // ---- fences (+-+-), walls (heavy), hedges (bumpy line)
+    let barriers = ctx.lines("osm_id AS id, barrier AS class, NULL::text AS sub, 0::float8 AS num", "barrier_way", "")?;
+    for f in &barriers {
+        let pts = line_pts(&ctx, &f.geom);
+        match f.class.as_str() {
+            "fence" | "handrail" => {
+                if let Some(p) = pts_path(&pts, false) {
+                    line(&mut pm, &p, &paint(ink(0.85)), &stroke(lw * 0.6), None);
+                }
+                let tick = ctx.m(0.35).max(1.6);
+                let mut pb = PathBuilder::new();
+                for (x, y, a) in along(&pts, ctx.m(2.2).max(6.0), 2.0) {
+                    let (nx, ny) = (-a.sin(), a.cos());
+                    pb.move_to(x - nx * tick, y - ny * tick);
+                    pb.line_to(x + nx * tick, y + ny * tick);
+                }
+                if let Some(p) = pb.finish() {
+                    line(&mut pm, &p, &paint(ink(0.85)), &stroke(lw * 0.7), None);
+                }
+            }
+            "wall" | "retaining_wall" => {
+                if let Some(p) = pts_path(&wobble_pts(&ctx, &pts, 0.3, 5.0, 13), false) {
+                    line(&mut pm, &p, &paint(ink(1.0)), &stroke(ctx.m(0.35).max(lw * 1.6)), None);
+                }
+            }
+            "hedge" => {
+                let r = ctx.m(0.55).max(1.6);
+                let mut pb = PathBuilder::new();
+                for (x, y, _) in along(&pts, r * 1.1, 0.0) {
+                    pb.push_circle(x, y, r);
+                }
+                if let Some(p) = pb.finish() {
+                    fill(&mut pm, &p, &paint(paper), None);
+                    line(&mut pm, &p, &paint(ink(0.7)), &stroke(lw * 0.6), None);
+                }
+            }
+            _ => {}
+        }
+    }
+
     // ---- buildings (plan + roof hatch + ridge + south facade band), north → south
     draw_buildings(&mut ctx, &mut pm, lw)?;
 

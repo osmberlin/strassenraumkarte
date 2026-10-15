@@ -206,6 +206,9 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
         crate::layers::paint_road_marking_way(ctx.client, ctx.prep, &mut pm, ctx.extent, ctx.z, &mut t)?;
     }
 
+    // ---- hedges, fences, walls and street furniture (plan symbols)
+    draw_details(&mut ctx, &mut pm)?;
+
     // ---- trees
     draw_trees(&mut ctx, &mut pm, &woods)?;
 
@@ -260,7 +263,7 @@ fn draw_trees(ctx: &mut Ctx, pm: &mut Pixmap, woods: &[&Polygon<f64>]) -> Result
                 y,
                 r: ctx.m(3.2 + 2.2 * f64::from(r)),
                 variant: (rand01(seed, 2) * 3.0) as u8,
-                colour: shade(hex(CROWNS[(rand01(seed, 4) * 6.0) as usize % 6]), 0.92),
+                colour: hex(CROWNS[(rand01(seed, 4) * 6.0) as usize % 6]),
                 seed,
             });
         }
@@ -272,7 +275,7 @@ fn draw_trees(ctx: &mut Ctx, pm: &mut Pixmap, woods: &[&Polygon<f64>]) -> Result
         pb.push_circle(c.x + o, c.y + o * 0.8, c.r);
     }
     if let Some(p) = pb.finish() {
-        fill(pm, &p, &paint_blend(with_alpha(hex(SHADOW), 0.22), BlendMode::Multiply), None);
+        fill(pm, &p, &paint_blend(with_alpha(hex(SHADOW), 0.16), BlendMode::Multiply), None);
     }
     crowns.sort_by(|a, b| b.r.total_cmp(&a.r));
     for c in &crowns {
@@ -359,4 +362,79 @@ pub fn point_in_polygon(pt: geo_types::Coord<f64>, poly: &Polygon<f64>) -> bool 
         inside
     }
     ring(pt, poly.exterior()) && !poly.interiors().iter().any(|h| ring(pt, h))
+}
+
+fn draw_details(ctx: &mut Ctx, pm: &mut Pixmap) -> Result<()> {
+    let barriers = ctx.lines("osm_id AS id, barrier AS class, NULL::text AS sub, 0::float8 AS num", "barrier_way", "")?;
+    let hedge = hex("#8E8F70");
+    for f in &barriers {
+        let pts = line_pts(ctx, &f.geom);
+        match f.class.as_str() {
+            "hedge" => {
+                let r = ctx.m(0.6).max(1.2);
+                let mut pb = PathBuilder::new();
+                for (x, y, _) in along(&pts, r * 0.9, 0.0) {
+                    pb.push_circle(x, y, r);
+                }
+                if let Some(p) = pb.finish() {
+                    fill(pm, &p, &paint(with_alpha(hedge, 0.55)), None);
+                    line(pm, &p, &paint(with_alpha(shade(hedge, 0.75), 0.5)), &stroke(0.5), None);
+                }
+            }
+            "wall" | "retaining_wall" => {
+                if let Some(p) = pts_path(&pts, false) {
+                    line(pm, &p, &paint(hex("#7C7A70")), &stroke(ctx.m(0.3).max(1.0)), None);
+                }
+            }
+            "fence" | "handrail" => {
+                if let Some(p) = pts_path(&pts, false) {
+                    line(pm, &p, &paint(with_alpha(hex("#7C7A70"), 0.8)), &stroke(ctx.m(0.06).max(0.5)), None);
+                }
+            }
+            _ => {}
+        }
+    }
+    if ctx.z < 18 {
+        return Ok(());
+    }
+    let furniture = ctx.points(
+        "osm_id AS id, class, subclass AS sub, COALESCE(direction, -1)::float8 AS num",
+        "feature_node WHERE class IN ('bench', 'waste_basket', 'bicycle_parking', 'street_lamp', 'table_tennis', 'drinking_water')",
+        "",
+    )?;
+    let dark = hex("#5F5E57");
+    for f in &furniture {
+        let (x, y) = ctx.px(f.geom.0);
+        let ang = if f.num >= 0.0 { (f.num as f32).to_radians() } else { 0.0 };
+        match f.class.as_str() {
+            "bench" => {
+                if let Some(p) = rect_rot(x, y, ctx.m(1.8).max(3.0), ctx.m(0.55).max(1.2), ang) {
+                    fill(pm, &p, &paint(hex("#FFFFFF")), None);
+                    line(pm, &p, &paint(dark), &stroke(0.7), None);
+                }
+            }
+            "table_tennis" => {
+                if let Some(p) = rect_rot(x, y, ctx.m(2.7), ctx.m(1.5), ang) {
+                    fill(pm, &p, &paint(hex("#FFFFFF")), None);
+                    line(pm, &p, &paint(dark), &stroke(0.7), None);
+                }
+            }
+            "waste_basket" | "drinking_water" => {
+                if let Some(p) = PathBuilder::from_circle(x, y, ctx.m(0.3).max(1.0)) {
+                    fill(pm, &p, &paint(dark), None);
+                }
+            }
+            "street_lamp" => {
+                if let Some(p) = PathBuilder::from_circle(x, y, ctx.m(0.25).max(0.9)) {
+                    line(pm, &p, &paint(with_alpha(dark, 0.8)), &stroke(0.6), None);
+                }
+            }
+            _ => {
+                if let Some(p) = rect_rot(x, y, ctx.m(1.6).max(2.5), ctx.m(0.12).max(0.6), ang) {
+                    fill(pm, &p, &paint(with_alpha(dark, 0.8)), None);
+                }
+            }
+        }
+    }
+    Ok(())
 }
