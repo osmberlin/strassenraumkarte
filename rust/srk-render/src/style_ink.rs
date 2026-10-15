@@ -238,6 +238,19 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
         }
     }
 
+    // ---- embankments / cliffs: hachures
+    let slopes = ctx.lines("osm_id AS id, class, NULL::text AS sub, 0::float8 AS num", "landscape_way WHERE class IN ('cliff', 'embankment', 'earth_bank')", "")?;
+    for f in &slopes {
+        let pts = line_pts(&ctx, &f.geom);
+        if let Some(p) = pts_path(&wobble_pts(&ctx, &pts, 0.3, 5.0, 17), false) {
+            line(&mut pm, &p, &paint(ink(0.95)), &stroke(lw * 1.1), None);
+        }
+        let l = ctx.m(if f.class == "cliff" { 2.2 } else { 1.6 }).max(4.0);
+        if let Some(p) = hachures(&pts, ctx.m(0.7).max(2.6), l) {
+            line(&mut pm, &p, &paint(ink(0.8)), &stroke(lw * 0.7), None);
+        }
+    }
+
     // ---- fences (+-+-), walls (heavy), hedges (bumpy line)
     let barriers = ctx.lines("osm_id AS id, barrier AS class, NULL::text AS sub, 0::float8 AS num", "barrier_way", "")?;
     for f in &barriers {

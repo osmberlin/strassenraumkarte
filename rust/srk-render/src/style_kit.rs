@@ -779,3 +779,18 @@ pub fn point_at(pts: &[(f32, f32)], s: f32) -> (f32, f32) {
     }
     *pts.last().unwrap_or(&(0.0, 0.0))
 }
+
+/// Slope hachures along an embankment/cliff line: strokes towards the downhill side (OSM: right
+/// of the way direction), alternating long and short like hand-drawn hachures.
+pub fn hachures(pts: &[(f32, f32)], spacing: f32, len: f32) -> Option<Path> {
+    let mut pb = PathBuilder::new();
+    for (i, (x, y, a)) in along(pts, spacing, spacing * 0.5).into_iter().enumerate() {
+        let (tx, ty) = (a.cos(), a.sin());
+        // pixel space (y down): right-hand side of travel = (-ty, tx)
+        let (nx, ny) = (-ty, tx);
+        let l = if i % 2 == 0 { len } else { len * 0.55 };
+        pb.move_to(x, y);
+        pb.line_to(x + nx * l, y + ny * l);
+    }
+    pb.finish()
+}

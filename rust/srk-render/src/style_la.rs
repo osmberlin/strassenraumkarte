@@ -477,6 +477,18 @@ pub fn point_in_polygon(pt: geo_types::Coord<f64>, poly: &Polygon<f64>) -> bool 
 }
 
 fn draw_details(ctx: &mut Ctx, pm: &mut Pixmap) -> Result<()> {
+    // embankments: soft shaded band on the downhill side + fine comb
+    let slopes = ctx.lines("osm_id AS id, class, NULL::text AS sub, 0::float8 AS num", "landscape_way WHERE class IN ('cliff', 'embankment', 'earth_bank')", "")?;
+    for f in &slopes {
+        let pts = line_pts(ctx, &f.geom);
+        let l = ctx.m(1.8).max(4.0);
+        if let Some(p) = hachures(&pts, ctx.m(0.6).max(2.5), l) {
+            line(pm, &p, &paint(with_alpha(hex("#8E8F70"), 0.55)), &stroke(0.6), None);
+        }
+        if let Some(p) = pts_path(&pts, false) {
+            line(pm, &p, &paint(with_alpha(hex("#6C6B5A"), 0.7)), &stroke(0.8), None);
+        }
+    }
     let barriers = ctx.lines("osm_id AS id, barrier AS class, NULL::text AS sub, 0::float8 AS num", "barrier_way", "")?;
     let hedge = hex("#8E8F70");
     for f in &barriers {
