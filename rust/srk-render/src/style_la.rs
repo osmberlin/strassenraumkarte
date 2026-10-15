@@ -17,7 +17,7 @@ use crate::tile::RenderExtent;
 const PAPER: &str = "#EAE9E3";
 const LAWN: &str = "#CBD4BC";
 const MEADOW: &str = "#C2C5A6";
-const SHRUB: &str = "#A6A48C";
+const SHRUB: &str = "#B5B39C";
 const WOOD_GROUND: &str = "#B8BB9E";
 const SAND: &str = "#DDD6C2";
 const PAVING: &str = "#E4E2DA";
@@ -100,9 +100,9 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
     if let Some(mask) = mask_of(&ctx, &shrubs) {
         let dab = with_alpha(shade(hex(SHRUB), 0.82), 0.55);
         let mut pb = PathBuilder::new();
-        for (x, y, r) in world_scatter(&ctx, 1.6, 0.9, 21) {
+        for (x, y, r) in world_scatter(&ctx, zcell(z, 1.6), 0.9, 21) {
             let (px, py) = ctx.extent.map_to_px(x, y);
-            pb.push_circle(px, py, ctx.m(0.35 + 0.35 * f64::from(r)).max(0.6));
+            pb.push_circle(px, py, ctx.m(zcell(z, 0.35 + 0.35 * f64::from(r))).max(0.6));
         }
         if let Some(p) = pb.finish() {
             fill(&mut pm, &p, &paint(dab), Some(&mask));
@@ -199,11 +199,13 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
         }
     }
 
-    // road markings (white/yellow) from the shared painters
+    // road markings from the shared painters, pulled towards grey (no signal red in a site plan)
     {
         let mut t: Option<&mut crate::profile::StageTimers> = None;
-        crate::layers::paint_road_marking_polygon(ctx.client, ctx.prep, &mut pm, ctx.extent, ctx.z, &mut t)?;
-        crate::layers::paint_road_marking_way(ctx.client, ctx.prep, &mut pm, ctx.extent, ctx.z, &mut t)?;
+        let mut layer = Pixmap::new(ctx.extent.width_px, ctx.extent.height_px).expect("pixmap");
+        crate::layers::paint_road_marking_polygon(ctx.client, ctx.prep, &mut layer, ctx.extent, ctx.z, &mut t)?;
+        crate::layers::paint_road_marking_way(ctx.client, ctx.prep, &mut layer, ctx.extent, ctx.z, &mut t)?;
+        draw_desaturated(&mut pm, &mut layer, 0.8, 0.85);
     }
 
     // ---- hedges, fences, walls and street furniture (plan symbols)
@@ -394,8 +396,31 @@ fn draw_details(ctx: &mut Ctx, pm: &mut Pixmap) -> Result<()> {
             _ => {}
         }
     }
+    // play equipment: structures white with outline, lines (slides, beams) as dark strokes
+    let pg = ctx.polygons("osm_id AS id, playground AS class, NULL::text AS sub, 0::float8 AS num", "playground_polygon", "")?;
+    for f in &pg {
+        if let Some(p) = poly_path(ctx, &f.geom) {
+            let col = if f.class == "sandpit" { "#E8E2D0" } else { "#FFFFFF" };
+            fill(pm, &p, &paint(hex(col)), None);
+            line(pm, &p, &paint(hex("#7C7A70")), &stroke(0.7), None);
+        }
+    }
+    let pgw = ctx.lines("osm_id AS id, playground AS class, NULL::text AS sub, 0::float8 AS num", "playground_way", "")?;
+    for f in &pgw {
+        if let Some(p) = line_path(ctx, &f.geom) {
+            line(pm, &p, &paint(hex("#6C6B5A")), &stroke(ctx.m(0.25).max(0.9)), None);
+        }
+    }
     if ctx.z < 18 {
         return Ok(());
+    }
+    let pgn = ctx.points("osm_id AS id, playground AS class, NULL::text AS sub, 0::float8 AS num", "playground_node", "")?;
+    for f in &pgn {
+        let (x, y) = ctx.px(f.geom.0);
+        if let Some(p) = PathBuilder::from_circle(x, y, ctx.m(0.5).max(1.5)) {
+            fill(pm, &p, &paint(hex("#FFFFFF")), None);
+            line(pm, &p, &paint(hex("#6C6B5A")), &stroke(0.7), None);
+        }
     }
     let furniture = ctx.points(
         "osm_id AS id, class, subclass AS sub, COALESCE(direction, -1)::float8 AS num",

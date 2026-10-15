@@ -58,8 +58,8 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
     // lawn: grass tufts + thin edge
     if let Some(mask) = mask_of(&ctx, &lawns) {
         let mut pb = PathBuilder::new();
-        let h = ctx.m(0.7).max(2.0);
-        for (x, y, r) in world_scatter(&ctx, 3.2, 0.55, 41) {
+        let h = ctx.m(zcell(z, 0.7)).max(2.0);
+        for (x, y, r) in world_scatter(&ctx, zcell(z, 3.2), 0.55, 41) {
             let (px, py) = ctx.extent.map_to_px(x, y);
             let s = h * (0.7 + 0.6 * r);
             for (dx, lean) in [(-0.45f32, -0.35f32), (0.0, 0.0), (0.45, 0.35)] {
@@ -79,9 +79,9 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
     // shrubs: small scribbled loops
     if let Some(mask) = mask_of(&ctx, &shrubs) {
         let mut pb = PathBuilder::new();
-        for (x, y, r) in world_scatter(&ctx, 1.4, 0.8, 43) {
+        for (x, y, r) in world_scatter(&ctx, zcell(z, 1.4), 0.8, 43) {
             let (px, py) = ctx.extent.map_to_px(x, y);
-            let rr = ctx.m(0.45 + 0.3 * f64::from(r)).max(1.2);
+            let rr = ctx.m(zcell(z, 0.45 + 0.3 * f64::from(r))).max(1.2);
             let pts = scallop_pts(px, py, rr, 5, 0.25, r * 6.0);
             if let Some(p) = pts_path(&pts, true) {
                 pb.push_path(&p);
@@ -92,7 +92,7 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
         }
     }
     // sand: stipple
-    stipple(&ctx, &mut pm, &sands, 0.55, 0.6, ink(0.75), 45);
+    stipple(&ctx, &mut pm, &sands, zcell(z, 0.55), 0.6, ink(0.75), 45);
 
     // ---- water: wavy hatch + ripple lines following the shore
     let water = ctx.polygons("0::bigint AS id, NULL::text AS class, NULL::text AS sub, 0::float8 AS num", "water_body_dissolved", "")?;
@@ -109,7 +109,7 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
             }
             let mut pb = PathBuilder::new();
             let gap = ctx.m(1.6).max(5.0);
-            for (x, y, _) in world_scatter(&ctx, 2.6, 0.5, 47) {
+            for (x, y, _) in world_scatter(&ctx, zcell(z, 2.6), 0.5, 47) {
                 let (px, py) = ctx.extent.map_to_px(x, y);
                 let pts: Vec<(f32, f32)> = (0..=8).map(|i| {
                     let t = i as f32 / 8.0;
@@ -155,7 +155,7 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
         })
         .map(|f| &f.geom)
         .collect();
-    stipple(&ctx, &mut pm, &road, 1.1, 0.35, ink(0.55), 49);
+    stipple(&ctx, &mut pm, &road, zcell(z, 1.1), 0.35, ink(0.55), 49);
     for g in &road {
         if let Some(p) = wobbly_poly(&ctx, g, 0.5) {
             line(&mut pm, &p, &paint(ink(0.9)), &stroke(lw * 0.9), None);
@@ -271,7 +271,7 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
     uprights.sort_by(|a, b| a.1.total_cmp(&b.1));
     for &(x, y, r, id, kind) in &uprights {
         match kind {
-            9 => draw_equipment(&mut pm, x, y, r.max(2.5), lw, accent, paper),
+            9 => draw_equipment(&mut pm, x, y, r.max(2.5), lw, accent, paper, eq_kind(id, &pg_nodes)),
             1 => draw_conifer(&ctx, &mut pm, x, y, r, id, lw, paper),
             _ => draw_tree(&ctx, &mut pm, x, y, r, id, lw, paper),
         }
@@ -359,7 +359,7 @@ fn draw_buildings(ctx: &mut Ctx, pm: &mut Pixmap, lw: f32) -> Result<()> {
         let ext = rings.first().cloned().unwrap_or_default();
         let (x0, y0, x1, y1) = bbox_px(&ext);
         // south facade band
-        let band = if landmark { fh * 2.2 } else { fh };
+        let band = if ctx.z < 18 { 0.0 } else if landmark { fh * 2.2 } else { fh };
         let mut facade = PathBuilder::new();
         let mut windows = PathBuilder::new();
         for ring in &rings {
@@ -376,7 +376,7 @@ fn draw_buildings(ctx: &mut Ctx, pm: &mut Pixmap, lw: f32) -> Result<()> {
                 let probe = ctx.world(mx + nx * 1.0, my + ny * 1.0);
                 let inside = point_in_polygon(geo_types::Coord { x: probe.0, y: probe.1 }, &f.geom);
                 let (ox, oy) = if inside { (-nx, -ny) } else { (nx, ny) };
-                if oy < 0.3 {
+                if oy < 0.3 || band <= 0.0 {
                     continue;
                 }
                 let k = oy.min(1.0);
@@ -388,7 +388,7 @@ fn draw_buildings(ctx: &mut Ctx, pm: &mut Pixmap, lw: f32) -> Result<()> {
                 let _ = ox;
                 // windows: short vertical ticks along the edge
                 let step = ctx.m(3.2).max(6.0);
-                let n = (len / step).floor() as i32;
+                let n = if ctx.z >= 19 { (len / step).floor() as i32 } else { 0 };
                 for j in 0..n {
                     let t = (j as f32 + 0.5) / n as f32;
                     let wx = ax + dx * t;
@@ -573,17 +573,65 @@ fn draw_conifer(ctx: &Ctx, pm: &mut Pixmap, x: f32, y: f32, r: f32, id: i64, lw:
     let _ = id;
 }
 
-fn draw_equipment(pm: &mut Pixmap, x: f32, y: f32, s: f32, lw: f32, accent: Color, paper: Color) {
-    // a tiny swing-like A-frame in accent ink
+fn eq_kind(id: i64, nodes: &[Feature<geo_types::Point<f64>>]) -> u8 {
+    match nodes.iter().find(|n| n.id == id).map(|n| n.class.as_str()) {
+        Some("swing" | "basketswing") => 0,
+        Some("slide" | "chute") => 1,
+        Some("springy" | "spring_board" | "seesaw" | "spinner" | "spinning_disc") => 2,
+        Some("climbingframe" | "structure" | "climbing_pole" | "ladder") => 3,
+        _ => 4,
+    }
+}
+
+fn draw_equipment(pm: &mut Pixmap, x: f32, y: f32, s: f32, lw: f32, accent: Color, paper: Color, kind: u8) {
     let mut pb = PathBuilder::new();
-    pb.move_to(x - s, y);
-    pb.line_to(x - s * 0.6, y - s * 1.6);
-    pb.line_to(x - s * 0.2, y);
-    pb.move_to(x + s * 0.2, y);
-    pb.line_to(x + s * 0.6, y - s * 1.6);
-    pb.line_to(x + s, y);
-    pb.move_to(x - s * 0.6, y - s * 1.6);
-    pb.line_to(x + s * 0.6, y - s * 1.6);
+    match kind {
+        0 => {
+            // swing: A-frame with a seat
+            pb.move_to(x - s, y);
+            pb.line_to(x - s * 0.6, y - s * 1.6);
+            pb.line_to(x - s * 0.2, y);
+            pb.move_to(x + s * 0.2, y);
+            pb.line_to(x + s * 0.6, y - s * 1.6);
+            pb.line_to(x + s, y);
+            pb.move_to(x - s * 0.6, y - s * 1.6);
+            pb.line_to(x + s * 0.6, y - s * 1.6);
+            pb.move_to(x, y - s * 1.6);
+            pb.line_to(x, y - s * 0.5);
+        }
+        1 => {
+            // slide: ladder + chute
+            pb.move_to(x - s * 0.8, y);
+            pb.line_to(x - s * 0.8, y - s * 1.5);
+            pb.line_to(x + s * 1.0, y);
+            for k in 1..4 {
+                let t = k as f32 / 4.0;
+                pb.move_to(x - s * 0.95, y - s * 1.5 * t);
+                pb.line_to(x - s * 0.65, y - s * 1.5 * t);
+            }
+        }
+        2 => {
+            // spring rider: spring + seat blob
+            for k in 0..4 {
+                let yy = y - k as f32 * s * 0.22;
+                pb.move_to(x - s * 0.25, yy);
+                pb.line_to(x + s * 0.25, yy - s * 0.11);
+            }
+            pb.push_circle(x, y - s * 1.1, s * 0.35);
+        }
+        3 => {
+            // climbing frame: dome grid
+            pb.move_to(x - s, y);
+            pb.quad_to(x, y - s * 2.2, x + s, y);
+            pb.move_to(x - s * 0.5, y);
+            pb.quad_to(x, y - s * 1.2, x + s * 0.5, y);
+            pb.move_to(x - s * 0.85, y - s * 0.55);
+            pb.line_to(x + s * 0.85, y - s * 0.55);
+        }
+        _ => {
+            pb.push_rect(tiny_skia::Rect::from_xywh(x - s * 0.5, y - s * 1.0, s, s).unwrap());
+        }
+    }
     if let Some(p) = pb.finish() {
         line(pm, &p, &paint(paper), &stroke(lw * 3.0), None);
         line(pm, &p, &paint(accent), &stroke(lw * 1.1), None);

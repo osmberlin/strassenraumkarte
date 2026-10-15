@@ -466,3 +466,25 @@ pub fn rect_rot(x: f32, y: f32, w: f32, h: f32, angle: f32) -> Option<Path> {
         .collect();
     pts_path(&pts, true)
 }
+
+/// World cell size that keeps a constant on-screen density across zooms (tuned at z19).
+pub fn zcell(z: u32, cell_m: f64) -> f64 {
+    cell_m * 2f64.powi(19 - z as i32)
+}
+
+/// Draw `layer` onto `pm` after pulling its colours `amount` (0..1) towards their luminance.
+pub fn draw_desaturated(pm: &mut Pixmap, layer: &mut Pixmap, amount: f32, opacity: f32) {
+    for px in layer.data_mut().chunks_exact_mut(4) {
+        if px[3] == 0 {
+            continue;
+        }
+        let (r, g, b) = (f32::from(px[0]), f32::from(px[1]), f32::from(px[2]));
+        let l = 0.3 * r + 0.59 * g + 0.11 * b;
+        px[0] = (r + (l - r) * amount) as u8;
+        px[1] = (g + (l - g) * amount) as u8;
+        px[2] = (b + (l - b) * amount) as u8;
+    }
+    let mut pp = tiny_skia::PixmapPaint::default();
+    pp.opacity = opacity;
+    pm.draw_pixmap(0, 0, layer.as_ref(), &pp, Transform::identity(), None);
+}

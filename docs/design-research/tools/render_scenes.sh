@@ -6,7 +6,7 @@
 #
 # <layers>: srk-render preset (full-approx | la | ink …)
 # Writes <out-dir>/tiles/{z}/{x}/{y}.png and <out-dir>/<scene>.png
-# zoom: 19 (default, 4×4 tiles per scene) or 18 (2×2 tiles around the same centre)
+# zoom: 19 (default, 4×4 tiles per scene) or lower (same area, fewer tiles: 18 → 2×2, 17 → 1×1)
 #
 set -euo pipefail
 
@@ -29,8 +29,9 @@ SCENES=(
 TILES=()
 for s in "${SCENES[@]}"; do
   read -r name x0 x1 y0 y1 <<<"$s"
-  if [[ $ZOOM == 18 ]]; then
-    x0=$((x0 / 2)); x1=$((x1 / 2)); y0=$((y0 / 2)); y1=$((y1 / 2))
+  if ((ZOOM < 19)); then
+    d=$((1 << (19 - ZOOM)))
+    x0=$((x0 / d)); x1=$((x1 / d)); y0=$((y0 / d)); y1=$((y1 / d))
   fi
   for ((x = x0; x <= x1; x++)); do
     for ((y = y0; y <= y1; y++)); do
@@ -51,8 +52,9 @@ out, zoom, scenes = sys.argv[1], int(sys.argv[2]), sys.argv[3:]
 for s in scenes:
     name, x0, x1, y0, y1 = s.split()
     x0, x1, y0, y1 = map(int, (x0, x1, y0, y1))
-    if zoom == 18:
-        x0, x1, y0, y1 = x0 // 2, x1 // 2, y0 // 2, y1 // 2
+    if zoom < 19:
+        d = 1 << (19 - zoom)
+        x0, x1, y0, y1 = x0 // d, x1 // d, y0 // d, y1 // d
     im = Image.new("RGB", ((x1 - x0 + 1) * 256, (y1 - y0 + 1) * 256), (237, 237, 237))
     for x in range(x0, x1 + 1):
         for y in range(y0, y1 + 1):
