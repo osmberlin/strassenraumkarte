@@ -214,6 +214,24 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
     // ---- trees
     draw_trees(&mut ctx, &mut pm, &woods)?;
 
+    if z >= 17 {
+        draw_street_labels(
+            &mut ctx,
+            &mut pm,
+            &LabelStyle {
+                family: "Avenir Next",
+                italic: false,
+                weight: 500,
+                size_px: 10.5,
+                letter_spacing_em: 0.16,
+                uppercase: true,
+                fill: "#5F5E57",
+                halo: "#F1F0EB",
+                halo_px: 2.6,
+                repeat_px: 520.0,
+            },
+        )?;
+    }
     apply_grain(&ctx, &mut pm, None, 0.6, 1, 0.018, 99);
     Ok(pm)
 }

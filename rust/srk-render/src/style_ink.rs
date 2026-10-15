@@ -32,6 +32,8 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
     apply_grain(&ctx, &mut pm, None, 90.0, 3, 0.045, 1);
 
     let lw = ctx.m(0.16).clamp(0.6, 1.6); // base pen width
+    // Which category gets the accent ink: playground (default) | bench | tree | none
+    let accent_cat = std::env::var("SRK_ACCENT").unwrap_or_else(|_| "playground".into());
 
     // ---- landuse textures (plan view)
     let landuse = ctx.polygons(
@@ -182,7 +184,12 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
     let pg_nodes = ctx.points("osm_id AS id, playground AS class, NULL::text AS sub, 0::float8 AS num", "playground_node", "")?;
     let pg_ways = ctx.lines("osm_id AS id, playground AS class, NULL::text AS sub, 0::float8 AS num", "playground_way", "")?;
     let accent = hex(ACCENT);
-    if let Some(mask) = mask_of(&ctx, &playgrounds) {
+    let pg_on = accent_cat == "playground";
+    let pg_col = if pg_on { accent } else { ink(0.85) };
+    if !pg_on {
+        stipple(&ctx, &mut pm, &playgrounds, zcell(z, 0.7), 0.5, ink(0.6), 46);
+    }
+    if let Some(mask) = mask_of(&ctx, &playgrounds).filter(|_| pg_on) {
         let (w, h) = (ctx.extent.width_px as f32, ctx.extent.height_px as f32);
         if let Some(p) = hatch_path(&ctx, ctx.m(1.1).max(4.0), 45.0, 0.0, 0.0, w, h) {
             line(&mut pm, &p, &paint(with_alpha(accent, 0.45)), &stroke(lw * 0.7), Some(&mask));
@@ -192,17 +199,17 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
     }
     for g in &playgrounds {
         if let Some(p) = wobbly_poly(&ctx, g, 0.6) {
-            line(&mut pm, &p, &paint(accent), &stroke(lw * 1.3), None);
+            line(&mut pm, &p, &paint(pg_col), &stroke(lw * 1.3), None);
         }
     }
     for f in &pg_poly {
         if let Some(p) = wobbly_poly(&ctx, &f.geom, 0.4) {
-            line(&mut pm, &p, &paint(with_alpha(accent, 0.9)), &stroke(lw), None);
+            line(&mut pm, &p, &paint(with_alpha(pg_col, 0.9)), &stroke(lw), None);
         }
     }
     for f in &pg_ways {
         if let Some(p) = line_path(&ctx, &f.geom) {
-            line(&mut pm, &p, &paint(accent), &stroke(lw * 1.2), None);
+            line(&mut pm, &p, &paint(pg_col), &stroke(lw * 1.2), None);
         }
     }
 
@@ -268,15 +275,44 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
         let (x, y) = ctx.px(n.geom.0);
         uprights.push((x, y, ctx.m(0.9), n.id, 9));
     }
+    if z >= 18 || accent_cat == "bench" {
+        let benches = ctx.points("osm_id AS id, class, NULL::text AS sub, COALESCE(direction, -1)::float8 AS num", "feature_node WHERE class = 'bench'", "")?;
+        for b in &benches {
+            let (x, y) = ctx.px(b.geom.0);
+            uprights.push((x, y, ctx.m(0.9), b.id, 8));
+        }
+    }
     uprights.sort_by(|a, b| a.1.total_cmp(&b.1));
     for &(x, y, r, id, kind) in &uprights {
         match kind {
-            9 => draw_equipment(&mut pm, x, y, r.max(2.5), lw, accent, paper, eq_kind(id, &pg_nodes)),
-            1 => draw_conifer(&ctx, &mut pm, x, y, r, id, lw, paper),
-            _ => draw_tree(&ctx, &mut pm, x, y, r, id, lw, paper),
+            9 => draw_equipment(&mut pm, x, y, r.max(2.5), lw, pg_col, paper, eq_kind(id, &pg_nodes)),
+            8 => {
+                let on = accent_cat == "bench";
+                draw_bench(&mut pm, x, y, if on { r.max(3.5) * 1.3 } else { r.max(2.2) }, lw, if on { accent } else { ink(0.85) }, paper)
+            }
+            1 => draw_conifer(&ctx, &mut pm, x, y, r, id, lw, paper, if accent_cat == "tree" { accent } else { ink(1.0) }),
+            _ => draw_tree(&ctx, &mut pm, x, y, r, id, lw, paper, if accent_cat == "tree" { accent } else { ink(1.0) }),
         }
     }
 
+    if z >= 16 {
+        draw_street_labels(
+            &mut ctx,
+            &mut pm,
+            &LabelStyle {
+                family: "Hoefler Text",
+                italic: true,
+                weight: 400,
+                size_px: if z >= 19 { 17.0 } else { 14.0 },
+                letter_spacing_em: 0.06,
+                uppercase: false,
+                fill: INK,
+                halo: PAPER,
+                halo_px: 3.2,
+                repeat_px: 560.0,
+            },
+        )?;
+    }
     apply_grain(&ctx, &mut pm, None, 0.5, 1, 0.03, 2);
     Ok(pm)
 }
@@ -509,7 +545,7 @@ fn draw_spire(pm: &mut Pixmap, cx: f32, base: f32, s: f32, lw: f32, paper: Color
     }
 }
 
-fn draw_tree(ctx: &Ctx, pm: &mut Pixmap, x: f32, y: f32, r: f32, id: i64, lw: f32, paper: Color) {
+fn draw_tree(ctx: &Ctx, pm: &mut Pixmap, x: f32, y: f32, r: f32, id: i64, lw: f32, paper: Color, pen: Color) {
     let r = r.max(2.5);
     let cx = x;
     let cy = y - r * 0.85;
@@ -545,11 +581,11 @@ fn draw_tree(ctx: &Ctx, pm: &mut Pixmap, x: f32, y: f32, r: f32, id: i64, lw: f3
         if let Some(sp) = s.finish() {
             line(pm, &sp, &paint(ink(0.6)), &stroke(lw * 0.6), None);
         }
-        line(pm, &p, &paint(ink(1.0)), &stroke(lw * 1.05), None);
+        line(pm, &p, &paint(pen), &stroke(lw * 1.05), None);
     }
 }
 
-fn draw_conifer(ctx: &Ctx, pm: &mut Pixmap, x: f32, y: f32, r: f32, id: i64, lw: f32, paper: Color) {
+fn draw_conifer(ctx: &Ctx, pm: &mut Pixmap, x: f32, y: f32, r: f32, id: i64, lw: f32, paper: Color, pen: Color) {
     let _ = ctx;
     let h = r * 2.6;
     let w = r * 0.9;
@@ -568,7 +604,7 @@ fn draw_conifer(ctx: &Ctx, pm: &mut Pixmap, x: f32, y: f32, r: f32, id: i64, lw:
     pb.close();
     if let Some(p) = pb.finish() {
         fill(pm, &p, &paint(paper), None);
-        line(pm, &p, &paint(ink(1.0)), &stroke(lw), None);
+        line(pm, &p, &paint(pen), &stroke(lw), None);
     }
     let _ = id;
 }
@@ -635,5 +671,22 @@ fn draw_equipment(pm: &mut Pixmap, x: f32, y: f32, s: f32, lw: f32, accent: Colo
     if let Some(p) = pb.finish() {
         line(pm, &p, &paint(paper), &stroke(lw * 3.0), None);
         line(pm, &p, &paint(accent), &stroke(lw * 1.1), None);
+    }
+}
+
+fn draw_bench(pm: &mut Pixmap, x: f32, y: f32, s: f32, lw: f32, pen: Color, paper: Color) {
+    // seat, backrest and two legs, seen from the front
+    let mut pb = PathBuilder::new();
+    pb.move_to(x - s, y - s * 0.55);
+    pb.line_to(x + s, y - s * 0.55);
+    pb.move_to(x - s, y - s * 1.15);
+    pb.line_to(x + s, y - s * 1.15);
+    pb.move_to(x - s * 0.8, y);
+    pb.line_to(x - s * 0.8, y - s * 1.15);
+    pb.move_to(x + s * 0.8, y);
+    pb.line_to(x + s * 0.8, y - s * 1.15);
+    if let Some(p) = pb.finish() {
+        line(pm, &p, &paint(paper), &stroke(lw * 3.0), None);
+        line(pm, &p, &paint(pen), &stroke(lw * 1.1), None);
     }
 }

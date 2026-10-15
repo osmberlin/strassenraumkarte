@@ -53,6 +53,7 @@ impl Ctx<'_> {
         let wkb = match kind {
             3 => clip_polygon_wkb_sql_fast("geom", self.z),
             2 => clip_line_wkb_sql_fast("geom", self.z),
+            4 => "ST_AsBinary(geom)".to_string(),
             _ => clip_point_wkb_sql("geom"),
         };
         let sql = format!(
@@ -95,6 +96,17 @@ impl Ctx<'_> {
     pub fn lines(&mut self, select: &str, from_where: &str, order: &str) -> Result<Vec<Feature<LineString<f64>>>> {
         Ok(self
             .query(select, from_where, order, 2)?
+            .into_iter()
+            .flat_map(|(id, class, sub, num, g, aux)| {
+                geometry_lines(g).into_iter().map(move |p| Feature { geom: p, id, class: class.clone(), sub: sub.clone(), num, aux: aux.clone() })
+            })
+            .collect())
+    }
+
+    /// Lines **without** clipping (labels need the whole line for stable placement).
+    pub fn lines_full(&mut self, select: &str, from_where: &str, order: &str) -> Result<Vec<Feature<LineString<f64>>>> {
+        Ok(self
+            .query(select, from_where, order, 4)?
             .into_iter()
             .flat_map(|(id, class, sub, num, g, aux)| {
                 geometry_lines(g).into_iter().map(move |p| Feature { geom: p, id, class: class.clone(), sub: sub.clone(), num, aux: aux.clone() })
@@ -487,4 +499,115 @@ pub fn draw_desaturated(pm: &mut Pixmap, layer: &mut Pixmap, amount: f32, opacit
     let mut pp = tiny_skia::PixmapPaint::default();
     pp.opacity = opacity;
     pm.draw_pixmap(0, 0, layer.as_ref(), &pp, Transform::identity(), None);
+}
+
+
+// ---------------------------------------------------------------- labels
+
+pub struct LabelStyle {
+    pub family: &'static str,
+    pub italic: bool,
+    pub weight: u32,
+    pub size_px: f32,
+    pub letter_spacing_em: f32,
+    pub uppercase: bool,
+    pub fill: &'static str,
+    pub halo: &'static str,
+    pub halo_px: f32,
+    /// Distance between repeated labels along a street, in pixels.
+    pub repeat_px: f32,
+}
+
+fn font_db() -> std::sync::Arc<resvg::usvg::fontdb::Database> {
+    static DB: std::sync::OnceLock<std::sync::Arc<resvg::usvg::fontdb::Database>> = std::sync::OnceLock::new();
+    DB.get_or_init(|| {
+        let mut db = resvg::usvg::fontdb::Database::new();
+        db.load_system_fonts();
+        std::sync::Arc::new(db)
+    })
+    .clone()
+}
+
+fn xml_escape(s: &str) -> String {
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
+}
+
+/// Street names along `label_highway`, placed at world-stable arc positions (seamless tiles).
+pub fn draw_street_labels(ctx: &mut Ctx, pm: &mut Pixmap, st: &LabelStyle) -> Result<()> {
+    let labels = ctx.lines_full("0::bigint AS id, name AS class, class AS sub, 0::float8 AS num", "label_highway WHERE name IS NOT NULL", "")?;
+    let mut defs = String::new();
+    let mut texts = String::new();
+    for (i, f) in labels.iter().enumerate() {
+        let mut pts = line_pts(ctx, &f.geom);
+        if pts.len() < 2 {
+            continue;
+        }
+        // keep text upright: run left → right
+        if pts.last().unwrap().0 < pts[0].0 {
+            pts.reverse();
+        }
+        let total: f32 = pts.windows(2).map(|w| ((w[1].0 - w[0].0).powi(2) + (w[1].1 - w[0].1).powi(2)).sqrt()).sum();
+        let name = if st.uppercase { f.class.to_uppercase() } else { f.class.clone() };
+        let est = name.chars().count() as f32 * st.size_px * (0.55 + st.letter_spacing_em);
+        if total < est * 1.3 {
+            continue;
+        }
+        let d: String = pts
+            .iter()
+            .enumerate()
+            .map(|(k, (x, y))| format!("{}{:.1},{:.1}", if k == 0 { "M" } else { " L" }, x, y))
+            .collect();
+        defs.push_str(&format!("<path id=\"l{i}\" d=\"{d}\"/>"));
+        // anchors at world-stable positions: middle of the line, then ± repeat
+        let mid = total / 2.0;
+        let mut anchors = vec![mid];
+        let mut k = 1.0;
+        while mid - k * st.repeat_px > est {
+            anchors.push(mid - k * st.repeat_px);
+            anchors.push(mid + k * st.repeat_px);
+            k += 1.0;
+        }
+        for a in anchors {
+            if a - est / 2.0 < 0.0 || a + est / 2.0 > total {
+                continue;
+            }
+            texts.push_str(&format!(
+                "<text><textPath href=\"#l{i}\" startOffset=\"{a:.1}\" text-anchor=\"middle\">{}</textPath></text>",
+                xml_escape(&name)
+            ));
+        }
+    }
+    if texts.is_empty() {
+        return Ok(());
+    }
+    let (w, h) = (ctx.extent.width_px, ctx.extent.height_px);
+    let svg = format!(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="{w}" height="{h}" viewBox="0 0 {w} {h}">
+<defs>{defs}</defs>
+<g font-family="{fam}" font-size="{size}" font-style="{style}" font-weight="{weight}" letter-spacing="{ls}" fill="{fill}"
+   stroke="{halo}" stroke-width="{hw}" stroke-linejoin="round" paint-order="stroke" dominant-baseline="central">{texts}</g></svg>"##,
+        fam = st.family,
+        size = st.size_px,
+        style = if st.italic { "italic" } else { "normal" },
+        weight = st.weight,
+        ls = st.letter_spacing_em * st.size_px,
+        fill = st.fill,
+        halo = st.halo,
+        hw = st.halo_px,
+    );
+    let mut opts = resvg::usvg::Options::default();
+    opts.fontdb = font_db();
+    let tree = match resvg::usvg::Tree::from_str(&svg, &opts) {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("warn: label svg: {e}");
+            return Ok(());
+        }
+    };
+    let Some(mut layer) = resvg::tiny_skia::Pixmap::new(w, h) else { return Ok(()) };
+    resvg::render(&tree, resvg::tiny_skia::Transform::identity(), &mut layer.as_mut());
+    if let Some(ours) = tiny_skia::IntSize::from_wh(w, h).and_then(|sz| Pixmap::from_vec(layer.take(), sz)) {
+        pm.draw_pixmap(0, 0, ours.as_ref(), &tiny_skia::PixmapPaint::default(), Transform::identity(), None);
+    }
+    Ok(())
 }
