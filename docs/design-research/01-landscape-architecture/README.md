@@ -35,6 +35,7 @@ More: [`showcase-z17.jpg`](showcase-z17.jpg) / [`showcase-z18.jpg`](showcase-z18
 | Buildings | white `#FBFAF7`, crisp `#4E4D46` outline, blurred SE shadow scaled by height, `building:part` as faint lines; outbuildings light grey; red (`#C98C7A`/`#B98270`) only on ~¼ of small homes |
 | Trees | one symbol per genus: shaded disc + ring + centre dot, radial branches, scalloped; star for conifers. Translucent, NW-lit radial gradient, blurred SE shadow, size from `diameter_crown` |
 | Pitches | procedural white line markings from `pitch_markings` |
+| Railways | gravel bed, two rails, sleepers from z18; below streets/bridges |
 | Details | hedges, walls, fences, embankment combs, benches, bins, lamps, bicycle stands, play equipment |
 | Labels | street names (Avenir Next Medium, spaced caps, z17+), area names (Avenir Next Demi Bold, spaced caps) |
 

@@ -42,6 +42,7 @@ Only landmarks (`church`, `chapel`, `cathedral`: one spire on their smallest pol
 | Cemeteries | scattered small crosses |
 | Trees | upright scalloped / round / tall crowns (by OSM id), trunk, shading strokes, ground tick; conifers as stacked triangles |
 | Pitches | procedural line markings from `pitch_markings` |
+| Railways | double line with cross ties; carriageways are paper-filled so bridges occlude the tracks |
 | Accent | `SRK_ACCENT=playground` (default), `bench`, `tree`, `none` — vermilion `#C8452C` for outline, 45° hatch, light wash and glyphs (swing, slide, spring rider, climbing frame) |
 | Labels | street names (Hoefler Text Italic, paper halo, z16+), area names (Hoefler Text spaced capitals) |
 
