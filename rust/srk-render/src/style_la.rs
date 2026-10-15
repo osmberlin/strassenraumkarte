@@ -31,6 +31,32 @@ const BUILDING: &str = "#FBFAF7";
 const BUILDING_LINE: &str = "#4E4D46";
 const SHADOW: &str = "#6C6B5A";
 const CROWNS: [&str; 6] = ["#A6A48C", "#9AA07C", "#B3B596", "#85835F", "#8E8F70", "#7C735F"];
+const CROWNS_VIVID: [&str; 6] = ["#7FA05A", "#6E9150", "#93B06A", "#5C7F45", "#88A863", "#A3B776"];
+
+/// `SRK_LA_PALETTE=vivid`: the saturated greens of modern rendered plans instead of the board's
+/// sage/khaki. Only the planting tones change; paper, streets and buildings stay.
+fn vivid() -> bool {
+    static V: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *V.get_or_init(|| std::env::var("SRK_LA_PALETTE").map(|v| v == "vivid").unwrap_or(false))
+}
+
+fn tone(c: &'static str) -> &'static str {
+    if !vivid() {
+        return c;
+    }
+    match c {
+        LAWN => "#BCD39A",
+        MEADOW => "#B3C68C",
+        SHRUB => "#93AC72",
+        WOOD_GROUND => "#9DB77F",
+        "#9FAA8C" => "#8FA96A",
+        _ => c,
+    }
+}
+
+fn crown_palette() -> &'static [&'static str; 6] {
+    if vivid() { &CROWNS_VIVID } else { &CROWNS }
+}
 
 fn landuse_colour(class: &str) -> Option<&'static str> {
     Some(match class {
@@ -75,7 +101,7 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
     for f in &landuse {
         let Some(col) = landuse_colour(&f.class) else { continue };
         if let Some(path) = poly_path(&ctx, &f.geom) {
-            fill(&mut pm, &path, &paint(hex(col)), None);
+            fill(&mut pm, &path, &paint(hex(tone(col))), None);
         }
         match col {
             LAWN | MEADOW => green.push(&f.geom),
@@ -100,7 +126,7 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
         let rim_w = ctx.m(1.2).clamp(3.0, 12.0);
         for g in &green {
             if let Some(p) = poly_path(&ctx, g) {
-                line(&mut rim, &p, &paint(hex("#9FAA8C")), &stroke(rim_w), Some(&mask));
+                line(&mut rim, &p, &paint(hex(tone("#9FAA8C"))), &stroke(rim_w), Some(&mask));
             }
         }
         blur_layer(&mut rim, (rim_w * 0.5) as usize);
@@ -110,7 +136,7 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
     }
     // shrub beds: darker edge + dabs
     if let Some(mask) = mask_of(&ctx, &shrubs) {
-        let dab = with_alpha(shade(hex(SHRUB), 0.82), 0.55);
+        let dab = with_alpha(shade(hex(tone(SHRUB)), 0.82), 0.55);
         let mut pb = PathBuilder::new();
         for (x, y, r) in world_scatter(&ctx, zcell(z, 1.6), 0.9, 21) {
             let (px, py) = ctx.extent.map_to_px(x, y);
@@ -121,7 +147,7 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
         }
         for g in &shrubs {
             if let Some(path) = poly_path(&ctx, g) {
-                line(&mut pm, &path, &paint(with_alpha(shade(hex(SHRUB), 0.7), 0.7)), &stroke(ctx.m(0.15).max(0.5)), None);
+                line(&mut pm, &path, &paint(with_alpha(shade(hex(tone(SHRUB)), 0.7), 0.7)), &stroke(ctx.m(0.15).max(0.5)), None);
             }
         }
     }
@@ -332,7 +358,7 @@ fn draw_trees(ctx: &mut Ctx, pm: &mut Pixmap, woods: &[&Polygon<f64>]) -> Result
         let (x, y) = ctx.px(t.geom.0);
         let key = if t.class.is_empty() { t.id } else { t.class.bytes().fold(7i64, |h, b| h.wrapping_mul(31).wrapping_add(i64::from(b))) };
         let variant = if t.sub == "needleleaved" { 3 } else { (rand01(key, 5) * 3.0) as u8 };
-        let colour = hex(CROWNS[(rand01(key, 9) * CROWNS.len() as f32) as usize % CROWNS.len()]);
+        let colour = hex(crown_palette()[(rand01(key, 9) * 6.0) as usize % 6]);
         crowns.push(Crown { x, y, r: ctx.m(t.num.clamp(2.0, 18.0) / 2.0), variant, colour, seed: t.id });
     }
     // woodland: world-anchored scatter of crowns inside forest polygons
@@ -349,7 +375,7 @@ fn draw_trees(ctx: &mut Ctx, pm: &mut Pixmap, woods: &[&Polygon<f64>]) -> Result
                 y,
                 r: ctx.m(3.2 + 2.2 * f64::from(r)),
                 variant: (rand01(seed, 2) * 3.0) as u8,
-                colour: hex(CROWNS[(rand01(seed, 4) * 6.0) as usize % 6]),
+                colour: hex(crown_palette()[(rand01(seed, 4) * 6.0) as usize % 6]),
                 seed,
             });
         }
