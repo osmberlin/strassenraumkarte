@@ -106,3 +106,8 @@ vector/compare-output/**
 
 # macOS
 .DS_Store
+
+# Design research: downloaded and collected reference images stay local (copyright)
+docs/design-research/*/references/web/
+docs/design-research/*/references/user/
+.venv-design/
