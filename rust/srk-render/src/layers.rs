@@ -1319,7 +1319,7 @@ fn paint_viewpoint(
     Ok(())
 }
 
-fn paint_road_marking_polygon(
+pub(crate) fn paint_road_marking_polygon(
     client: &mut Client,
     prep_cache: &mut PreparedCache,
     pixmap: &mut Pixmap,
@@ -1408,7 +1408,7 @@ fn paint_road_marking_polygon(
 }
 
 /// G5 road marking lines/// G5 road marking lines: parking_edge, edge_line, centre lines, etc.
-fn paint_road_marking_way(
+pub(crate) fn paint_road_marking_way(
     client: &mut Client,
     prep_cache: &mut PreparedCache,
     pixmap: &mut Pixmap,

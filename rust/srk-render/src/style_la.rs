@@ -20,8 +20,9 @@ const MEADOW: &str = "#C2C5A6";
 const SHRUB: &str = "#A6A48C";
 const WOOD_GROUND: &str = "#B8BB9E";
 const SAND: &str = "#DDD6C2";
-const PAVING: &str = "#E2E0D8";
-const ROAD: &str = "#D2CFC6";
+const PAVING: &str = "#E4E2DA";
+const SIDEWALK: &str = "#F1F0EB";
+const ROAD: &str = "#C9C5BA";
 const PARKING: &str = "#DAD7CF";
 const CYCLE: &str = "#D3A796";
 const WATER: &str = "#A9BEBD";
@@ -29,7 +30,7 @@ const WATER_EDGE: &str = "#7E9896";
 const BUILDING: &str = "#FBFAF7";
 const BUILDING_LINE: &str = "#4E4D46";
 const SHADOW: &str = "#6C6B5A";
-const CROWNS: [&str; 6] = ["#85835F", "#7C735F", "#A6A48C", "#6C6B5A", "#5F5E3E", "#9AA07C"];
+const CROWNS: [&str; 6] = ["#A6A48C", "#9AA07C", "#B3B596", "#85835F", "#8E8F70", "#7C735F"];
 
 fn landuse_colour(class: &str) -> Option<&'static str> {
     Some(match class {
@@ -132,7 +133,9 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
         if let Some(path) = poly_path(&ctx, &f.geom) {
             fill(&mut pm, &path, &paint(hex(col)), None);
             if col == ROAD {
-                line(&mut pm, &path, &paint(with_alpha(hex("#B9B5AA"), 0.9)), &stroke(ctx.m(0.12).max(0.5)), None);
+                line(&mut pm, &path, &paint(with_alpha(hex("#9F9B90"), 0.9)), &stroke(ctx.m(0.12).max(0.6)), None);
+            } else if f.class == "parking_space" {
+                line(&mut pm, &path, &paint(with_alpha(Color::WHITE, 0.9)), &stroke(ctx.m(0.1).max(0.5)), None);
             }
         }
     }
@@ -145,7 +148,7 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
         let w = if f.num > 0.0 { f.num } else if f.class == "cycleway" { 1.6 } else { 1.8 };
         let col = match f.class.as_str() {
             "cycleway" => CYCLE,
-            "footway" | "pedestrian" | "steps" if f.sub == "sidewalk" || f.sub == "crossing" => PAVING,
+            "footway" | "pedestrian" | "steps" if f.sub == "sidewalk" || f.sub == "crossing" => SIDEWALK,
             _ => "#DCD3BC",
         };
         if let Some(path) = line_path(&ctx, &f.geom) {
@@ -163,7 +166,7 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
     let sh = ctx.m(2.2);
     for (k, a) in [(1.0f32, 0.16f32), (0.66, 0.12), (0.33, 0.10)] {
         let mut pb = PathBuilder::new();
-        for f in &buildings {
+        for f in buildings.iter().filter(|f| f.sub.is_empty()) {
             let off = sh * k * (f.num as f32 / 15.0).clamp(0.4, 1.6);
             if let Some(p) = poly_path_shifted(&ctx, &f.geom, off, off * 0.75) {
                 pb.push_path(&p);
@@ -173,24 +176,34 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
             fill(&mut pm, &p, &paint_blend(with_alpha(hex(SHADOW), a), BlendMode::Multiply), None);
         }
     }
-    for f in &buildings {
+    for f in buildings.iter().filter(|f| f.sub.is_empty()) {
         let Some(path) = poly_path(&ctx, &f.geom) else { continue };
-        let area = (f.geom.exterior().coords().count() > 0).then(|| f.num).unwrap_or(0.0);
-        let _ = area;
         let r = rand01(f.id, 3);
-        let landmark = matches!(f.class.as_str(), "church" | "chapel" | "cathedral" | "public" | "civic");
-        let small = polygon_area_m2(&f.geom) < 400.0;
+        let landmark = matches!(f.class.as_str(), "church" | "chapel" | "cathedral" | "public" | "civic" | "school");
+        let small = polygon_area_m2(&f.geom) < 300.0;
         let col = if landmark {
-            "#F3F1EA"
-        } else if small && r < 0.28 {
-            if r < 0.14 { "#C98C7A" } else { "#B98270" }
-        } else if r < 0.18 {
-            "#E1DFD8"
+            "#F5F4EF"
+        } else if small && r < 0.14 {
+            if r < 0.08 { "#C98C7A" } else { "#B98270" }
+        } else if r < 0.16 {
+            "#E3E1DA"
         } else {
             BUILDING
         };
         fill(&mut pm, &path, &paint(hex(col)), None);
         line(&mut pm, &path, &paint(hex(BUILDING_LINE)), &stroke(ctx.m(0.22).clamp(0.7, 1.6)), None);
+    }
+    for f in buildings.iter().filter(|f| !f.sub.is_empty()) {
+        if let Some(path) = poly_path(&ctx, &f.geom) {
+            line(&mut pm, &path, &paint(with_alpha(hex(BUILDING_LINE), 0.35)), &stroke(ctx.m(0.08).clamp(0.4, 0.8)), None);
+        }
+    }
+
+    // road markings (white/yellow) from the shared painters
+    {
+        let mut t: Option<&mut crate::profile::StageTimers> = None;
+        crate::layers::paint_road_marking_polygon(ctx.client, ctx.prep, &mut pm, ctx.extent, ctx.z, &mut t)?;
+        crate::layers::paint_road_marking_way(ctx.client, ctx.prep, &mut pm, ctx.extent, ctx.z, &mut t)?;
     }
 
     // ---- trees
@@ -276,8 +289,8 @@ fn draw_crown(pm: &mut Pixmap, c: &Crown) {
         // board canonical: translucent disc, thin ring, centre dot
         0 => {
             if let Some(p) = PathBuilder::from_circle(c.x, c.y, c.r) {
-                fill(pm, &p, &paint(with_alpha(c.colour, 0.55)), None);
-                line(pm, &p, &paint(with_alpha(dark, 0.85)), &stroke(w), None);
+                fill(pm, &p, &paint(with_alpha(c.colour, 0.5)), None);
+                line(pm, &p, &paint(with_alpha(dark, 0.8)), &stroke(w), None);
             }
         }
         // radial branches

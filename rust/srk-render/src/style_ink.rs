@@ -302,6 +302,7 @@ fn draw_buildings(ctx: &mut Ctx, pm: &mut Pixmap, lw: f32) -> Result<()> {
     let mut order: Vec<(f32, usize)> = buildings
         .iter()
         .enumerate()
+        .filter(|(_, f)| f.sub.is_empty())
         .map(|(i, f)| {
             let pts = poly_rings_px(ctx, &f.geom).into_iter().next().unwrap_or_default();
             (bbox_px(&pts).3, i)
@@ -393,10 +394,29 @@ fn draw_buildings(ctx: &mut Ctx, pm: &mut Pixmap, lw: f32) -> Result<()> {
         if let Some(p) = pb.finish() {
             line(pm, &p, &paint(ink(1.0)), &stroke(lw * 1.25), None);
         }
-        if landmark && polygon_px_area(&ext) > 600.0 {
-            let cx = (x0 + x1) / 2.0;
-            draw_spire(pm, cx, y0 + (y1 - y0) * 0.35, ctx.m(4.5).max(10.0), lw, paper);
+    }
+    // building parts: thin lines on the roofs
+    for f in buildings.iter().filter(|f| !f.sub.is_empty()) {
+        if let Some(p) = poly_path(ctx, &f.geom) {
+            line(pm, &p, &paint(ink(0.45)), &stroke(lw * 0.5), None);
         }
+    }
+    // landmarks: one spire per landmark, on its smallest polygon (usually the tower)
+    let mut seen = std::collections::HashMap::new();
+    for f in buildings.iter().filter(|f| matches!(f.class.as_str(), "church" | "chapel" | "cathedral")) {
+        let ext = poly_rings_px(ctx, &f.geom).into_iter().next().unwrap_or_default();
+        let a = polygon_px_area(&ext);
+        if a < 20.0 {
+            continue;
+        }
+        let e = seen.entry(f.id).or_insert((f32::MAX, ext.clone()));
+        if a < e.0 {
+            *e = (a, ext);
+        }
+    }
+    for (_, (_, ext)) in seen {
+        let (x0, y0, x1, y1) = bbox_px(&ext);
+        draw_spire(pm, (x0 + x1) / 2.0, (y0 + y1) / 2.0 + (y1 - y0) * 0.3, ctx.m(4.5).max(10.0), lw, paper);
     }
     Ok(())
 }
