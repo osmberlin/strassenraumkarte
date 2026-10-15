@@ -28,6 +28,7 @@ if [[ -z ${SKIP_RENDER:-} ]]; then
   render la-vivid la playground SRK_LA_PALETTE=vivid
   render ink ink
   render ink-oblique ink playground SRK_INK_OBLIQUE=freestanding
+  render ink-white ink playground SRK_INK_PAPER=white
   render ink-bench ink bench
   render ink-tree ink tree
   render full-approx full-approx

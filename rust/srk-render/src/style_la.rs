@@ -17,7 +17,7 @@ use crate::tile::RenderExtent;
 const PAPER: &str = "#EAE9E3";
 const LAWN: &str = "#CBD4BC";
 const MEADOW: &str = "#C2C5A6";
-const SHRUB: &str = "#B5B39C";
+const SHRUB: &str = "#BDBBA4";
 const WOOD_GROUND: &str = "#B8BB9E";
 const SAND: &str = "#DDD6C2";
 const PAVING: &str = "#E4E2DA";
@@ -136,7 +136,7 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
     }
     // shrub beds: darker edge + dabs
     if let Some(mask) = mask_of(&ctx, &shrubs) {
-        let dab = with_alpha(shade(hex(tone(SHRUB)), 0.82), 0.55);
+        let dab = with_alpha(shade(hex(tone(SHRUB)), 0.86), 0.45);
         let mut pb = PathBuilder::new();
         for (x, y, r) in world_scatter(&ctx, zcell(z, 1.6), 0.9, 21) {
             let (px, py) = ctx.extent.map_to_px(x, y);
@@ -156,7 +156,25 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
     for f in &water {
         if let Some(path) = poly_path(&ctx, &f.geom) {
             fill(&mut pm, &path, &paint(hex(WATER)), None);
-            line(&mut pm, &path, &paint(hex(WATER_EDGE)), &stroke(ctx.m(0.4).max(0.8)), None);
+        }
+    }
+    // watercolour depth: darker towards the banks (blurred inner edge), crisp bank line on top
+    let wpolys: Vec<&Polygon<f64>> = water.iter().map(|f| &f.geom).collect();
+    if let Some(mask) = mask_of(&ctx, &wpolys).filter(|_| !wpolys.is_empty()) {
+        let mut edge = new_layer(&ctx);
+        let w = ctx.m(2.5).clamp(4.0, 24.0);
+        for g in &wpolys {
+            if let Some(p) = poly_path(&ctx, g) {
+                line(&mut edge, &p, &paint(hex(WATER_EDGE)), &stroke(w), Some(&mask));
+            }
+        }
+        blur_layer(&mut edge, (w * 0.45) as usize);
+        draw_layer(&mut pm, &edge, 0.55, BlendMode::Multiply);
+        apply_grain(&ctx, &mut pm, Some(&mask), 6.0, 2, 0.04, 77);
+        for g in &wpolys {
+            if let Some(p) = poly_path(&ctx, g) {
+                line(&mut pm, &p, &paint(hex(WATER_EDGE)), &stroke(ctx.m(0.3).max(0.8)), None);
+            }
         }
     }
 

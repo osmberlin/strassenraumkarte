@@ -16,20 +16,36 @@ use crate::style_kit::*;
 use crate::style_la::point_in_polygon;
 use crate::tile::RenderExtent;
 
-const PAPER: &str = "#F1E7CF";
-const INK: &str = "#2B2620";
+const PAPER_SEPIA: &str = "#F1E7CF";
+const INK_SEPIA: &str = "#2B2620";
+const PAPER_WHITE: &str = "#FBFAF6";
+const INK_BLACK: &str = "#151515";
+
+/// `SRK_INK_PAPER=white`: pure black ink on white paper (print), instead of sepia on parchment.
+fn white_paper() -> bool {
+    static V: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *V.get_or_init(|| std::env::var("SRK_INK_PAPER").map(|v| v == "white").unwrap_or(false))
+}
+fn paper_hex() -> &'static str {
+    if white_paper() { PAPER_WHITE } else { PAPER_SEPIA }
+}
+fn ink_hex() -> &'static str {
+    if white_paper() { INK_BLACK } else { INK_SEPIA }
+}
 const ACCENT: &str = "#C8452C";
 
 fn ink(a: f32) -> Color {
-    with_alpha(hex(INK), a)
+    with_alpha(hex(ink_hex()), a)
 }
 
 pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExtent, z: u32) -> Result<Pixmap> {
     let mut pm = Pixmap::new(extent.width_px, extent.height_px).expect("pixmap");
-    let paper = hex(PAPER);
+    let paper = hex(paper_hex());
     pm.fill(paper);
     let mut ctx = Ctx { client, prep, extent, z, margin_m: 40.0 };
-    apply_grain(&ctx, &mut pm, None, 90.0, 3, 0.045, 1);
+    if !white_paper() {
+        apply_grain(&ctx, &mut pm, None, 90.0, 3, 0.045, 1);
+    }
 
     // base pen width; a little heavier when zoomed out so blocks still read
     let lw = ctx.m(0.16).clamp(if z <= 17 { 0.85 } else { 0.7 }, 1.6);
@@ -354,8 +370,8 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
             size_px: 15.0,
             letter_spacing_em: 0.32,
             uppercase: true,
-            fill: INK,
-            halo: PAPER,
+            fill: ink_hex(),
+            halo: paper_hex(),
             halo_px: 3.5,
             repeat_px: 0.0,
         },
@@ -373,8 +389,8 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
                 size_px: if z >= 19 { 17.0 } else { 14.0 },
                 letter_spacing_em: 0.06,
                 uppercase: false,
-                fill: INK,
-                halo: PAPER,
+                fill: ink_hex(),
+                halo: paper_hex(),
                 halo_px: 3.2,
                 repeat_px: 560.0,
             },
@@ -446,7 +462,7 @@ fn draw_buildings(ctx: &mut Ctx, pm: &mut Pixmap, lw: f32) -> Result<()> {
         sql_from,
         "",
     )?;
-    let paper = hex(PAPER);
+    let paper = hex(paper_hex());
     let mut order: Vec<(f32, usize)> = buildings
         .iter()
         .enumerate()
