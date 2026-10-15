@@ -133,8 +133,8 @@ Local file column: `references/web/...` if downloaded. "Text only" means read fr
 | 3 | House, Richmond, Virginia: site plan and landscaping | Benjamin Henry Latrobe (1764–1820) | https://commons.wikimedia.org/wiki/File:House,_Richmond,_Virginia._Site_plan_and_landscaping_LCCN2001698099.jpg | `la-04-commons-latrobe-richmond-site-plan-landscaping.jpg` | Public domain. Scalloped cloud-outline crowns in ochre wash, a pink building accent, cursive labels, compass rose. Best precedent for the scalloped canopy outline. |
 | 4 | United States Capitol grounds: site plan, footprint, landscaping | Charles Bulfinch (1763–1844) | https://commons.wikimedia.org/wiki/File:United_States_Capitol_grounds,_Washington,_D.C._Site_plan,_footprint,_landscaping_LCCN2002712004.jpg | `la-03-commons-bulfinch-capitol-grounds-site-plan-landscaping.jpg` | Public domain. Line-based: building as outline, trees as small symbols in rows along the edges, paths as double lines. Shows how a plan without colour still reads as a landscape plan. |
 | 5 | Map of Central Park (Vaux & Olmsted, 1868) | Calvert Vaux, Frederick Law Olmsted (Geographicus reprint) | https://commons.wikimedia.org/wiki/File:1868_Vaux_%5E_Olmsted_Map_of_Central_Park%2C_New_York_City_-_Geographicus_-_CentralPark-CentralPark-1869.jpg | `la-02-commons-vaux-olmsted-central-park-map-1868.jpg` | Public domain. Printed, coloured: stipple tree clusters, pale green meadows, cream background, tan paths. Good precedent for a printed (not painted) look. |
-| 6 | Quick site plans (Photoshop tutorial) | Visualizing Architecture (site author not named on the page) | https://visualizingarchitecture.com/tutorial-quick-site-plans/ | `la-05`, `la-06`, `la-07`, `la-08`, `la-09`, `la-10`, `la-11` (tutorial steps) | Step-by-step Photoshop workflow (see Production techniques). Source aerial, layer stack, Multiply line work, Levels on shadow, Smudge, Overlay colour. |
-| 7 | Alex Hogrefe site plan (the project used in the tutorial) | Alex Hogrefe | Watermark only: alexhogrefe.com (page not found) | `la-11-va-quickplan-final.jpg` | Final render: saturated olive greens, dark tree masses, white building with dark roof and brown wall, contour lines. Shows the modern Photoshop look, which is saturated, not pastel. |
+| 6 | Quick site plans (Photoshop tutorial) | Visualizing Architecture (site author not named on the page) | https://visualizingarchitecture.com/tutorial-quick-site-plans/ | removed (tutorial screenshots, not a style reference) | Step-by-step Photoshop workflow (see Production techniques). Source aerial, layer stack, Multiply line work, Levels on shadow, Smudge, Overlay colour. |
+| 7 | Alex Hogrefe site plan (the project used in the tutorial) | Alex Hogrefe | Watermark only: alexhogrefe.com (page not found) | removed | Final render: saturated olive greens, dark tree masses, white building with dark roof and brown wall, contour lines. Shows the modern Photoshop look, which is saturated, not pastel. |
 | 8 | Trees pack, five top-view PSDs (contour, monochrome, watercolour) | Archez International | https://archezinternational.com/?p=706 | none (images were not retrievable) | Paid ($5). Three textures per tree that can be layered or used alone. Useful for a symbol vocabulary study. |
 | 9 | Archez blog: trees in architectural illustration | Archez International | https://archezinternational.com/?p=8345 | none (text only) | Text on depth layering, scale (8–20 m trees) and brush styles per presentation type. |
 | 10 | New tutorial: draw grouped trees for large-scale masterplans | LandSpace Architecture | https://landspacearch.gumroad.com/p/new-tutorial-draw-grouped-trees-for-large-scale-masterplans | none (title only) | Paid. Grouped trees for masterplans, relevant to clustering crowns. Content not read. |
@@ -170,20 +170,20 @@ Also useful: the Berlin competition pages on berlin.de (Rathaus der Zukunft Prei
 
 ### Photoshop site-plan recipe (Visualizing Architecture, "Quick site plans")
 
-URL: https://visualizingarchitecture.com/tutorial-quick-site-plans/ (steps verified from the page; images downloaded as `la-05` to `la-11`).
+URL: https://visualizingarchitecture.com/tutorial-quick-site-plans/ (steps verified from the page; step images were downloaded and later removed).
 
-1. Base: highest-resolution aerial, preferred over a 3D model for texture (`la-05`).
+1. Base: highest-resolution aerial, preferred over a 3D model for texture.
 2. Desaturate (Image > Adjustments > Desaturate).
 3. Topography lines: invert a contour layer so the lines are white, set to Lighten to remove the white background.
 4. SketchUp (or other 3D) export as three separate images: shaded colour, line work, and shadows. Confirm shadow direction matches the aerial.
 5. Building colour layer: scale to site, erase background so only the building remains.
-6. Line work: Multiply to remove white, reduce opacity so only roof detail shows (`la-07`).
-7. Shadow layer: Levels, drag the black point until shadows are solid black (`la-08`).
+6. Line work: Multiply to remove white, reduce opacity so only roof detail shows.
+7. Shadow layer: Levels, drag the black point until shadows are solid black.
 8. Shadow layer: Multiply.
-9. Smudge at 92% strength to soften edges away from the building (`la-09`). Soft eraser at 25% to fade outer edges. Darkest at the building.
+9. Smudge at 92% strength to soften edges away from the building. Soft eraser at 25% to fade outer edges. Darkest at the building.
 10. Colour layer below the building: soft brush at 50% opacity radiating from the building.
-11. Colour layer set to Overlay at 68% opacity (`la-10`).
-12. Final output (`la-11`).
+11. Colour layer set to Overlay at 68% opacity.
+12. Final output.
 
 ### Other tutorials and tools
 
