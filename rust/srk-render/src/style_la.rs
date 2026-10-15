@@ -91,8 +91,17 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
             line(&mut pm, &path, &paint(with_alpha(hex("#FFFFFF"), 0.8)), &stroke(ctx.m(0.12).max(0.6)), None);
         }
     }
-    // watercolour mottling on green
+    // watercolour mottling on green + a darker, bled rim along the edges
     if let Some(mask) = mask_of(&ctx, &green) {
+        let mut rim = new_layer(&ctx);
+        let rim_w = ctx.m(1.2).clamp(3.0, 12.0);
+        for g in &green {
+            if let Some(p) = poly_path(&ctx, g) {
+                line(&mut rim, &p, &paint(hex("#9FAA8C")), &stroke(rim_w), Some(&mask));
+            }
+        }
+        blur_layer(&mut rim, (rim_w * 0.5) as usize);
+        draw_layer(&mut pm, &rim, 0.45, BlendMode::Multiply);
         apply_grain(&ctx, &mut pm, Some(&mask), 18.0, 3, 0.05, 11);
         apply_grain(&ctx, &mut pm, Some(&mask), 2.5, 2, 0.025, 12);
     }
@@ -164,17 +173,22 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
         "ORDER BY COALESCE(height, 0), osm_id",
     )?;
     let sh = ctx.m(2.2);
-    for (k, a) in [(1.0f32, 0.16f32), (0.66, 0.12), (0.33, 0.10)] {
+    {
+        let mut layer = new_layer(&ctx);
         let mut pb = PathBuilder::new();
         for f in buildings.iter().filter(|f| f.sub.is_empty()) {
-            let off = sh * k * (f.num as f32 / 15.0).clamp(0.4, 1.6);
-            if let Some(p) = poly_path_shifted(&ctx, &f.geom, off, off * 0.75) {
-                pb.push_path(&p);
+            let off = sh * (f.num as f32 / 15.0).clamp(0.4, 1.6);
+            for k in [0.33f32, 0.66, 1.0] {
+                if let Some(p) = poly_path_shifted(&ctx, &f.geom, off * k, off * k * 0.75) {
+                    pb.push_path(&p);
+                }
             }
         }
         if let Some(p) = pb.finish() {
-            fill(&mut pm, &p, &paint_blend(with_alpha(hex(SHADOW), a), BlendMode::Multiply), None);
+            fill(&mut layer, &p, &paint(hex(SHADOW)), None);
         }
+        blur_layer(&mut layer, (ctx.m(0.35).max(1.0)) as usize);
+        draw_layer(&mut pm, &layer, 0.34, BlendMode::Multiply);
     }
     for f in buildings.iter().filter(|f| f.sub.is_empty()) {
         let Some(path) = poly_path(&ctx, &f.geom) else { continue };
@@ -295,7 +309,10 @@ fn draw_trees(ctx: &mut Ctx, pm: &mut Pixmap, woods: &[&Polygon<f64>]) -> Result
         pb.push_circle(c.x + o, c.y + o * 0.8, c.r);
     }
     if let Some(p) = pb.finish() {
-        fill(pm, &p, &paint_blend(with_alpha(hex(SHADOW), 0.16), BlendMode::Multiply), None);
+        let mut layer = new_layer(ctx);
+        fill(&mut layer, &p, &paint(hex(SHADOW)), None);
+        blur_layer(&mut layer, (ctx.m(0.6).max(1.5)) as usize);
+        draw_layer(pm, &layer, 0.26, BlendMode::Multiply);
     }
     crowns.sort_by(|a, b| b.r.total_cmp(&a.r));
     for c in &crowns {

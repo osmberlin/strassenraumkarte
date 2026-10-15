@@ -611,3 +611,55 @@ pub fn draw_street_labels(ctx: &mut Ctx, pm: &mut Pixmap, st: &LabelStyle) -> Re
     }
     Ok(())
 }
+
+/// Approximate gaussian blur of a premultiplied layer: three box-blur passes per axis.
+pub fn blur_layer(layer: &mut Pixmap, radius: usize) {
+    if radius == 0 {
+        return;
+    }
+    let (w, h) = (layer.width() as usize, layer.height() as usize);
+    let data = layer.data_mut();
+    let mut buf = vec![0u16; w.max(h) * 4];
+    for _ in 0..3 {
+        for y in 0..h {
+            box_line(data, &mut buf, y * w * 4, 4, w, radius);
+        }
+        for x in 0..w {
+            box_line(data, &mut buf, x * 4, w * 4, h, radius);
+        }
+    }
+}
+
+fn box_line(data: &mut [u8], buf: &mut [u16], start: usize, stride: usize, n: usize, r: usize) {
+    for i in 0..n {
+        for c in 0..4 {
+            buf[i * 4 + c] = u16::from(data[start + i * stride + c]);
+        }
+    }
+    let win = (2 * r + 1) as u32;
+    for c in 0..4 {
+        let mut acc: u32 = 0;
+        for k in 0..=r.min(n - 1) {
+            acc += u32::from(buf[k * 4 + c]);
+        }
+        acc += u32::from(buf[c]) * r as u32; // clamp-to-edge on the left
+        for i in 0..n {
+            data[start + i * stride + c] = (acc / win) as u8;
+            let add = (i + r + 1).min(n - 1);
+            let sub = i.saturating_sub(r);
+            acc += u32::from(buf[add * 4 + c]);
+            acc -= u32::from(buf[sub * 4 + c]);
+        }
+    }
+}
+
+pub fn draw_layer(pm: &mut Pixmap, layer: &Pixmap, opacity: f32, mode: BlendMode) {
+    let mut pp = tiny_skia::PixmapPaint::default();
+    pp.opacity = opacity;
+    pp.blend_mode = mode;
+    pm.draw_pixmap(0, 0, layer.as_ref(), &pp, Transform::identity(), None);
+}
+
+pub fn new_layer(ctx: &Ctx) -> Pixmap {
+    Pixmap::new(ctx.extent.width_px, ctx.extent.height_px).expect("layer")
+}

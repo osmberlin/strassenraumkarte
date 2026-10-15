@@ -455,7 +455,34 @@ fn draw_buildings(ctx: &mut Ctx, pm: &mut Pixmap, lw: f32) -> Result<()> {
         }
         if let Some(Geometry::LineString(_) | Geometry::MultiLineString(_)) = &f.aux {
             for l in geometry_lines(f.aux.clone().unwrap()) {
-                if let Some(p) = line_path(ctx, &l) {
+                let rp = line_pts(ctx, &l);
+                // shaded roof half: the side facing away from the light (NE), cross-hatched
+                if let (Some(&(px, py)), Some(&(qx, qy))) = (rp.first(), rp.last()) {
+                    let (dx, dy) = (qx - px, qy - py);
+                    let len = (dx * dx + dy * dy).sqrt();
+                    if len > 2.0 {
+                        let (ux, uy) = (dx / len, dy / len);
+                        let (mut nx, mut ny) = (-uy, ux);
+                        if nx - ny < 0.0 {
+                            nx = -nx;
+                            ny = -ny;
+                        }
+                        let big = 400.0;
+                        let quad = [
+                            (px - ux * big, py - uy * big),
+                            (qx + ux * big, qy + uy * big),
+                            (qx + ux * big + nx * big, qy + uy * big + ny * big),
+                            (px - ux * big + nx * big, py - uy * big + ny * big),
+                        ];
+                        if let (Some(mut mask), Some(half)) = (mask_of(ctx, &[&f.geom]), pts_path(&quad, true)) {
+                            mask.intersect_path(&half, tiny_skia::FillRule::Winding, true, tiny_skia::Transform::identity());
+                            if let Some(h) = hatch_path(ctx, hatch_sp * 1.3, axis_px, x0 - 4.0, y0 - 4.0, x1 + 4.0, y1 + 4.0) {
+                                line(pm, &h, &paint(ink(0.38)), &stroke(lw * 0.5), Some(&mask));
+                            }
+                        }
+                    }
+                }
+                if let Some(p) = pts_path(&rp, false) {
                     line(pm, &p, &paint(ink(0.9)), &stroke(lw), None);
                 }
             }
