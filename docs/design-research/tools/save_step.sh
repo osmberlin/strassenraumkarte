@@ -15,11 +15,11 @@ README=${4:?readme file}
 OUT="$EXP/steps/$STEP"
 mkdir -p "$OUT"
 magick montage "$RUN/a-herrfurthplatz.png" "$RUN/b-schillerpromenade.png" "$RUN/c-hasenheide-edge.png" "$RUN/d-courtyard-blocks.png" \
-  -tile 2x2 -geometry 760x760+4+4 -background '#ffffff' -quality 80 "$OUT/sheet.jpg"
+  -tile 2x2 -geometry 700x700+4+4 -background "#ffffff" -quality 74 "$OUT/sheet.jpg"
 magick "$RUN/a-herrfurthplatz.png" -crop 560x560+380+300 +repage -quality 85 "$OUT/detail.jpg"
 if [[ -f "$RUN/e-richardplatz.png" && -f "$RUN/f-koernerpark.png" ]]; then
   magick montage "$RUN/e-richardplatz.png" "$RUN/f-koernerpark.png" \
-    -tile 2x1 -geometry 760x760+4+4 -background '#ffffff' -quality 80 "$OUT/sheet-ef.jpg"
+    -tile 2x1 -geometry 700x700+4+4 -background "#ffffff" -quality 74 "$OUT/sheet-ef.jpg"
 fi
 cp "$README" "$OUT/README.md"
 echo "$OUT"
