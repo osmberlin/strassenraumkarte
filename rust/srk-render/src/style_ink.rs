@@ -297,18 +297,29 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
     // ---- upright things: trees and playground equipment, painted north → south
     let trees = ctx.points("osm_id AS id, COALESCE(leaf_type,'') AS class, NULL::text AS sub, COALESCE(diameter_crown, 6)::float8 AS num", "tree", "")?;
     let mut uprights: Vec<(f32, f32, f32, i64, u8)> = Vec::new();
+    // woodland: one cloud silhouette with a heavy outline, light arcs inside (fantasy-map forest);
+    // mapped trees inside a wood join the silhouette instead of being drawn one by one
+    let mut forest: Vec<(f32, f32, f32, i64)> = Vec::new();
     for t in &trees {
         let (x, y) = ctx.px(t.geom.0);
+        let r = ctx.m(t.num.clamp(2.0, 16.0) / 2.0 * 0.85);
+        if woods.iter().any(|p| point_in_polygon(t.geom.0, p)) {
+            forest.push((x, y, r, t.id));
+            continue;
+        }
         let kind = if t.class == "needleleaved" { 1 } else { 0 };
-        uprights.push((x, y, ctx.m(t.num.clamp(2.0, 16.0) / 2.0 * 0.85), t.id, kind));
+        uprights.push((x, y, r, t.id, kind));
     }
-    for (wx, wy, r) in world_scatter(&ctx, 5.0, 0.9, 51) {
+    // coarser forest when zoomed out: cell and crown size grow with √2 per zoom level below z19
+    let fk = 2f64.powf((19.0 - f64::from(z)).max(0.0) / 2.0);
+    for (wx, wy, r) in world_scatter(&ctx, 5.0 * fk, 0.9, 51) {
         let pt = geo_types::Coord { x: wx, y: wy };
         if woods.iter().any(|p| point_in_polygon(pt, p)) {
             let (x, y) = ctx.extent.map_to_px(wx, wy);
-            uprights.push((x, y, ctx.m(2.6 + 1.6 * f64::from(r)), (wx * 3.0) as i64 ^ (wy * 5.0) as i64, 0));
+            forest.push((x, y, ctx.m((2.6 + 1.6 * f64::from(r)) * fk), (wx * 3.0) as i64 ^ (wy * 5.0) as i64));
         }
     }
+    draw_forest(&ctx, &mut pm, &mut forest, lw, paper);
     for n in &pg_nodes {
         let (x, y) = ctx.px(n.geom.0);
         uprights.push((x, y, ctx.m(0.9), n.id, 9));
@@ -815,5 +826,53 @@ fn draw_bench(pm: &mut Pixmap, x: f32, y: f32, s: f32, lw: f32, pen: Color, pape
     if let Some(p) = pb.finish() {
         line(pm, &p, &paint(paper), &stroke(lw * 3.0), None);
         line(pm, &p, &paint(pen), &stroke(lw * 1.1), None);
+    }
+}
+
+fn draw_forest(ctx: &Ctx, pm: &mut Pixmap, crowns: &mut [(f32, f32, f32, i64)], lw: f32, paper: Color) {
+    if crowns.is_empty() {
+        return;
+    }
+    crowns.sort_by(|a, b| a.1.total_cmp(&b.1));
+    let shape = |&(x, y, r, id): &(f32, f32, f32, i64)| {
+        let pts = scallop_pts(x, y - r * 0.7, r, 7 + (rand01(id, 3) * 4.0) as u32, 0.16, rand01(id, 4) * 6.28);
+        pts_path(&wobble_pts(ctx, &pts, 0.3, 4.0, id as u64), true)
+    };
+    let mut all = PathBuilder::new();
+    for c in crowns.iter() {
+        if let Some(p) = shape(c) {
+            all.push_path(&p);
+        }
+    }
+    let Some(all) = all.finish() else { return };
+    // 1) heavy outline of every crown, 2) paper fill of every crown on top → only the silhouette stays
+    line(pm, &all, &paint(ink(1.0)), &stroke(lw * 2.6), None);
+    // Winding, not EvenOdd: overlaps must stay filled or the inner outlines shine through
+    pm.fill_path(&all, &paint(paper), tiny_skia::FillRule::Winding, tiny_skia::Transform::identity(), None);
+    // 3) inside: the lower-right half of each crown as a light arc, plus a few shading strokes
+    let mut arcs = PathBuilder::new();
+    let mut shading = PathBuilder::new();
+    for &(x, y, r, id) in crowns.iter() {
+        let cy = y - r * 0.7;
+        let a0 = -0.3 + rand01(id, 5) * 0.4;
+        let steps = 10;
+        for k in 0..=steps {
+            let a = a0 + (k as f32 / steps as f32) * 2.4;
+            let (px, py) = (x + r * a.cos(), cy + r * a.sin());
+            if k == 0 { arcs.move_to(px, py) } else { arcs.line_to(px, py) }
+        }
+        for k in 0..3 {
+            let a = 0.3 + 1.2 * rand01(id, 20 + k);
+            let rr = r * (0.45 + 0.35 * rand01(id, 30 + k));
+            let (px, py) = (x + rr * a.cos(), cy + rr * a.sin());
+            shading.move_to(px, py);
+            shading.line_to(px - r * 0.22, py + r * 0.15);
+        }
+    }
+    if let Some(p) = arcs.finish() {
+        line(pm, &p, &paint(ink(0.55)), &stroke(lw * 0.7), None);
+    }
+    if let Some(p) = shading.finish() {
+        line(pm, &p, &paint(ink(0.45)), &stroke(lw * 0.6), None);
     }
 }
