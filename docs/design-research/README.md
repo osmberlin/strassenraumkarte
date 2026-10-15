@@ -54,6 +54,8 @@ DB_PORT=5433 PGPASSWORD=postgres rust/srk-render/target/release/srk-render \
   --layers ink --bbox 13.4132,52.4715,13.4312,52.4821 --zmin 16 --zmax 19 --format webp --out /tmp/ink-tiles
 ```
 
+Interactive: `docs/design-research/tools/serve_viewer.sh` renders LA, ink (accent playgrounds / benches / trees) and the Rust baseline for the Schillerkiez (z16–19, ~2 min) into `tmp/design-tiles/` and serves a small Leaflet viewer on <http://127.0.0.1:8017/> with one layer per variant (`SKIP_RENDER=1` to serve existing tiles).
+
 Code: [`style_la.rs`](../../rust/srk-render/src/style_la.rs), [`style_ink.rs`](../../rust/srk-render/src/style_ink.rs), shared helpers (queries, world noise, masks, hatching, wobble, blur, labels) in [`style_kit.rs`](../../rust/srk-render/src/style_kit.rs).
 
 ## Gotchas (learned the hard way)

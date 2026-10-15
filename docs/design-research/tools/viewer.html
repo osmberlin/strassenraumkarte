@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Design-Explorationen · Straßenraumkarte</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    html, body { margin: 0; height: 100%; background: #ededed; font: 14px/1.4 system-ui, sans-serif; }
+    #map { position: absolute; inset: 0; }
+    .leaflet-container { background: #ededed; }
+    .hint { position: absolute; z-index: 1000; left: 12px; bottom: 12px; padding: 6px 10px; background: rgba(255,255,255,.9); border-radius: 6px; max-width: 360px; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div class="hint">Ebenen oben rechts umschalten. Gerendert von <code>srk-render --layers la | ink</code> (Schillerkiez, z16–19).</div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    // Served by docs/design-research/tools/serve_viewer.sh from its tile root.
+    const opts = { minZoom: 16, maxZoom: 20, maxNativeZoom: 19, tileSize: 256, keepBuffer: 4 };
+    const layers = {
+      'Landschaftsarchitektur': L.tileLayer('la/{z}/{x}/{y}.webp', opts),
+      'Tusche · Akzent Spielplätze': L.tileLayer('ink/{z}/{x}/{y}.webp', opts),
+      'Tusche · Akzent Bänke': L.tileLayer('ink-bench/{z}/{x}/{y}.webp', opts),
+      'Tusche · Akzent Bäume': L.tileLayer('ink-tree/{z}/{x}/{y}.webp', opts),
+      'Rust full-approx (Basis)': L.tileLayer('full-approx/{z}/{x}/{y}.webp', opts),
+    };
+    const map = L.map('map', { zoomSnap: 1, layers: [layers['Landschaftsarchitektur']] })
+      .setView([52.4771, 13.4222], 18);
+    L.control.layers(layers, {}, { collapsed: false }).addTo(map);
+    const hash = () => {
+      const c = map.getCenter();
+      history.replaceState(null, '', `#${map.getZoom()}/${c.lat.toFixed(5)}/${c.lng.toFixed(5)}`);
+    };
+    const m = location.hash.match(/^#(\d+)\/([\d.]+)\/([\d.]+)/);
+    if (m) map.setView([+m[2], +m[3]], +m[1]);
+    map.on('moveend', hash);
+  </script>
+</body>
+</html>

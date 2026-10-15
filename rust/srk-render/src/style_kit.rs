@@ -602,11 +602,14 @@ pub fn draw_street_labels(ctx: &mut Ctx, pm: &mut Pixmap, st: &LabelStyle) -> Re
 /// `ST_PointOnSurface` of the whole polygon (world-stable). `min_area_px`: smallest area that gets a name.
 pub fn draw_area_labels(ctx: &mut Ctx, pm: &mut Pixmap, st: &LabelStyle, min_area_px: f64, max_size_px: f32) -> Result<()> {
     let mpp = ctx.extent.metres_per_px();
-    let from = r#"(SELECT osm_id, name, class, ST_Area(geom) AS a, ST_PointOnSurface(geom) AS geom
-                  FROM landuse
-                  WHERE name IS NOT NULL
-                    AND class IN ('park', 'recreation_ground', 'cemetery', 'garden', 'village_green', 'allotments', 'meadow', 'forest', 'wood')
-                    AND geom && ST_MakeEnvelope($1::float8, $2::float8, $3::float8, $4::float8, 3857)) q"#;
+    // label point on the polygon, but never on top of a building (e.g. the church on Herrfurthplatz)
+    let from = r#"(SELECT osm_id, name, class, a, geom FROM (
+                    SELECT l.osm_id, l.name, l.class, ST_Area(l.geom) AS a, ST_PointOnSurface(l.geom) AS geom
+                    FROM landuse l
+                    WHERE l.name IS NOT NULL
+                      AND l.class IN ('park', 'recreation_ground', 'cemetery', 'garden', 'village_green', 'allotments', 'meadow', 'forest', 'wood')
+                      AND l.geom && ST_MakeEnvelope($1::float8, $2::float8, $3::float8, $4::float8, 3857)) p
+                  WHERE NOT EXISTS (SELECT 1 FROM building b WHERE ST_DWithin(b.geom, p.geom, 25))) q"#;
     let pts = ctx.points("osm_id AS id, name AS class, NULL::text AS sub, a::float8 AS num", from, "")?;
     let mut texts = String::new();
     for f in &pts {
