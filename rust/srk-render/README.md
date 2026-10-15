@@ -8,6 +8,10 @@ Rust XYZ tile renderer for the Straßenraumkarte evaluation.
 | --- | --- |
 | `full-approx` (**default**) | Paint stack: landuse → pitch → water → waterway → path/service → highway_area → buildings (SE drop-shadow) → trees (soft crowns). No labels, SVG, or full QGIS effect stacks. |
 | `highway_area` | Isolate: SimpleFill class rules only (parity smoke vs QGIS `--layers highway_area`). |
+| `la` | Design research: landscape-architecture plan ([`style_la.rs`](src/style_la.rs)). Env: `SRK_LA_PALETTE=vivid`. |
+| `ink` | Design research: fantasy-book ink map ([`style_ink.rs`](src/style_ink.rs)). Env: `SRK_ACCENT=playground\|bench\|tree\|none`, `SRK_INK_OBLIQUE=freestanding`, `SRK_INK_PAPER=white`. |
+
+`la` and `ink` share helpers in [`style_kit.rs`](src/style_kit.rs) (feature queries, world-anchored noise/scatter/hatching, masks, wobble, blur layers, resvg labels). They need the same PostGIS tables as `full-approx`. Background, decisions and iteration history: [`docs/design-research/`](../../docs/design-research/README.md).
 
 ## Build
 
