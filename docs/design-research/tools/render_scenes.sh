@@ -24,6 +24,8 @@ SCENES=(
   "b-schillerpromenade 281691 281694 172049 172052"
   "c-hasenheide-edge 281682 281685 172039 172042"
   "d-courtyard-blocks 281701 281704 172044 172047"
+  "e-richardplatz 281722 281725 172051 172054"
+  "f-koernerpark 281712 281715 172058 172061"
 )
 
 TILES=()
