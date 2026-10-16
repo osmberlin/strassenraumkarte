@@ -13,6 +13,7 @@ use tiny_skia::{BlendMode, Color, PathBuilder, Pixmap};
 use crate::paint::geometry_lines;
 use crate::sql_cache::PreparedCache;
 use crate::style_kit::*;
+use crate::style_ink_extra as extra;
 use crate::style_la::point_in_polygon;
 use crate::tile::RenderExtent;
 
@@ -185,7 +186,15 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
     }
 
     // ---- railways: double line with cross ties (old-map railway sign)
-    for (pts, main) in railway_lines(&mut ctx)? {
+    // unclipped lines: ties are spaced from the line start, which must not move with the tile
+    let rails = ctx.lines_full(
+        "osm_id AS id, railway AS class, COALESCE(service, '') AS sub, 0::float8 AS num",
+        "railway_way WHERE railway IN ('rail', 'light_rail', 'subway', 'disused', 'tram', 'narrow_gauge') AND COALESCE(tunnel, 'no') = 'no'",
+        "ORDER BY COALESCE(layer, 0)",
+    )?;
+    let rails: Vec<(Vec<(f32, f32)>, bool)> =
+        rails.iter().map(|f| (line_pts(&ctx, &f.geom), f.sub.is_empty() && f.class != "disused")).collect();
+    for (pts, main) in rails {
         let w = ctx.m(if main { 1.6 } else { 1.1 }).max(3.0);
         if let Some(p) = pts_path(&pts, false) {
             line(&mut pm, &p, &paint(ink(0.95)), &stroke(w + lw * 1.6), None);
@@ -202,6 +211,10 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
             line(&mut pm, &p, &paint(ink(0.9)), &stroke(lw * 0.9), None);
         }
     }
+
+    // ---- bridges: paper deck over rails and water (parapets after the streets)
+    let decks = extra::bridges(&mut ctx)?;
+    extra::draw_bridge_decks(&ctx, &mut pm, &decks, paper);
 
     // ---- streets: carriageway outline + sparse stipple, paths as double lines
     let areas = ctx.polygons(
@@ -248,6 +261,8 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
         }
     }
 
+    extra::draw_bridge_parapets(&ctx, &mut pm, &decks, lw, ink(1.0));
+
     // ---- accent: playgrounds (wash, hatch, outline, equipment)
     let pg_poly = ctx.polygons("osm_id AS id, playground AS class, NULL::text AS sub, 0::float8 AS num", "playground_polygon", "")?;
     let pg_nodes = ctx.points("osm_id AS id, playground AS class, NULL::text AS sub, 0::float8 AS num", "playground_node", "")?;
@@ -283,7 +298,8 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
     }
 
     // ---- embankments / cliffs: hachures
-    let slopes = ctx.lines("osm_id AS id, class, NULL::text AS sub, 0::float8 AS num", "landscape_way WHERE class IN ('cliff', 'embankment', 'earth_bank')", "")?;
+    // unclipped (lines_full) so hachures, fence ticks and hedge loops keep their phase across tiles
+    let slopes = ctx.lines_full("osm_id AS id, class, NULL::text AS sub, 0::float8 AS num", "landscape_way WHERE class IN ('cliff', 'embankment', 'earth_bank')", "")?;
     for f in &slopes {
         let pts = line_pts(&ctx, &f.geom);
         if let Some(p) = pts_path(&wobble_pts(&ctx, &pts, 0.3, 5.0, 17), false) {
@@ -296,7 +312,7 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
     }
 
     // ---- fences (+-+-), walls (heavy), hedges (bumpy line)
-    let barriers = ctx.lines("osm_id AS id, barrier AS class, NULL::text AS sub, 0::float8 AS num", "barrier_way", "")?;
+    let barriers = ctx.lines_full("osm_id AS id, barrier AS class, NULL::text AS sub, 0::float8 AS num", "barrier_way", "")?;
     for f in &barriers {
         let pts = line_pts(&ctx, &f.geom);
         match f.class.as_str() {
@@ -375,6 +391,11 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
             uprights.push((x, y, ctx.m(0.9), b.id, 8));
         }
     }
+    let water_on = accent_cat == "water";
+    for (id, kind, (x, y)) in extra::furniture(&mut ctx, water_on)? {
+        let r = if kind == extra::FOUNTAIN { ctx.m(1.8).max(5.0) } else { ctx.m(0.95).max(3.0) };
+        uprights.push((x, y, r, id, kind));
+    }
     uprights.sort_by(|a, b| a.1.total_cmp(&b.1));
     for &(x, y, r, id, kind) in &uprights {
         match kind {
@@ -382,6 +403,11 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
             8 => {
                 let on = accent_cat == "bench";
                 draw_bench(&mut pm, x, y, if on { r.max(3.5) * 1.3 } else { r.max(2.2) }, lw, if on { accent } else { ink(0.85) }, paper)
+            }
+            k if k >= extra::LAMP => {
+                let on = water_on && extra::is_water(k);
+                let s = if on { r.max(3.2) * 1.3 } else { r };
+                extra::draw_furniture(&mut pm, k, x, y, s, lw, if on { accent } else { ink(0.9) }, paper)
             }
             1 => draw_conifer(&ctx, &mut pm, x, y, r, id, lw, paper, if accent_cat == "tree" { accent } else { ink(1.0) }),
             _ => draw_tree(&ctx, &mut pm, x, y, r, id, lw, paper, if accent_cat == "tree" { accent } else { ink(1.0) }),
@@ -511,17 +537,47 @@ fn draw_buildings(ctx: &mut Ctx, pm: &mut Pixmap, lw: f32) -> Result<()> {
     let oblique = std::env::var("SRK_INK_OBLIQUE").map(|v| v == "freestanding").unwrap_or(false) && ctx.z >= 17;
     let mut lifts: std::collections::HashMap<i64, f32> = std::collections::HashMap::new();
     let hatch_sp = ctx.m(0.7).clamp(2.6, 6.0);
-    for (_, i) in order {
-        let f = &buildings[i];
+    let lift_of = |f: &Feature<Polygon<f64>>| -> f32 {
         let landmark = matches!(f.class.as_str(), "church" | "chapel" | "cathedral");
         let mut kind = f.sub.split(';');
         let free = kind.next() == Some("true");
         let height_m: f64 = kind.next().and_then(|h| h.parse().ok()).unwrap_or(9.0);
-        let lift = if oblique && (free || landmark) {
+        if oblique && (free || landmark) {
             ctx.m((height_m * if landmark { 0.6 } else { 0.5 }).clamp(3.0, 18.0)).clamp(4.0, 60.0)
         } else {
             0.0
-        };
+        }
+    };
+    // lifted buildings cast a hatched shadow on the ground towards the east (light from the
+    // south-west, as for the shaded roof half); drawn first so every building covers it
+    if oblique {
+        let mut shadow = PathBuilder::new();
+        for (_, i) in &order {
+            let f = &buildings[*i];
+            let lift = lift_of(f);
+            if lift <= 0.0 {
+                continue;
+            }
+            for k in [0.2f32, 0.4, 0.6, 0.8, 1.0] {
+                if let Some(p) = poly_path_shifted(ctx, &f.geom, lift * 0.75 * k, -lift * 0.35 * k) {
+                    shadow.push_path(&p);
+                }
+            }
+        }
+        if let Some(sp) = shadow.finish() {
+            if let Some(mut mask) = tiny_skia::Mask::new(ctx.extent.width_px, ctx.extent.height_px) {
+                mask.fill_path(&sp, tiny_skia::FillRule::Winding, true, tiny_skia::Transform::identity());
+                let (w, h) = (ctx.extent.width_px as f32, ctx.extent.height_px as f32);
+                if let Some(hp) = hatch_path(ctx, hatch_sp * 0.9, 45.0, 0.0, 0.0, w, h) {
+                    line(pm, &hp, &paint(ink(0.42)), &stroke(lw * 0.55), Some(&mask));
+                }
+            }
+        }
+    }
+    for (_, i) in order {
+        let f = &buildings[i];
+        let landmark = matches!(f.class.as_str(), "church" | "chapel" | "cathedral");
+        let lift = lift_of(f);
         if lift > 0.0 {
             lifts.insert(f.id, lift);
         }
@@ -667,10 +723,60 @@ fn draw_buildings(ctx: &mut Ctx, pm: &mut Pixmap, lw: f32) -> Result<()> {
             *e = (a, ext);
         }
     }
+    // icons stand upright: collect (base y, draw) and paint north → south
+    let mut icons: Vec<(f32, f32, Option<extra::Landmark>, f32)> = Vec::new();
     for (id, (_, ext)) in seen {
         let l = lifts.get(&id).copied().unwrap_or(0.0);
         let (x0, y0, x1, y1) = bbox_px(&ext);
-        draw_spire(pm, (x0 + x1) / 2.0, (y0 + y1) / 2.0 + (y1 - y0) * 0.3 - l, ctx.m(4.5).max(10.0), lw, paper);
+        icons.push(((x0 + x1) / 2.0, (y0 + y1) / 2.0 + (y1 - y0) * 0.3 - l, None, ctx.m(4.5).max(10.0)));
+    }
+    // schools (bell turret) and civic buildings (clock tower): one icon per building, on its
+    // largest polygon, from z17 and only on buildings that are big enough to carry it
+    if ctx.z >= 17 {
+        let min_a = ctx.m(1.0).powi(2) * 250.0;
+        let mut best: std::collections::HashMap<i64, (f32, usize, extra::Landmark)> = std::collections::HashMap::new();
+        for (i, f) in buildings.iter().enumerate() {
+            let Some(kind) = extra::landmark_of(&f.class) else { continue };
+            if f.sub == "part" {
+                continue;
+            }
+            let ext = poly_rings_px(ctx, &f.geom).into_iter().next().unwrap_or_default();
+            let a = polygon_px_area(&ext);
+            if a < min_a {
+                continue;
+            }
+            let e = best.entry(f.id).or_insert((0.0, i, kind));
+            if a > e.0 {
+                *e = (a, i, kind);
+            }
+        }
+        for (id, (_, i, kind)) in best {
+            let f = &buildings[i];
+            let l = lifts.get(&id).copied().unwrap_or(0.0);
+            // on the ridge if there is one, else well inside the footprint
+            let ridge_mid = match &f.aux {
+                Some(Geometry::LineString(ls)) if ls.0.len() >= 2 => {
+                    let pts = line_pts(ctx, ls);
+                    let len: f32 = pts.windows(2).map(|w| ((w[1].0 - w[0].0).powi(2) + (w[1].1 - w[0].1).powi(2)).sqrt()).sum();
+                    Some(point_at(&pts, len / 2.0))
+                }
+                _ => None,
+            };
+            let ext = poly_rings_px(ctx, &f.geom).into_iter().next().unwrap_or_default();
+            let Some((x, y)) = ridge_mid.or_else(|| extra::inner_point(&ext, &f.geom, ctx)) else { continue };
+            let s = match kind {
+                extra::Landmark::BellTurret => ctx.m(5.2).max(10.0),
+                extra::Landmark::ClockTower => ctx.m(5.6).max(11.0),
+            };
+            icons.push((x, y - l, Some(kind), s));
+        }
+    }
+    icons.sort_by(|a, b| a.1.total_cmp(&b.1));
+    for (x, y, kind, s) in icons {
+        match kind {
+            None => draw_spire(pm, x, y, s, lw, paper),
+            Some(k) => extra::draw_landmark(pm, k, x, y, s, lw, ink(1.0), paper),
+        }
     }
     Ok(())
 }
@@ -744,12 +850,12 @@ fn draw_tree(ctx: &Ctx, pm: &mut Pixmap, x: f32, y: f32, r: f32, id: i64, lw: f3
     let bumps = 7 + (rand01(id, 3) * 5.0) as u32;
     let shape = (rand01(id, 8) * 10.0) as u32; // 0–5 scalloped, 6–8 round, 9 tall
     let pts: Vec<(f32, f32)> = match shape {
-        6..=8 => scallop_pts(cx, cy, r, 5, 0.05, rand01(id, 4) * 6.28),
-        9 => scallop_pts(cx, cy - r * 0.35, r, bumps, 0.12, rand01(id, 4) * 6.28)
+        6..=8 => scallop_pts(cx, cy, r, 5, 0.05, rand01(id, 4) * std::f32::consts::TAU),
+        9 => scallop_pts(cx, cy - r * 0.35, r, bumps, 0.12, rand01(id, 4) * std::f32::consts::TAU)
             .into_iter()
             .map(|(px, py)| (cx + (px - cx) * 0.7, (cy - r * 0.35) + (py - (cy - r * 0.35)) * 1.35))
             .collect(),
-        _ => scallop_pts(cx, cy, r, bumps, 0.16, rand01(id, 4) * 6.28),
+        _ => scallop_pts(cx, cy, r, bumps, 0.16, rand01(id, 4) * std::f32::consts::TAU),
     };
     let pts = wobble_pts(ctx, &pts, 0.3, 4.0, id as u64);
     if let Some(p) = pts_path(&pts, true) {
@@ -883,7 +989,7 @@ fn draw_forest(ctx: &Ctx, pm: &mut Pixmap, crowns: &mut [(f32, f32, f32, i64)], 
     }
     crowns.sort_by(|a, b| a.1.total_cmp(&b.1));
     let shape = |&(x, y, r, id): &(f32, f32, f32, i64)| {
-        let pts = scallop_pts(x, y - r * 0.7, r, 7 + (rand01(id, 3) * 4.0) as u32, 0.16, rand01(id, 4) * 6.28);
+        let pts = scallop_pts(x, y - r * 0.7, r, 7 + (rand01(id, 3) * 4.0) as u32, 0.16, rand01(id, 4) * std::f32::consts::TAU);
         pts_path(&wobble_pts(ctx, &pts, 0.3, 4.0, id as u64), true)
     };
     let mut all = PathBuilder::new();

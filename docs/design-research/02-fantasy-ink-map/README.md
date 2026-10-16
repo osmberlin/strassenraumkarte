@@ -27,7 +27,7 @@ More: [`showcase-z17.jpg`](showcase-z17.jpg) / [`showcase-z18.jpg`](showcase-z18
 3. a second hatch on the roof half facing away from the light (NE) → cross-hatched shade,
 4. a narrow south facade band with window ticks on every south-facing edge (band from z18, windows from z19).
 
-Only landmarks (`church`, `chapel`, `cathedral`: one spire on their smallest polygon) and trees, benches and play equipment stand upright, painted north → south.
+Only landmarks (`church`, `chapel`, `cathedral`: one spire on their smallest polygon; schools: bell turret; civic buildings: clock tower), trees, benches, play equipment and street furniture stand upright, painted north → south.
 
 | Element | Implementation |
 | --- | --- |
@@ -43,11 +43,14 @@ Only landmarks (`church`, `chapel`, `cathedral`: one spire on their smallest pol
 | Trees | upright scalloped / round / tall crowns (by OSM id), trunk, shading strokes, ground tick; conifers as stacked triangles |
 | Pitches | procedural line markings from `pitch_markings` |
 | Railways | double line with cross ties; carriageways are paper-filled so bridges occlude the tracks |
-| Accent | `SRK_ACCENT=playground` (default), `bench`, `tree`, `none` — vermilion `#C8452C` for outline, 45° hatch, light wash and glyphs (swing, slide, spring rider, climbing frame) |
+| Bridges | `bridge` polygons that cross rails, water or a lower road: paper deck over what lies below, heavy parapets along the long sides with flared wing walls, hatched shadow under a south parapet ([step 20](steps/20-bridges-landmarks-furniture/), [21](steps/21-real-bridges-icons-water-accent/)) |
+| Landmarks | church spire; `building=school\|kindergarten` → bell turret, `civic\|public\|townhall` → clock tower with dome and flag; one per building on its largest polygon (≥ 250 m²), from z17 |
+| Street furniture (z19+) | upright glyphs from `feature_node`/`feature_polygon`: street lamps, street pumps (`water_well`), drinking water, fountains, advertising columns, memorials/artworks (obelisk), clocks, flagpoles |
+| Accent | `SRK_ACCENT=playground` (default), `bench`, `tree`, `water` (fountains, pumps, drinking water — from z17), `none` — vermilion `#C8452C` for outline, 45° hatch, light wash and glyphs (swing, slide, spring rider, climbing frame) |
 | Labels | street names (Hoefler Text Italic, paper halo, z16+), area names (Hoefler Text spaced capitals) |
 
 Variants:
-- `SRK_INK_OBLIQUE=freestanding` — free-standing buildings and landmarks are lifted into an oblique view (roof shifted north, south walls with windows); rows stay plan. See [step 11](steps/11-oblique-freestanding/). **Candidate for the default.**
+- `SRK_INK_OBLIQUE=freestanding` — free-standing buildings and landmarks are lifted into an oblique view (roof shifted north, south walls with windows); rows stay plan. Lifted buildings cast a hatched shadow towards the east-north-east ([step 20](steps/20-bridges-landmarks-furniture/)). See [step 11](steps/11-oblique-freestanding/). **Candidate for the default.**
 - `SRK_INK_PAPER=white` — black ink on white for print / two-colour printing. See [step 15](steps/15-paper-variant/).
 
 ## Plan vs. pseudo-3D
@@ -107,6 +110,10 @@ Fixed rules that make it work programmatically:
 
 ## Open questions
 
+- Seams (2026-10-16, `tools/seam_check.sh ink`): default 0.087 % mean; with `SRK_INK_OBLIQUE=freestanding` 0.106 % — slightly above the 0.1 % target, not yet traced (worst tile 19/281689/172048 is the same 2.27 % in both, so it is not the new shadows alone).
+- Water names: there is nothing to label in the scenes — `label_waterway` is empty and only one `water_body` has a name (Rixdorfer Teich, outside the scenes). Italic water names need that data first.
+- Roof ridges on L- and T-shaped footprints: the ridge is still only drawn where area / oriented envelope > 0.72. A straight skeleton (SFCGAL) would give ridges for every shape.
+- Accent for labels: the highlighted categories (playgrounds, benches, water) carry almost no names in OSM here, so accent-coloured labels have nothing to show yet; a legend glyph belongs on the printed map sheet, not in tiles.
 - Extrusion height: stylised constant or derived from `building:levels`? Constant reads better as "drawn"; levels give more character. Probably levels mapped to a narrow range.
 - Do oblique buildings across tile/metatile edges stay seamless? The extrusion is a pure translation, so yes, as long as the gutter is larger than `h`.
 - How much does the occlusion hide? Streets north of a block lose ≈ `h` px of their southern sidewalk. Acceptable in the fiction; check at z18.
