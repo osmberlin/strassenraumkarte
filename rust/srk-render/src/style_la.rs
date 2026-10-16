@@ -332,7 +332,7 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
     draw_details(&mut ctx, &mut pm)?;
 
     // ---- trees
-    draw_trees(&mut ctx, &mut pm, &woods)?;
+    draw_trees(&mut ctx, &mut pm, &woods, &green)?;
 
     draw_area_labels(
         &mut ctx,
@@ -394,10 +394,16 @@ struct Crown {
     seed: i64,
 }
 
-fn draw_trees(ctx: &mut Ctx, pm: &mut Pixmap, woods: &[&Polygon<f64>]) -> Result<()> {
+fn draw_trees(ctx: &mut Ctx, pm: &mut Pixmap, woods: &[&Polygon<f64>], green: &[&Polygon<f64>]) -> Result<()> {
+    // `sub` = leaf_type | name of the street the tree stands on (nearest named road within ~12 m)
     let trees = ctx.points(
-        "osm_id AS id, COALESCE(genus, leaf_type, '') AS class, COALESCE(leaf_type, '') AS sub, COALESCE(diameter_crown, 0)::float8 AS num",
-        "tree",
+        "id, class, sub, num",
+        r#"(SELECT t.osm_id AS id, COALESCE(t.genus, t.leaf_type, '') AS class,
+                   COALESCE(t.leaf_type, '') || '|' || COALESCE((SELECT h.name FROM highway h
+                       WHERE h.type = 'road' AND h.name IS NOT NULL AND ST_DWithin(h.geom, t.geom, 20)
+                       ORDER BY h.geom <-> t.geom LIMIT 1), '') AS sub,
+                   COALESCE(t.diameter_crown, 0)::float8 AS num, t.geom
+            FROM tree t WHERE t.geom && ST_MakeEnvelope($1::float8, $2::float8, $3::float8, $4::float8, 3857)) q"#,
         "",
     )?;
     let mut crowns: Vec<Crown> = Vec::new();
@@ -405,18 +411,26 @@ fn draw_trees(ctx: &mut Ctx, pm: &mut Pixmap, woods: &[&Polygon<f64>]) -> Result
     for t in &trees {
         let (x, y) = ctx.px(t.geom.0);
         let in_wood = woods.iter().any(|p| point_in_polygon(t.geom.0, p));
-        // known genus → its own plan symbol, colour and default crown size; otherwise the generic
-        // symbols picked by id (conifers by leaf_type)
+        let (leaf, street) = t.sub.split_once('|').unwrap_or((t.sub.as_str(), ""));
+        let street_tree = !street.is_empty() && !in_wood && !green.iter().any(|p| point_in_polygon(t.geom.0, p));
+        // known genus → its own plan symbol, colour and default crown size; street trees without
+        // genus → one symbol and tone per street (rows read as rows); otherwise generic by id
         let spec = extra::genus_spec(&t.class);
         let (variant, colour, default_d) = match &spec {
-            Some(g) => (g.variant, crown_palette()[g.colour], g.default_d),
+            Some(g) => (g.variant, hex(crown_palette()[g.colour]), g.default_d),
+            None if street_tree && leaf != "needleleaved" => {
+                let key = street.bytes().fold(7i64, |h, b| h.wrapping_mul(31).wrapping_add(i64::from(b)));
+                let base = hex(crown_palette()[(rand01(key, 9) * 6.0) as usize % 6]);
+                // small per-tree tone jitter, so the row is uniform but not stamped
+                (((rand01(key, 5) * 3.0) as u8), mix(base, Color::WHITE, 0.08 * rand01(t.id, 13)), 5.5)
+            }
             None => {
-                let v = if t.sub == "needleleaved" { 3 } else { (rand01(t.id, 5) * 3.0) as u8 };
-                (v, crown_palette()[(rand01(t.id, 9) * 6.0) as usize % 6], 6.0)
+                let v = if leaf == "needleleaved" { 3 } else { (rand01(t.id, 5) * 3.0) as u8 };
+                (v, hex(crown_palette()[(rand01(t.id, 9) * 6.0) as usize % 6]), 6.0)
             }
         };
         let d = if t.num > 0.0 { t.num } else { default_d };
-        let c = Crown { x, y, r: ctx.m(d.clamp(2.0, 18.0) / 2.0), variant, colour: hex(colour), seed: t.id };
+        let c = Crown { x, y, r: ctx.m(d.clamp(2.0, 18.0) / 2.0), variant, colour, seed: t.id };
         if in_wood { forest.push(c) } else { crowns.push(c) }
     }
     // woodland: world-anchored scatter of crowns inside forest polygons
