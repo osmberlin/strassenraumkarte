@@ -14,10 +14,10 @@
 --      gabled|saltbox|double_saltbox|quadruple_saltbox|gambrel → gabled;
 --      hipped|pyramidal|mansard|round|onion|cone|dome → hipped;
 --      anything else (unknown, multi-valued such as 'hipped;flat' or 'many') → default rule.
---   4. Default rule for untagged outlines: sheds/garages → flat; attached ≤4 storeys → hipped (block);
---      attached 5+ storeys → flat; detached and large (≥350 m² or ≥4 storeys) → flat; elongated → gabled;
---      else hipped.
---   5. Touching outlines of the same kind form one mass (closed by 0.6 m, simplified 0.2 m).
+--   4. Default rule for untagged outlines: sheds/garages and <25 m² → flat; attached 3–6 storeys → hipped
+--      (Gründerzeit rows and blocks; 5 storeys is the Schillerkiez norm); attached 1–2 or 7+ storeys → flat;
+--      detached and large (≥350 m² or ≥5 storeys) → flat; elongated (≥1.25) → gabled; else hipped.
+--   5. Touching outlines of the same kind form one mass (closed by 1.2 m to absorb wall jogs, simplified 0.4 m).
 --      Masses above 9000 m² or 60 buildings fall back to one mass per building.
 --
 -- Distances and areas below are ground metres; metres() converts them to EPSG:3857 map units.
@@ -193,9 +193,10 @@ SELECT
         WHEN c.building IN ('garage', 'garages', 'shed', 'carport', 'service', 'greenhouse', 'storage_tank', 'hut', 'kiosk')
             THEN 'flat'
         WHEN ST_Area(c.geom) < metres(1) ^ 2 * 25 THEN 'flat'
-        WHEN c.n_attached > 1 AND COALESCE(c.levels, 3) <= 4 THEN 'hipped'
-        WHEN c.n_attached > 1 THEN 'flat'
-        WHEN ST_Area(c.geom) >= metres(1) ^ 2 * 350 OR COALESCE(c.levels, 3) >= 4 THEN 'flat'
+        -- Gründerzeit rows and perimeter blocks (3–6 storeys, attached): hipped, ridge along the street
+        WHEN c.n_attached > 1 AND COALESCE(c.levels, 3) BETWEEN 3 AND 6 THEN 'hipped'
+        WHEN c.n_attached > 1 THEN 'flat'  -- single-storey extensions, 7+ storeys
+        WHEN ST_Area(c.geom) >= metres(1) ^ 2 * 350 OR COALESCE(c.levels, 3) >= 5 THEN 'flat'
         WHEN ax.long_m / NULLIF(ax.short_m, 0) >= 1.25 THEN 'gabled'
         ELSE 'hipped'
     END) AS kind
@@ -243,9 +244,9 @@ FROM (
     SELECT
         kind, n, ids,
         (ST_Dump(ST_CollectionExtract(ST_MakeValid(ST_SimplifyPreserveTopology(
-            ST_Buffer(ST_Buffer(geom, metres(0.6), 'quad_segs=2 join=mitre'),
-                      -metres(0.6), 'quad_segs=2 join=mitre'),
-            metres(0.2)
+            ST_Buffer(ST_Buffer(geom, metres(1.2), 'quad_segs=2 join=mitre'),
+                      -metres(1.2), 'quad_segs=2 join=mitre'),
+            metres(0.4)
         )), 3))).geom AS geom
     FROM roof_mass_raw
 ) AS closed
