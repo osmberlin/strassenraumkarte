@@ -725,11 +725,36 @@ fn opaque_bbox(data: &[u8], w: usize, h: usize) -> Option<(usize, usize, usize, 
     b
 }
 
+/// `sum / win` for the box blur, as a multiply-shift. With m = floor(2^32 / win) + 1 the result is
+/// exact for every sum below 2^32 / win, which covers 255 · win for win < 4096 (the fallback
+/// division handles larger windows).
+#[derive(Clone, Copy)]
+struct BoxDiv {
+    win: u32,
+    m: u64,
+}
+
+impl BoxDiv {
+    fn new(win: u32) -> Self {
+        let m = if win < 4096 { (1u64 << 32) / u64::from(win) + 1 } else { 0 };
+        Self { win, m }
+    }
+
+    #[inline(always)]
+    fn div(self, sum: u32) -> u8 {
+        if self.m == 0 {
+            (sum / self.win) as u8
+        } else {
+            ((u64::from(sum) * self.m) >> 32) as u8
+        }
+    }
+}
+
 /// One horizontal box pass over `n` RGBA pixels with clamp-to-edge (same arithmetic as before:
 /// window sum / (2r+1), truncating).
 fn box_row(row: &mut [u8], buf: &mut [u8], n: usize, r: usize) {
     buf.copy_from_slice(row);
-    let win = (2 * r + 1) as u32;
+    let dv = BoxDiv::new((2 * r + 1) as u32);
     let mut acc = [0u32; 4];
     for k in 0..=r.min(n - 1) {
         for c in 0..4 {
@@ -743,7 +768,7 @@ fn box_row(row: &mut [u8], buf: &mut [u8], n: usize, r: usize) {
         let add = (i + r + 1).min(n - 1) * 4;
         let sub = i.saturating_sub(r) * 4;
         for c in 0..4 {
-            row[i * 4 + c] = (acc[c] / win) as u8;
+            row[i * 4 + c] = dv.div(acc[c]);
             acc[c] += u32::from(buf[add + c]);
             acc[c] -= u32::from(buf[sub + c]);
         }
@@ -760,7 +785,7 @@ fn box_cols(data: &mut [u8], src: &mut [u8], acc: &mut [u32], w: usize, x0: usiz
         let o = ((y0 + i) * w + x0) * 4;
         src[i * rb..(i + 1) * rb].copy_from_slice(&data[o..o + rb]);
     }
-    let win = (2 * r + 1) as u32;
+    let dv = BoxDiv::new((2 * r + 1) as u32);
     for (j, a) in acc.iter_mut().enumerate() {
         *a = u32::from(src[j]) * r as u32; // clamp-to-edge at the top
     }
@@ -776,7 +801,7 @@ fn box_cols(data: &mut [u8], src: &mut [u8], acc: &mut [u32], w: usize, x0: usiz
         let sub = i.saturating_sub(r) * rb;
         let out = &mut data[o..o + rb];
         for j in 0..rb {
-            out[j] = (acc[j] / win) as u8;
+            out[j] = dv.div(acc[j]);
             acc[j] += u32::from(src[add + j]);
             acc[j] -= u32::from(src[sub + j]);
         }
