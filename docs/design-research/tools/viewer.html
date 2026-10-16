@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Design-Explorationen · Straßenraumkarte</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- Tailwind v4 (same generation as Catalyst in ~/Development/_tailwind), browser build, pinned -->
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.1.11/dist/index.global.js"></script>
+  <style type="text/tailwindcss">
+    @import "tailwindcss";
+
+    @theme {
+      --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+      --color-a: #2d6cdf;
+      --color-b: #d2552d;
+    }
+
+    @layer components {
+      /* segmented control (Catalyst-like: recessed track, raised white active segment) */
+      .seg { @apply inline-flex items-center gap-0.5 rounded-lg bg-zinc-950/5 p-0.5 dark:bg-white/10; }
+      .seg > button { @apply cursor-pointer rounded-md px-2.5 py-1 text-sm/6 font-medium whitespace-nowrap text-zinc-600 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white; }
+      .seg > button.on { @apply bg-white font-semibold text-zinc-950 shadow-sm ring-1 ring-zinc-950/10 dark:bg-zinc-700 dark:text-white dark:ring-white/10; }
+
+      /* buttons: outline style of the Catalyst button */
+      .btn { @apply inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-zinc-950/10 bg-white px-2.5 py-1.5 text-sm/6 font-semibold text-zinc-950 shadow-sm select-none hover:bg-zinc-950/2.5 active:bg-zinc-950/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:border-white/15 dark:bg-zinc-800 dark:text-white dark:hover:bg-zinc-700; }
+
+      /* select: Catalyst select, native element with a chevron */
+      .select {
+        @apply block w-full cursor-pointer appearance-none rounded-lg border border-zinc-950/10 bg-white py-1.5 pr-9 pl-3 text-sm/6 text-zinc-950 shadow-sm hover:border-zinc-950/20 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-white/10 dark:bg-zinc-800 dark:text-white dark:hover:border-white/20;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%2371717a'%3E%3Cpath fill-rule='evenodd' d='M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z' clip-rule='evenodd'/%3E%3C/svg%3E");
+        background-position: right 0.5rem center;
+        background-repeat: no-repeat;
+        background-size: 1.25rem;
+      }
+
+      /* layer tags A / B, keyboard keys */
+      .tag { @apply inline-flex size-5 shrink-0 items-center justify-center rounded text-xs font-bold text-white; }
+      .kbd { @apply rounded border border-zinc-300 bg-white px-1 font-mono text-[11px] leading-4 text-zinc-600 shadow-xs dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-300; }
+
+      /* map badges */
+      .badge { @apply pointer-events-none absolute top-2 z-5 rounded-md px-2 py-0.5 text-xs/5 font-semibold whitespace-nowrap text-white shadow-md ring-1 ring-black/10; }
+
+      /* zoom level group, top centre of the map */
+      #zoomBar { @apply absolute top-3 left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-1.5; }
+      #zooms { @apply bg-white/90 shadow-sm ring-1 ring-zinc-950/10 backdrop-blur dark:bg-zinc-900/90; }
+      #zooms > button { @apply tabular-nums; }
+      .hint { @apply rounded-md bg-white/90 px-2 py-0.5 text-xs/5 text-zinc-600 shadow-sm ring-1 ring-zinc-950/10 backdrop-blur dark:bg-zinc-900/90 dark:text-zinc-300; }
+    }
+
+    @layer base {
+      body { @apply bg-zinc-100 font-sans text-zinc-950 antialiased dark:bg-zinc-950 dark:text-zinc-100; }
+    }
+  </style>
+  <style>
+    /* layout: plain CSS, driven by body.single / body.side / body.swipe */
+    html, body { height: 100%; margin: 0; }
+    body { display: flex; flex-direction: column; }
+    #maps { position: relative; flex: 1 1 0; min-height: 0; overflow: hidden; isolation: isolate; }
+    .map { position: absolute; inset: 0; z-index: 0; background: #ededed; }
+    #badgeA { left: 0.5rem; background: var(--color-a); }
+    #badgeB { right: 0.5rem; background: var(--color-b); }
+    body.single #mapB, body.single #badgeB { display: none; }
+    /* side by side: two rounded cards with a small gap, same card style as the osmcha2 panes */
+    body.side .map { inset: 10px; border-radius: 0.5rem; box-shadow: 0 0 16px rgb(24 24 27 / .16), 0 4px 12px rgb(24 24 27 / .08), 0 0 0 1px rgb(9 9 11 / .05); }
+    body.side #mapA { right: calc(50% + 5px); }
+    body.side #mapB { left: calc(50% + 5px); }
+    body.side #badgeA { left: 1.1rem; top: 1.1rem; }
+    body.side #badgeB { left: calc(50% + 1.1rem); right: auto; top: 1.1rem; }
+    #divider { display: none; position: absolute; top: 0; bottom: 0; width: 0; z-index: 10; touch-action: none; }
+    body.swipe #divider { display: block; }
+  </style>
+</head>
+<body class="single">
+  <header class="relative z-1001 flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-zinc-950/10 bg-white/90 px-4 py-2.5 backdrop-blur dark:border-white/10 dark:bg-zinc-900/90">
+    <div class="mr-1 flex items-baseline gap-2 whitespace-nowrap">
+      <span class="text-sm/6 font-semibold">Design-Explorationen</span>
+      <span id="areaTitle" class="text-sm/6 text-zinc-500 dark:text-zinc-400">Straßenraumkarte</span>
+    </div>
+
+    <div class="seg" role="group" aria-label="Ansicht" id="modes">
+      <button type="button" data-mode="single">Eine Ebene</button>
+      <button type="button" data-mode="swipe">Wischen</button>
+      <button type="button" data-mode="side">Nebeneinander</button>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <span class="tag bg-a" aria-hidden="true">A</span>
+      <select id="selA" class="select w-auto min-w-52" aria-label="Ebene A"></select>
+      <button type="button" id="swap" class="btn px-2" title="Ebene A ↔ B (Taste x)" aria-label="Ebene A ↔ B">
+        <svg viewBox="0 0 20 20" class="size-4" fill="currentColor" aria-hidden="true"><path d="M4 6h10.6l-2.3-2.3 1.4-1.4L18.4 7l-4.7 4.7-1.4-1.4 2.3-2.3H4V6zm12 8H5.4l2.3 2.3-1.4 1.4L1.6 13l4.7-4.7 1.4 1.4-2.3 2.3H16v2z"/></svg>
+      </button>
+      <span class="tag bg-b" aria-hidden="true">B</span>
+      <select id="selB" class="select w-auto min-w-52" aria-label="Ebene B"></select>
+    </div>
+
+    <div id="sceneWrap" class="flex items-center gap-2 text-sm/6 text-zinc-600 dark:text-zinc-400">
+      <label for="scene">Szene</label>
+      <select id="scene" class="select w-auto min-w-40"></select>
+    </div>
+    <label id="framesWrap" class="flex items-center gap-2 text-sm/6 text-zinc-600 dark:text-zinc-400">
+      <input type="checkbox" id="frames" class="size-4 rounded border-zinc-300 accent-zinc-900 dark:accent-white" />
+      Szenen-Rahmen
+    </label>
+    <!-- same view in the MapLibre vector compare (QGIS · Rust · Vector panes); href follows the map, see writeHash -->
+    <a id="vectorLink" class="btn" href="#" target="_blank" rel="noopener" title="Gleicher Ausschnitt im Vektor-Vergleich (vector/, bun run dev)">Vektor-Vergleich ↗</a>
+
+    <p id="status" class="hidden text-sm/6 text-amber-700 dark:text-amber-400"></p>
+    <p class="ml-auto hidden items-center gap-1.5 text-xs/5 text-zinc-500 xl:flex dark:text-zinc-400">
+      <kbd class="kbd">1</kbd><kbd class="kbd">2</kbd><kbd class="kbd">3</kbd> Modus
+      <span aria-hidden="true">·</span> <kbd class="kbd">←</kbd><kbd class="kbd">→</kbd> Szene
+    </p>
+  </header>
+
+  <main id="maps">
+    <div id="mapA" class="map"></div>
+    <div id="mapB" class="map"></div>
+    <!-- swipe divider: rounded line + grip pill at mid-height (grip style of the tilda-geo panel resize handle) -->
+    <div id="divider" class="group">
+      <div class="hit absolute inset-y-0 left-0 w-8 -translate-x-1/2 cursor-col-resize touch-none"></div>
+      <span class="pointer-events-none absolute inset-y-2 left-0 w-1.5 -translate-x-1/2 rounded-full bg-white/95 shadow-[0_0_4px_rgb(0_0_0/.35)] transition-colors group-hover:bg-zinc-950/80 group-active:bg-zinc-950/80"></span>
+      <span class="pointer-events-none absolute top-1/2 left-0 inline-flex h-5 w-2.5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white text-zinc-600 shadow-md ring-1 ring-zinc-950/10 transition-colors group-hover:bg-zinc-950/80 group-hover:text-white group-active:bg-zinc-950/80 group-active:text-white">
+        <svg viewBox="0 0 10 16" class="h-2.5 w-1.5" fill="currentColor" aria-hidden="true">
+          <circle cx="2.5" cy="2" r="1.15" /><circle cx="7.5" cy="2" r="1.15" />
+          <circle cx="2.5" cy="8" r="1.15" /><circle cx="7.5" cy="8" r="1.15" />
+          <circle cx="2.5" cy="14" r="1.15" /><circle cx="7.5" cy="14" r="1.15" />
+        </svg>
+      </span>
+    </div>
+    <div class="badge" id="badgeA"></div>
+    <div class="badge" id="badgeB"></div>
+    <div id="zoomBar">
+      <div class="seg" role="group" aria-label="Zoomstufe" id="zooms"></div>
+      <p class="hint">Klick: auf Zoomstufe springen · Mausrad: stufenweise zoomen</p>
+    </div>
+  </main>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    // Served by docs/design-research/tools/serve_viewer.sh (or any web server in the tile folder).
+    // The tile folder holds layers.json (variant folders: format and zoom range) and area.json
+    // (start view and scene list), both written by serve_viewer.sh.
+    const LABELS = {
+      la: 'Landschaftsarchitektur',
+      'la-vivid': 'Landschaftsarchitektur · vivid',
+      'la-cars': 'Landschaftsarchitektur · mit Autos',
+      ink: 'Tusche · Akzent Spielplätze',
+      'ink-bench': 'Tusche · Akzent Bänke',
+      'ink-tree': 'Tusche · Akzent Bäume',
+      'ink-oblique': 'Tusche · frei stehend schräg',
+      'ink-white': 'Tusche · schwarz auf weiß',
+      'ink-cars': 'Tusche · mit Karren (Autos)',
+      'full-approx': 'Rust full-approx (Basis)',
+      qgis: 'QGIS heute',
+    };
+    const DEFAULT_VIEW = { z: 18, lat: 52.4771, lng: 13.4222 };
+    const VECTOR_URL = 'http://127.0.0.1:5177/';  // vector/ dev server (bun run dev)
+
+    const $ = id => document.getElementById(id);
+    document.body.className = 'single';
+
+    // ---- URL state: #map=z/lat/lng&a=..&b=..&mode=..&split=..&frames=1
+    const params = new URLSearchParams(location.hash.slice(1));
+    const state = {
+      a: params.get('a') || 'la',
+      b: params.get('b') || 'ink',
+      mode: params.get('mode') || 'single',
+      split: Math.min(0.95, Math.max(0.05, +params.get('split') || 0.5)),
+      frames: params.get('frames') === '1',
+    };
+    let view = DEFAULT_VIEW;
+    let hasHashView = false;
+    const mv = (params.get('map') || '').split('/').map(Number);
+    if (mv.length === 3 && mv.every(Number.isFinite)) { view = { z: mv[0], lat: mv[1], lng: mv[2] }; hasHashView = true; }
+    // old viewer links: #18/52.47/13.42
+    const old = location.hash.match(/^#(\d+)\/([\d.]+)\/([\d.]+)$/);
+    if (old) { view = { z: +old[1], lat: +old[2], lng: +old[3] }; hasHashView = true; }
+
+    const writeHash = () => {
+      const c = mapA.getCenter();
+      const at = `${mapA.getZoom()}/${c.lat.toFixed(5)}/${c.lng.toFixed(5)}`;
+      let h = `#map=${at}&a=${state.a}&b=${state.b}&mode=${state.mode}`;
+      if (state.mode === 'swipe') h += `&split=${state.split.toFixed(3)}`;
+      if (state.frames) h += '&frames=1';
+      history.replaceState(null, '', h);
+      // the vector compare (vector/, bun run dev) takes the same view as ?map=zoom/lat/lng
+      $('vectorLink').href = `${VECTOR_URL}?compare=1&panes=qgis,rust,vector&map=${at}`;
+    };
+
+    // ---- two synced maps (B is hidden in single mode, sized in setMode)
+    // Zoom: fixed levels from the zoom bar; the wheel steps one level per gesture (debounced, so a
+    // trackpad does not skip several levels). No +/- buttons.
+    const mapOpts = { minZoom: 15, maxZoom: 21, zoomSnap: 1, zoomDelta: 1, wheelPxPerZoomLevel: 200,
+      wheelDebounceTime: 200, zoomControl: false, zoomAnimation: false, maxBoundsViscosity: 1 };
+    const mapA = L.map('mapA', { ...mapOpts, attributionControl: false }).setView([view.lat, view.lng], view.z);
+    const mapB = L.map('mapB', { ...mapOpts, attributionControl: false }).setView([view.lat, view.lng], view.z);
+    let syncing = false;
+    const link = (from, to) => from.on('move zoomend', () => {
+      if (syncing) return;
+      syncing = true;
+      to.setView(from.getCenter(), from.getZoom(), { animate: false });
+      syncing = false;
+    });
+    link(mapA, mapB);
+    link(mapB, mapA);
+    mapA.on('moveend', writeHash);
+
+    // ---- zoom bar: one button per fixed level, the current level is highlighted
+    const ZOOM_LEVELS = [[15, 'Übersicht'], [16, 'Quartier'], [17, 'Straßenraum'], [18, 'Hauszeile'], [19, 'Detail']];
+    ZOOM_LEVELS.forEach(([z, name]) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.dataset.zoom = z;
+      b.textContent = `${z} · ${name}`;
+      b.title = `Zoomstufe ${z} (${name}) anspringen`;
+      b.onclick = () => mapA.setZoom(z);
+      $('zooms').append(b);
+    });
+    const markZoom = () => {
+      const z = mapA.getZoom();
+      document.querySelectorAll('#zooms button').forEach(b => b.classList.toggle('on', +b.dataset.zoom === z));
+    };
+    mapA.on('zoomend', markZoom);
+
+    // ---- layers
+    let variants = [];
+    const current = { A: null, B: null };
+    const find = id => variants.find(v => v.id === id);
+    const tileLayer = v => L.tileLayer(`${v.id}/{z}/{x}/{y}.${v.ext}`, {
+      minZoom: 15, maxZoom: 21, minNativeZoom: v.zmin, maxNativeZoom: v.zmax, tileSize: 256, keepBuffer: 4,
+    });
+    const setLayer = side => {
+      const map = side === 'A' ? mapA : mapB;
+      const v = find(state[side.toLowerCase()]);
+      if (current[side]) map.removeLayer(current[side]);
+      current[side] = v ? tileLayer(v).addTo(map) : null;
+      $('sel' + side).value = v ? v.id : '';
+      $('badge' + side).textContent = `${side} · ${v ? v.label : 'keine Ebene'}`;
+      writeHash();
+    };
+
+    // ---- modes and the swipe divider
+    const applySplit = () => {
+      const w = $('maps').clientWidth;
+      const x = Math.round(state.split * w);
+      $('divider').style.left = x + 'px';
+      $('mapB').style.clipPath = state.mode === 'swipe' ? `inset(0 0 0 ${x}px)` : '';
+    };
+    const setMode = mode => {
+      state.mode = mode;
+      document.body.className = mode;
+      document.querySelectorAll('#modes button').forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
+      applySplit();
+      mapA.invalidateSize();
+      mapB.invalidateSize();
+      mapB.setView(mapA.getCenter(), mapA.getZoom(), { animate: false });
+      writeHash();
+    };
+    document.querySelectorAll('#modes button').forEach(b => b.onclick = () => setMode(b.dataset.mode));
+    let dragging = false;
+    $('divider').addEventListener('pointerdown', e => {
+      dragging = true;
+      $('divider').setPointerCapture(e.pointerId);
+      e.preventDefault();
+    });
+    window.addEventListener('pointermove', e => {
+      if (!dragging) return;
+      const r = $('maps').getBoundingClientRect();
+      state.split = Math.min(0.98, Math.max(0.02, (e.clientX - r.left) / r.width));
+      applySplit();
+    });
+    const endDrag = () => { if (dragging) { dragging = false; writeHash(); } };
+    window.addEventListener('pointerup', endDrag);
+    window.addEventListener('pointercancel', endDrag);
+    new ResizeObserver(() => { applySplit(); mapA.invalidateSize(); mapB.invalidateSize(); }).observe($('maps'));
+
+    // ---- scenes (from area.json; none for areas without a list)
+    let SCENES = [];
+    const frameGroups = [L.layerGroup(), L.layerGroup()];
+    const gotoScene = key => {
+      const s = SCENES.find(s => s.id === key);
+      if (s) mapA.setView(L.latLngBounds(s.bounds).getCenter(), 19);
+    };
+    const setFrames = on => {
+      state.frames = on;
+      $('frames').checked = on;
+      [mapA, mapB].forEach((m, i) => on ? frameGroups[i].addTo(m) : m.removeLayer(frameGroups[i]));
+      writeHash();
+    };
+    $('scene').onchange = e => gotoScene(e.target.value);
+    $('frames').onchange = e => setFrames(e.target.checked);
+
+    // ---- keys
+    const swap = () => { [state.a, state.b] = [state.b, state.a]; setLayer('A'); setLayer('B'); };
+    $('swap').onclick = swap;
+    document.addEventListener('keydown', e => {
+      if (['SELECT', 'INPUT'].includes(e.target.tagName) || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === '1') setMode('single');
+      if (e.key === '2') setMode('swipe');
+      if (e.key === '3') setMode('side');
+      if (e.key === 'x') swap();
+      if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && SCENES.length) {
+        const i = SCENES.findIndex(s => s.id === $('scene').value);
+        const step = e.key === 'ArrowRight' ? 1 : -1;
+        const n = i < 0 ? (step > 0 ? 0 : SCENES.length - 1) : (i + step + SCENES.length) % SCENES.length;
+        $('scene').value = SCENES[n].id;
+        gotoScene(SCENES[n].id);
+        e.preventDefault();
+      }
+    });
+
+    // ---- start: layers.json and area.json, then the UI
+    const getJSON = url => fetch(url, { cache: 'no-cache' }).then(r => (r.ok ? r.json() : null)).catch(() => null);
+    const rank = id => { const i = Object.keys(LABELS).indexOf(id); return i < 0 ? 99 : i; };
+    Promise.all([getJSON('layers.json'), getJSON('area.json')]).then(([layers, area]) => {
+      if (!layers || !layers.length) {
+        $('status').textContent = 'layers.json fehlt: Ordner mit serve_viewer.sh ausliefern';
+        $('status').classList.remove('hidden');
+      }
+      variants = (layers || []).map(v => ({ ...v, label: LABELS[v.id] || v.id })).sort((x, y) => rank(x.id) - rank(y.id));
+      if (!find(state.a)) state.a = variants[0] ? variants[0].id : '';
+      if (!find(state.b)) state.b = (variants[1] || variants[0] || { id: '' }).id;
+      for (const side of ['A', 'B']) {
+        const sel = $('sel' + side);
+        variants.forEach(v => sel.add(new Option(v.label, v.id)));
+        sel.onchange = e => { state[side.toLowerCase()] = e.target.value; setLayer(side); };
+      }
+
+      // nested: an area has its own start view, title and scene list (area.json in its folder)
+      if (area) {
+        if (area.title) { $('areaTitle').textContent = area.title; document.title = `${area.title} · Design-Explorationen`; }
+        // like MapLibre's maxBounds: the view stays inside the area's box, also for a #map= link outside it
+        if (area.bounds) { const b = L.latLngBounds(area.bounds); mapA.setMaxBounds(b); mapB.setMaxBounds(b); }
+        if (!hasHashView) mapA.setView(area.center, area.zoom, { animate: false });
+        SCENES = area.scenes || [];
+      }
+      if (SCENES.length) {
+        $('scene').add(new Option('–', ''));  // placeholder: nothing selected = no jump yet
+        SCENES.forEach(s => {
+          $('scene').add(new Option(`${s.id.toUpperCase()} · ${s.label}`, s.id));
+          frameGroups.forEach(g => L.rectangle(s.bounds, { color: '#d2552d', weight: 2, dashArray: '6 4', fill: false, interactive: false })
+            .bindTooltip(s.label, { permanent: true, direction: 'top' }).addTo(g));
+        });
+      } else {
+        $('sceneWrap').classList.add('hidden');
+        $('framesWrap').classList.add('hidden');
+      }
+
+      setLayer('A');
+      setLayer('B');
+      setMode(state.mode);
+      setFrames(state.frames);
+      markZoom();
+    });
+  </script>
+</body>
+</html>

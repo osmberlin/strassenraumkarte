@@ -1,0 +1,198 @@
+{
+  "water": {
+    "x": 0,
+    "y": 0,
+    "width": 770,
+    "height": 770,
+    "pixelRatio": 2
+  },
+  "forest": {
+    "x": 770,
+    "y": 0,
+    "width": 512,
+    "height": 512,
+    "pixelRatio": 1
+  },
+  "wetland": {
+    "x": 1282,
+    "y": 0,
+    "width": 660,
+    "height": 506,
+    "pixelRatio": 2
+  },
+  "grass": {
+    "x": 0,
+    "y": 770,
+    "width": 600,
+    "height": 450,
+    "pixelRatio": 1
+  },
+  "surface/sett": {
+    "x": 600,
+    "y": 770,
+    "width": 242,
+    "height": 242,
+    "pixelRatio": 2
+  },
+  "flowerbed": {
+    "x": 842,
+    "y": 770,
+    "width": 220,
+    "height": 220,
+    "pixelRatio": 2
+  },
+  "patterns/dog-park-paw": {
+    "x": 1062,
+    "y": 770,
+    "width": 220,
+    "height": 220,
+    "pixelRatio": 2
+  },
+  "sand": {
+    "x": 1282,
+    "y": 770,
+    "width": 660,
+    "height": 218,
+    "pixelRatio": 1
+  },
+  "woodchips": {
+    "x": 0,
+    "y": 1220,
+    "width": 176,
+    "height": 176,
+    "pixelRatio": 2
+  },
+  "patterns/construction-hatch": {
+    "x": 176,
+    "y": 1220,
+    "width": 164,
+    "height": 164,
+    "pixelRatio": 2
+  },
+  "gravel": {
+    "x": 340,
+    "y": 1220,
+    "width": 150,
+    "height": 150,
+    "pixelRatio": 1
+  },
+  "surface/asphalt": {
+    "x": 490,
+    "y": 1220,
+    "width": 132,
+    "height": 132,
+    "pixelRatio": 2
+  },
+  "pitches/badminton": {
+    "x": 622,
+    "y": 1220,
+    "width": 128,
+    "height": 128,
+    "pixelRatio": 2
+  },
+  "pitches/basketball_1": {
+    "x": 750,
+    "y": 1220,
+    "width": 128,
+    "height": 128,
+    "pixelRatio": 2
+  },
+  "pitches/basketball_2": {
+    "x": 878,
+    "y": 1220,
+    "width": 128,
+    "height": 128,
+    "pixelRatio": 2
+  },
+  "pitches/chess": {
+    "x": 1006,
+    "y": 1220,
+    "width": 128,
+    "height": 128,
+    "pixelRatio": 2
+  },
+  "pitches/field_hockey": {
+    "x": 1134,
+    "y": 1220,
+    "width": 128,
+    "height": 128,
+    "pixelRatio": 2
+  },
+  "pitches/handball": {
+    "x": 1262,
+    "y": 1220,
+    "width": 128,
+    "height": 128,
+    "pixelRatio": 2
+  },
+  "pitches/multi": {
+    "x": 1390,
+    "y": 1220,
+    "width": 128,
+    "height": 128,
+    "pixelRatio": 2
+  },
+  "pitches/rugby_league": {
+    "x": 1518,
+    "y": 1220,
+    "width": 128,
+    "height": 128,
+    "pixelRatio": 2
+  },
+  "pitches/rugby_union": {
+    "x": 1646,
+    "y": 1220,
+    "width": 128,
+    "height": 128,
+    "pixelRatio": 2
+  },
+  "pitches/soccer": {
+    "x": 1774,
+    "y": 1220,
+    "width": 128,
+    "height": 128,
+    "pixelRatio": 2
+  },
+  "pitches/soccer_small": {
+    "x": 1902,
+    "y": 1220,
+    "width": 128,
+    "height": 128,
+    "pixelRatio": 2
+  },
+  "pitches/tennis": {
+    "x": 0,
+    "y": 1396,
+    "width": 128,
+    "height": 128,
+    "pixelRatio": 2
+  },
+  "pitches/volleyball": {
+    "x": 128,
+    "y": 1396,
+    "width": 128,
+    "height": 128,
+    "pixelRatio": 2
+  },
+  "surface/paving_stones": {
+    "x": 256,
+    "y": 1396,
+    "width": 98,
+    "height": 116,
+    "pixelRatio": 2
+  },
+  "patterns/outdoor-seating-hatch": {
+    "x": 354,
+    "y": 1396,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "surface/concrete": {
+    "x": 434,
+    "y": 1396,
+    "width": 66,
+    "height": 66,
+    "pixelRatio": 2
+  }
+}
