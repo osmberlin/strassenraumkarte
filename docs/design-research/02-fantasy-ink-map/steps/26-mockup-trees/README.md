@@ -1,4 +1,4 @@
-# Ink 25 — trees like the first mockup
+# Ink 26 — trees like the first mockup
 
 Solitary trees and woodland go back to the symbol of the first procedural mockup ([`mockups/overview.jpg`](../../mockups/overview.jpg), right column; `docs/design-research/tools/restyle_mockup.py`, `render_ink`). Step 14 had merged the woodland into one cloud silhouette with light arcs inside, and the street trees were small upright scalloped crowns. Both looked like a different drawing from the mockups.
 
