@@ -7,38 +7,226 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     html, body { margin: 0; height: 100%; background: #ededed; font: 14px/1.4 system-ui, sans-serif; }
-    #map { position: absolute; inset: 0; }
+    body { display: flex; flex-direction: column; }
+    #bar { position: relative; z-index: 1001; display: flex; flex-wrap: wrap; gap: 6px 14px;
+      align-items: center; padding: 7px 12px; background: #fafaf8; border-bottom: 1px solid #ccc; }
+    #bar label { display: inline-flex; gap: 5px; align-items: center; }
+    #bar select, #bar button { font: inherit; padding: 2px 6px; }
+    .seg button { border: 1px solid #999; background: #fff; margin: 0 -1px 0 0; cursor: pointer; }
+    .seg button.on { background: #333; color: #fff; border-color: #333; }
+    .tagA, .tagB { display: inline-block; min-width: 1.2em; text-align: center; font-weight: 700; border-radius: 3px; color: #fff; }
+    .tagA { background: #2d6cdf; } .tagB { background: #d2552d; }
+    #maps { position: relative; flex: 1; overflow: hidden; }
+    .map { position: absolute; inset: 0; }
     .leaflet-container { background: #ededed; }
-    .hint { position: absolute; z-index: 1000; left: 12px; bottom: 12px; padding: 6px 10px; background: rgba(255,255,255,.9); border-radius: 6px; max-width: 360px; }
+    #divider { position: absolute; top: 0; bottom: 0; width: 0; z-index: 1000; display: none; }
+    #divider::before { content: ''; position: absolute; top: 0; bottom: 0; left: -1px; width: 3px; background: #fff; box-shadow: 0 0 3px rgba(0,0,0,.6); }
+    #divider .grip { position: absolute; top: 50%; left: -16px; width: 32px; height: 32px; margin-top: -16px; border-radius: 50%;
+      background: #fff; box-shadow: 0 0 4px rgba(0,0,0,.6); cursor: ew-resize; display: grid; place-items: center; font-weight: 700; user-select: none; }
+    #divider .hit { position: absolute; top: 0; bottom: 0; left: -8px; width: 16px; cursor: ew-resize; }
+    .badge { position: absolute; z-index: 999; top: 8px; padding: 2px 8px; border-radius: 4px; color: #fff; font-weight: 600;
+      pointer-events: none; box-shadow: 0 1px 3px rgba(0,0,0,.35); white-space: nowrap; }
+    #badgeA { background: #2d6cdf; left: 8px; } #badgeB { background: #d2552d; right: 8px; }
+    body.single #mapB, body.single #badgeB { display: none; }
+    body.side #mapA { right: 50%; } body.side #mapB { left: 50%; border-left: 2px solid #fff; }
+    body.side #badgeB { left: calc(50% + 10px); right: auto; }
+    body.swipe #divider { display: block; }
+    .hint { color: #666; font-size: 12px; }
   </style>
 </head>
-<body>
-  <div id="map"></div>
-  <div class="hint">Ebenen oben rechts umschalten. Gerendert von <code>srk-render --layers la | ink</code> (Schillerkiez, z16–19).</div>
+<body class="single">
+  <div id="bar">
+    <span class="seg" id="modes"><button data-mode="single">Eine Ebene</button><button data-mode="swipe">Wischen</button><button data-mode="side">Nebeneinander</button></span>
+    <label><span class="tagA">A</span><select id="selA"></select></label>
+    <button id="swap" title="A und B tauschen (Taste x)">⇄</button>
+    <label><span class="tagB">B</span><select id="selB"></select></label>
+    <label>Szene <select id="scene"><option value="">–</option></select></label>
+    <label><input type="checkbox" id="frames" /> Szenen-Rahmen</label>
+    <span class="hint">Tasten: 1/2/3 Modus · x tauschen · ←/→ Szene</span>
+  </div>
+  <div id="maps">
+    <div id="mapA" class="map"></div>
+    <div id="mapB" class="map"></div>
+    <div id="divider"><div class="hit"></div><div class="grip">⇔</div></div>
+    <div class="badge" id="badgeA"></div>
+    <div class="badge" id="badgeB"></div>
+  </div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    // Served by docs/design-research/tools/serve_viewer.sh from its tile root.
-    const opts = { minZoom: 16, maxZoom: 20, maxNativeZoom: 19, tileSize: 256, keepBuffer: 4 };
-    const layers = {
-      'Landschaftsarchitektur': L.tileLayer('la/{z}/{x}/{y}.webp', opts),
-      'Landschaftsarchitektur · vivid': L.tileLayer('la-vivid/{z}/{x}/{y}.webp', opts),
-      'Tusche · frei stehend schräg': L.tileLayer('ink-oblique/{z}/{x}/{y}.webp', opts),
-      'Tusche · schwarz auf weiß': L.tileLayer('ink-white/{z}/{x}/{y}.webp', opts),
-      'Tusche · Akzent Spielplätze': L.tileLayer('ink/{z}/{x}/{y}.webp', opts),
-      'Tusche · Akzent Bänke': L.tileLayer('ink-bench/{z}/{x}/{y}.webp', opts),
-      'Tusche · Akzent Bäume': L.tileLayer('ink-tree/{z}/{x}/{y}.webp', opts),
-      'Rust full-approx (Basis)': L.tileLayer('full-approx/{z}/{x}/{y}.webp', opts),
+    // Served by docs/design-research/tools/serve_viewer.sh from tmp/design-tiles/.
+    // That script writes layers.json (which variant folders exist, their format and zoom range);
+    // without it (e.g. opened from a file) every known variant is offered.
+    const KNOWN = [
+      ['la', 'Landschaftsarchitektur'],
+      ['la-vivid', 'Landschaftsarchitektur · vivid'],
+      ['ink', 'Tusche · Akzent Spielplätze'],
+      ['ink-bench', 'Tusche · Akzent Bänke'],
+      ['ink-tree', 'Tusche · Akzent Bäume'],
+      ['ink-oblique', 'Tusche · frei stehend schräg'],
+      ['ink-white', 'Tusche · schwarz auf weiß'],
+      ['full-approx', 'Rust full-approx (Basis)'],
+      ['qgis', 'QGIS heute (render/tiles)'],
+    ];
+    // z19 tile ranges, keep in sync with render_scenes.sh
+    const SCENES = [
+      ['a', 'Herrfurthplatz', 281689, 281692, 172043, 172046],
+      ['b', 'Schillerpromenade', 281691, 281694, 172049, 172052],
+      ['c', 'Hasenheide-Rand', 281682, 281685, 172039, 172042],
+      ['d', 'Hofblöcke', 281701, 281704, 172044, 172047],
+      ['e', 'Richardplatz', 281722, 281725, 172051, 172054],
+      ['f', 'Körnerpark', 281712, 281715, 172058, 172061],
+    ];
+    const lon = x => x / 2 ** 19 * 360 - 180;
+    const lat = y => 180 / Math.PI * Math.atan(Math.sinh(Math.PI * (1 - 2 * y / 2 ** 19)));
+    const sceneBounds = s => L.latLngBounds([lat(s[5] + 1), lon(s[2])], [lat(s[4]), lon(s[3] + 1)]);
+
+    const $ = id => document.getElementById(id);
+
+    // ---- URL state: #map=z/lat/lng&a=..&b=..&mode=..&split=..&frames=1
+    const params = new URLSearchParams(location.hash.slice(1));
+    const state = {
+      a: params.get('a') || 'la',
+      b: params.get('b') || 'ink',
+      mode: params.get('mode') || 'single',
+      split: Math.min(0.95, Math.max(0.05, +params.get('split') || 0.5)),
+      frames: params.get('frames') === '1',
     };
-    const map = L.map('map', { zoomSnap: 1, layers: [layers['Landschaftsarchitektur']] })
-      .setView([52.4771, 13.4222], 18);
-    L.control.layers(layers, {}, { collapsed: false }).addTo(map);
-    const hash = () => {
-      const c = map.getCenter();
-      history.replaceState(null, '', `#${map.getZoom()}/${c.lat.toFixed(5)}/${c.lng.toFixed(5)}`);
+    let view = { z: 18, lat: 52.4771, lng: 13.4222 };
+    const mv = (params.get('map') || '').split('/').map(Number);
+    if (mv.length === 3 && mv.every(Number.isFinite)) view = { z: mv[0], lat: mv[1], lng: mv[2] };
+    // old viewer links: #18/52.47/13.42
+    const old = location.hash.match(/^#(\d+)\/([\d.]+)\/([\d.]+)$/);
+    if (old) view = { z: +old[1], lat: +old[2], lng: +old[3] };
+
+    const writeHash = () => {
+      const c = mapA.getCenter();
+      let h = `#map=${mapA.getZoom()}/${c.lat.toFixed(5)}/${c.lng.toFixed(5)}&a=${state.a}&b=${state.b}&mode=${state.mode}`;
+      if (state.mode === 'swipe') h += `&split=${state.split.toFixed(3)}`;
+      if (state.frames) h += '&frames=1';
+      history.replaceState(null, '', h);
     };
-    const m = location.hash.match(/^#(\d+)\/([\d.]+)\/([\d.]+)/);
-    if (m) map.setView([+m[2], +m[3]], +m[1]);
-    map.on('moveend', hash);
+
+    // ---- two synced maps
+    const mapOpts = { minZoom: 15, maxZoom: 21, zoomSnap: 1, zoomAnimation: false };
+    const mapA = L.map('mapA', mapOpts).setView([view.lat, view.lng], view.z);
+    const mapB = L.map('mapB', { ...mapOpts, zoomControl: false, attributionControl: false }).setView([view.lat, view.lng], view.z);
+    let syncing = false;
+    const link = (from, to) => from.on('move zoomend', () => {
+      if (syncing) return;
+      syncing = true;
+      to.setView(from.getCenter(), from.getZoom(), { animate: false });
+      syncing = false;
+    });
+    link(mapA, mapB);
+    link(mapB, mapA);
+    mapA.on('moveend', writeHash);
+
+    let variants = [];
+    const tileLayer = id => {
+      const v = variants.find(v => v.id === id) || variants[0];
+      return L.tileLayer(`${v.id}/{z}/{x}/{y}.${v.ext}`, {
+        minZoom: 15, maxZoom: 21, minNativeZoom: v.zmin, maxNativeZoom: v.zmax, tileSize: 256, keepBuffer: 4,
+      });
+    };
+    const current = { A: null, B: null };
+    const setLayer = (side) => {
+      const map = side === 'A' ? mapA : mapB;
+      const id = state[side.toLowerCase()];
+      if (current[side]) map.removeLayer(current[side]);
+      current[side] = tileLayer(id).addTo(map);
+      $('sel' + side).value = id;
+      $('badge' + side).textContent = side + ' · ' + (variants.find(v => v.id === id) || {}).label;
+      writeHash();
+    };
+
+    // ---- modes and the swipe divider
+    const applySplit = () => {
+      const w = $('maps').clientWidth;
+      const x = Math.round(state.split * w);
+      $('divider').style.left = x + 'px';
+      $('mapB').style.clipPath = state.mode === 'swipe' ? `inset(0 0 0 ${x}px)` : '';
+    };
+    const setMode = (mode) => {
+      state.mode = mode;
+      document.body.className = mode;
+      document.querySelectorAll('#modes button').forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
+      applySplit();
+      mapA.invalidateSize();
+      mapB.invalidateSize();
+      mapB.setView(mapA.getCenter(), mapA.getZoom(), { animate: false });
+      writeHash();
+    };
+    document.querySelectorAll('#modes button').forEach(b => b.onclick = () => setMode(b.dataset.mode));
+    let dragging = false;
+    $('divider').addEventListener('pointerdown', e => { dragging = true; e.target.setPointerCapture(e.pointerId); e.preventDefault(); });
+    window.addEventListener('pointermove', e => {
+      if (!dragging) return;
+      const r = $('maps').getBoundingClientRect();
+      state.split = Math.min(0.98, Math.max(0.02, (e.clientX - r.left) / r.width));
+      applySplit();
+    });
+    window.addEventListener('pointerup', () => { if (dragging) { dragging = false; writeHash(); } });
+    new ResizeObserver(() => { applySplit(); mapA.invalidateSize(); mapB.invalidateSize(); }).observe($('maps'));
+
+    // ---- scenes
+    const frames = [L.layerGroup(), L.layerGroup()];
+    SCENES.forEach(s => {
+      $('scene').add(new Option(`${s[0].toUpperCase()} · ${s[1]}`, s[0]));
+      frames.forEach(g => L.rectangle(sceneBounds(s), { color: '#d2552d', weight: 2, dashArray: '6 4', fill: false, interactive: false })
+        .bindTooltip(s[1], { permanent: true, direction: 'top', className: '' }).addTo(g));
+    });
+    const gotoScene = key => {
+      const s = SCENES.find(s => s[0] === key);
+      if (s) mapA.setView(sceneBounds(s).getCenter(), 19);
+    };
+    $('scene').onchange = e => gotoScene(e.target.value);
+    const setFrames = on => {
+      state.frames = on;
+      $('frames').checked = on;
+      [mapA, mapB].forEach((m, i) => on ? frames[i].addTo(m) : m.removeLayer(frames[i]));
+      writeHash();
+    };
+    $('frames').onchange = e => setFrames(e.target.checked);
+
+    // ---- keys
+    const swap = () => { [state.a, state.b] = [state.b, state.a]; setLayer('A'); setLayer('B'); };
+    $('swap').onclick = swap;
+    document.addEventListener('keydown', e => {
+      if (e.target.tagName === 'SELECT' || e.metaKey || e.ctrlKey) return;
+      if (e.key === '1') setMode('single');
+      if (e.key === '2') setMode('swipe');
+      if (e.key === '3') setMode('side');
+      if (e.key === 'x') swap();
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        const i = SCENES.findIndex(s => s[0] === $('scene').value);
+        const step = e.key === 'ArrowRight' ? 1 : -1;
+        const n = i < 0 ? (step > 0 ? 0 : SCENES.length - 1) : (i + step + SCENES.length) % SCENES.length;
+        $('scene').value = SCENES[n][0];
+        gotoScene(SCENES[n][0]);
+        e.preventDefault();
+      }
+    });
+
+    // ---- variants: from layers.json if served, else every known one
+    const label = id => (KNOWN.find(k => k[0] === id) || [id, id])[1];
+    fetch('layers.json').then(r => r.ok ? r.json() : Promise.reject())
+      .then(list => list.map(v => ({ ...v, label: label(v.id) })))
+      .catch(() => KNOWN.map(([id, l]) => id === 'qgis'
+        ? { id, label: l, ext: 'jpg', zmin: 15, zmax: 20 }
+        : { id, label: l, ext: 'webp', zmin: 16, zmax: 19 }))
+      .then(list => {
+        const order = id => { const i = KNOWN.findIndex(k => k[0] === id); return i < 0 ? 99 : i; };
+        variants = list.sort((x, y) => order(x.id) - order(y.id));
+        for (const side of ['A', 'B']) variants.forEach(v => $('sel' + side).add(new Option(v.label, v.id)));
+        if (!variants.some(v => v.id === state.a)) state.a = variants[0].id;
+        if (!variants.some(v => v.id === state.b)) state.b = (variants[1] || variants[0]).id;
+        $('selA').onchange = e => { state.a = e.target.value; setLayer('A'); };
+        $('selB').onchange = e => { state.b = e.target.value; setLayer('B'); };
+        setLayer('A');
+        setLayer('B');
+        setMode(state.mode);
+        setFrames(state.frames);
+      });
   </script>
 </body>
 </html>
