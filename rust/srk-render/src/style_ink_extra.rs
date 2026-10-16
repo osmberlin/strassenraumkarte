@@ -121,12 +121,14 @@ pub fn draw_bridge_parapets(ctx: &Ctx, pm: &mut Pixmap, decks: &[Feature<Polygon
             if let Some(p) = pts_path(&wobble_pts(ctx, &pts, 0.3, 5.0, 23), false) {
                 walls.push_path(&p);
             }
-            // shadow below the south parapet: short vertical strokes hanging from the wall
+            // shadow below the south parapet: short strokes hanging from the wall, leaning south-east
+            // with the light (roof_shapes::shadow_dir_px)
             if ny > 0.3 {
+                let (sx, sy) = crate::roof_shapes::shadow_dir_px();
                 for (x, y, _) in along(&run, ctx.m(0.45).max(2.2), 1.0) {
                     let l = shadow * (0.75 + 0.25 * ((x * 0.37).sin()).abs());
                     shade.move_to(x, y + lw * 1.5);
-                    shade.line_to(x, y + l);
+                    shade.line_to(x + l * sx / sy, y + l);
                 }
             }
         }

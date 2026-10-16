@@ -24,7 +24,7 @@ More: [`showcase-z17.jpg`](showcase-z17.jpg) / [`showcase-z18.jpg`](showcase-z18
 **Decision on houses (2026-10-15):** no oblique view for ordinary buildings — dense rows would collide. Instead each building is a plan footprint with
 1. roof hatching along the slope (perpendicular to the long axis of `ST_OrientedEnvelope`),
 2. a ridge line where the footprint is roughly rectangular (area / envelope > 0.72),
-3. a second hatch on the roof half facing away from the light (NE) → cross-hatched shade,
+3. a second hatch on the roof half facing away from the light (SE) → cross-hatched shade,
 4. a narrow south facade band with window ticks on every south-facing edge (band from z18, windows from z19).
 
 Only landmarks (`church`, `chapel`, `cathedral`: one spire on their smallest polygon; schools: bell turret; civic buildings: clock tower), trees, benches, play equipment and street furniture stand upright, painted north → south.
@@ -51,7 +51,7 @@ Only landmarks (`church`, `chapel`, `cathedral`: one spire on their smallest pol
 | Roofs | from `roof_shape.sql` (z17+): connected roof masses, facet hatch along the ridge, cross-hatch on the shaded side, ridge and hip lines (`SRK_ROOFS=off` to disable) |
 
 Variants:
-- `SRK_INK_OBLIQUE=freestanding` — free-standing buildings and landmarks are lifted into an oblique view (roof shifted north, south walls with windows); rows stay plan. Small connected groups (up to 6 buildings, 1800 m², such as semi-detached houses or rows of huts) are lifted together with one shared roof line ([step 22](steps/22-oblique-groups/)). Lifted buildings cast a hatched shadow towards the east-north-east ([step 20](steps/20-bridges-landmarks-furniture/)). See [step 11](steps/11-oblique-freestanding/). **Candidate for the default.**
+- `SRK_INK_OBLIQUE=freestanding` — free-standing buildings and landmarks are lifted into an oblique view (roof shifted north, south walls with windows); rows stay plan. Small connected groups (up to 6 buildings, 1800 m², such as semi-detached houses or rows of huts) are lifted together with one shared roof line ([step 22](steps/22-oblique-groups/)). Lifted buildings cast a hatched shadow towards the south-east ([step 20](steps/20-bridges-landmarks-furniture/)). See [step 11](steps/11-oblique-freestanding/). **Candidate for the default.**
 - `SRK_INK_PAPER=white` — black ink on white for print / two-colour printing. See [step 15](steps/15-paper-variant/).
 
 ## Plan vs. pseudo-3D

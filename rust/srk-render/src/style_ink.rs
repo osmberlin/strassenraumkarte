@@ -590,9 +590,10 @@ fn draw_buildings(ctx: &mut Ctx, pm: &mut Pixmap, lw: f32) -> Result<()> {
             }
         }
     }
-    // lifted buildings cast a hatched shadow on the ground towards the east (light from the
-    // south-west, as for the shaded roof half); drawn first so every building covers it
+    // lifted buildings cast a hatched shadow on the ground towards the south-east (light from the
+    // north-west, as for the shaded roof half); drawn first so every building covers it
     if oblique {
+        let (sx, sy) = crate::roof_shapes::shadow_dir_px();
         let mut shadow = PathBuilder::new();
         for (_, i) in &order {
             let f = &buildings[*i];
@@ -601,7 +602,7 @@ fn draw_buildings(ctx: &mut Ctx, pm: &mut Pixmap, lw: f32) -> Result<()> {
                 continue;
             }
             for k in [0.2f32, 0.4, 0.6, 0.8, 1.0] {
-                if let Some(p) = poly_path_shifted(ctx, &f.geom, lift * 0.75 * k, -lift * 0.35 * k) {
+                if let Some(p) = poly_path_shifted(ctx, &f.geom, sx * lift * 0.8 * k, sy * lift * 0.8 * k) {
                     shadow.push_path(&p);
                 }
             }
@@ -723,14 +724,15 @@ fn draw_buildings(ctx: &mut Ctx, pm: &mut Pixmap, lw: f32) -> Result<()> {
         if let (false, Some(Geometry::LineString(_) | Geometry::MultiLineString(_))) = (roofed, &f.aux) {
             for l in geometry_lines(f.aux.clone().unwrap()) {
                 let rp: Vec<(f32, f32)> = line_pts(ctx, &l).into_iter().map(|(x, y)| (x, y - lift)).collect();
-                // shaded roof half: the side facing away from the light (NE), cross-hatched
+                // shaded roof half: the side facing away from the light (SE), cross-hatched
                 if let (Some(&(px, py)), Some(&(qx, qy))) = (rp.first(), rp.last()) {
                     let (dx, dy) = (qx - px, qy - py);
                     let len = (dx * dx + dy * dy).sqrt();
                     if len > 2.0 {
                         let (ux, uy) = (dx / len, dy / len);
                         let (mut nx, mut ny) = (-uy, ux);
-                        if nx - ny < 0.0 {
+                        let (sx, sy) = crate::roof_shapes::shadow_dir_px();
+                        if nx * sx + ny * sy < 0.0 {
                             nx = -nx;
                             ny = -ny;
                         }
@@ -1069,7 +1071,8 @@ fn draw_forest(ctx: &Ctx, pm: &mut Pixmap, crowns: &mut [(f32, f32, f32, i64)], 
     line(pm, &all, &paint(ink(1.0)), &stroke(lw * 2.6), None);
     // Winding, not EvenOdd: overlaps must stay filled or the inner outlines shine through
     pm.fill_path(&all, &paint(paper), tiny_skia::FillRule::Winding, tiny_skia::Transform::identity(), None);
-    // 3) inside: the lower-right half of each crown as a light arc, plus a few shading strokes
+    // 3) inside: an arc across the lower half of each crown (its side away from the NW light),
+    // plus a few shading strokes on the lower right
     let mut arcs = PathBuilder::new();
     let mut shading = PathBuilder::new();
     for &(x, y, r, id) in crowns.iter() {
