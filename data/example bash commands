@@ -1,8 +1,6 @@
 # Refresh database, download new data for Berlin, extract data for Neukölln suburb before data import and processing
+# (bbox extracts are cached under tmp/osm-extracts/; set OSM_EXTRACT_FORCE=1 to rebuild)
 ./data_preparation.sh --refresh --data https://download.geofabrik.de/europe/germany/berlin-latest.osm.pbf --bbox 13.3924,52.4543,13.4859,52.5009
-
-# Use an existent osm extract for data import and processing
-./data_preparation.sh --data osm/extract_berlin-latest.osm.pbf
 
 # Full PBF without bbox extract
 ./data_preparation.sh --data https://download.geofabrik.de/europe/germany/berlin-latest.osm.pbf --refresh

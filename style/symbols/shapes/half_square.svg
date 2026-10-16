@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="-150 -150 300 300">
+  <!-- QGIS SimpleMarker "half_square": marker size = 200 units, centre at 0,0 (see SHAPE_BOX in vector/src/style/sprite-icons.ts) -->
+  <polygon points="0,-100 100,-100 100,100 0,100" fill="param(fill) #000000" stroke="param(outline) none" stroke-width="param(outline-width) 0" stroke-linejoin="bevel"/>
+</svg>

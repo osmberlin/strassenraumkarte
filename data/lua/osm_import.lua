@@ -138,6 +138,8 @@ local layers = {
             'height',
             'min_height',
             'roof:shape',
+            'roof:colour',
+            'building:colour',
         },
         geometries = { "polygon" }
     },

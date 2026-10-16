@@ -1,0 +1,43 @@
+{
+  "run": "bench-large-fullapprox-20260801-171946",
+  "format": "png",
+  "bbox": "13.3958,52.4243,13.4874,52.4849",
+  "zmin": 15,
+  "zmax": 20,
+  "tiles": 103915,
+  "total_bytes": 866481021,
+  "total_mib": 826.3,
+  "avg_bytes": 8338.4,
+  "by_zoom": {
+    "15": {
+      "tiles": 90,
+      "total_bytes": 1021631,
+      "avg_bytes": 11351.5
+    },
+    "16": {
+      "tiles": 342,
+      "total_bytes": 3592842,
+      "avg_bytes": 10505.4
+    },
+    "17": {
+      "tiles": 1258,
+      "total_bytes": 12291111,
+      "avg_bytes": 9770.4
+    },
+    "18": {
+      "tiles": 4964,
+      "total_bytes": 44706244,
+      "avg_bytes": 9006.1
+    },
+    "19": {
+      "tiles": 19564,
+      "total_bytes": 166685966,
+      "avg_bytes": 8520.0
+    },
+    "20": {
+      "tiles": 77697,
+      "total_bytes": 638183227,
+      "avg_bytes": 8213.7
+    }
+  }
+}

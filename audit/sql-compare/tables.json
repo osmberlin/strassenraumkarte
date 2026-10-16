@@ -1,0 +1,130 @@
+{
+  "grid_m": 0.001,
+  "groups": {
+    "building": {
+      "description": "Outputs of building.sql",
+      "tables": [
+        {
+          "name": "building",
+          "id": ["osm_id"],
+          "attrs": ["height", "floating", "building", "building:part", "building:levels", "building:min_level", "min_height"],
+          "geom": "geom"
+        },
+        {
+          "name": "building_parts",
+          "id": [],
+          "attrs": ["height", "floating"],
+          "geom": "geom"
+        },
+        {
+          "name": "building_parts_dissolved_height",
+          "id": [],
+          "attrs": ["height"],
+          "geom": "geom"
+        },
+        {
+          "name": "building_shade",
+          "id": [],
+          "attrs": ["height"],
+          "geom": "geom"
+        },
+        {
+          "name": "building_lines",
+          "id": [],
+          "attrs": ["class"],
+          "geom": "geom"
+        }
+      ]
+    },
+    "lanes_offset": {
+      "description": "lanes after lanes_offset.sql (geometry + offset attrs)",
+      "tables": [
+        {
+          "name": "lanes",
+          "id": ["osm_id", "lane_index", "segment_id"],
+          "attrs": ["highway", "type", "class", "direction", "width", "offset", "transition", "layer", "hierarchy"],
+          "geom": "geom"
+        }
+      ]
+    },
+    "lanes_connectivity": {
+      "description": "connectivity columns written by lanes_connectivity.sql",
+      "tables": [
+        {
+          "name": "lanes",
+          "id": ["osm_id", "lane_index", "segment_id"],
+          "attrs": [
+            "prev_osm_id",
+            "prev_lane_index",
+            "next_osm_id",
+            "next_lane_index",
+            "prev_segment_id",
+            "next_segment_id",
+            "direction_lane_count"
+          ],
+          "geom": null
+        }
+      ]
+    },
+    "road_marking_stop_lines": {
+      "description": "stop_line rows in road_marking_way",
+      "tables": [
+        {
+          "name": "road_marking_way",
+          "id": ["osm_id", "source", "road_marking"],
+          "attrs": ["type", "class", "colour", "width", "layer", "stroke", "dasharray"],
+          "geom": "geom",
+          "where": "road_marking = 'stop_line'"
+        }
+      ]
+    },
+    "road_marking_lane_divider": {
+      "description": "lane_divider rows in road_marking_way",
+      "tables": [
+        {
+          "name": "road_marking_way",
+          "id": ["osm_id", "source", "road_marking"],
+          "attrs": ["type", "class", "colour", "width", "layer", "stroke", "dasharray"],
+          "geom": "geom",
+          "where": "road_marking = 'lane_divider'"
+        }
+      ]
+    },
+    "road_marking_crossing": {
+      "description": "crossing edges / polygons + crossing nodes",
+      "tables": [
+        {
+          "name": "road_marking_way",
+          "id": ["osm_id", "source", "road_marking"],
+          "attrs": ["type", "class", "colour", "width", "layer", "stroke", "dasharray"],
+          "geom": "geom",
+          "where": "road_marking = 'crossing_edge'"
+        },
+        {
+          "name": "road_marking_polygon",
+          "id": ["osm_id", "source", "road_marking"],
+          "attrs": ["type", "class", "colour", "layer"],
+          "geom": "geom",
+          "where": "road_marking ILIKE '%crossing%' OR source ILIKE '%crossing%'"
+        },
+        {
+          "name": "crossing",
+          "id": ["osm_id"],
+          "attrs": ["road_azimuth", "temporary"],
+          "geom": "geom"
+        }
+      ]
+    },
+    "label_highway": {
+      "description": "label_highway.sql output",
+      "tables": [
+        {
+          "name": "label_highway",
+          "id": [],
+          "attrs": ["name", "class", "zoom"],
+          "geom": "geom"
+        }
+      ]
+    }
+  }
+}
