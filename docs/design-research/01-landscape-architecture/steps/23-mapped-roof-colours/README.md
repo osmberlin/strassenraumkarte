@@ -1,4 +1,4 @@
-# LA 22 — mapped roof colours
+# LA 23 — mapped roof colours
 
 The DB was re-imported on 2026-10-16 with `roof:colour` and `building:colour` (added to `osm_import.lua`). In the Schillerkiez, 455 of 6014 buildings have `roof:colour` and 233 have `building:colour`, mostly as `#rrggbb`.
 
