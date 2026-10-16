@@ -1255,7 +1255,7 @@ SELECT
     cm.is_temporary
 FROM crossing_marking_lines_pre_clip cm
 CROSS JOIN LATERAL (
-    SELECT ST_Union(ha.geom) AS union_geom
+    SELECT ST_Buffer(ST_Union(ha.geom), 0) AS union_geom
     FROM highway_area ha
     WHERE ha.geom && cm.geom
       AND ST_Intersects(ha.geom, cm.geom)
@@ -1460,7 +1460,7 @@ zone_per_row AS (
                 (
                     SELECT ST_Intersection(b.ext_buffer, areas.union_geom)
                     FROM (
-                        SELECT ST_Union(ha.geom) AS union_geom
+                        SELECT ST_Buffer(ST_Union(ha.geom), 0) AS union_geom
                         FROM highway_area ha
                         WHERE ha.geom && b.ext_buffer
                           AND ST_Intersects(ha.geom, b.ext_buffer)

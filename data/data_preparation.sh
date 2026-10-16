@@ -10,11 +10,17 @@
 #   --refresh           Drop and recreate the public schema before import/processing.
 #   --skip-processing   Skip SQL processing steps (import only, if --data is set).
 #
+# After processing, render tables get a missing GIST index, a tid key for QGIS,
+# and VACUUM ANALYZE (processing/sql/render_prepare.sql).
+#
 
 # postgres database specifications (override via env: DB_NAME, DB_USER, DB_HOST, DB_PORT, CRS)
 DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "$DIR/.." && pwd)
 # shellcheck source=db_config.sh
 source "$DIR/db_config.sh"
+# shellcheck source=../log_tee.sh
+source "$REPO_ROOT/log_tee.sh"
 
 # directories
 OSM_DATA_DIR="$DIR/osm"
@@ -178,7 +184,7 @@ else
   #          + # Script adds new tables only, no changes in existing tables
   #          * # Script changes existing tables
   #      00:00 # Script runtime (MM:SS) – time for processing Neukölln reference area on a reference machine (32 GB RAM, i7-7700HQ × 8 CPU)
-  #              (total SQL ~02:56)
+  #              (total SQL ~02:53)
   # Dependency # Information about requirements (tables) that must be generated earlier by other scripts
 
   # Optional mid-latitude from --bbox (WGS84 ymin,ymax → mean) for mercator scale.
@@ -225,7 +231,7 @@ else
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Convert table tennis areas to points..."
   run_sql "processing/sql/table_tennis.sql"
 
-  # * | 01:12
+  # * | 00:18
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Process building outlines..."
   run_sql "processing/sql/building.sql"
 
@@ -233,7 +239,7 @@ else
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Uniform housenumbers..."
   run_sql "processing/sql/housenumber.sql"
 
-  # + | 00:00
+  # + | 00:01
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Generate tactile paving..."
   run_sql "processing/sql/tactile_paving.sql"
 
@@ -241,23 +247,35 @@ else
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Prepare highway segments..."
   run_sql "processing/sql/highway_preparation.sql"
 
-  # * | 00:02 | Dependency: highway from highway_preparation.sql
+  # * | 00:03 | Dependency: highway from highway_preparation.sql
+  echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Derive traffic_calming / barrier node direction and width from highway..."
+  run_sql "processing/sql/node_highway_direction.sql"
+
+  # * | 00:01 | Dependency: railway_node, railway_way from import; metres() from crs_scale.sql
+  echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Derive railway node direction from railway lines..."
+  run_sql "processing/sql/node_railway_direction.sql"
+
+  # * | 00:01 | Dependency: highway from highway_preparation.sql
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Split lanes to highway segments..."
   run_sql "processing/sql/lanes_split.sql"
 
-  # + | 00:05 | Dependency: highway from highway_preparation.sql
+  # + | 00:06 | Dependency: highway from highway_preparation.sql
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Spread dual carriageway branches..."
   run_sql "processing/sql/lanes_spread_dual_carriageway.sql"
 
-  # * | 00:06 | Dependency: lanes from lanes_split.sql; highway_transformed from lanes_spread_dual_carriageway.sql
+  # * | 00:00 | Dependency: highway, lanes from lanes_split.sql; highway_transformed from lanes_spread_dual_carriageway.sql
+  echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Spread oneway Y-junctions..."
+  run_sql "processing/sql/lanes_spread_y_junctions.sql"
+
+  # * | 00:08 | Dependency: lanes from lanes_split.sql; highway_transformed from lanes_spread_dual_carriageway.sql / lanes_spread_y_junctions.sql
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Offset lanes..."
   run_sql "processing/sql/lanes_offset.sql"
 
-  # * | 00:07 | Dependency: lanes from lanes_offset.sql; highway from highway_preparation.sql
+  # * | 00:06 | Dependency: lanes from lanes_offset.sql; highway from highway_preparation.sql
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Compute lane connectivity (prev/next) ..."
   run_sql "processing/sql/lanes_connectivity.sql"
 
-  # * | 00:02 | Dependency: lanes from lanes_connectivity.sql
+  # * | 00:03 | Dependency: lanes from lanes_connectivity.sql
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Snap lane endpoints to connected neighbours ..."
   run_sql "processing/sql/lanes_connect_endpoints.sql"
 
@@ -265,11 +283,11 @@ else
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Create highway areas from centerlines..."
   run_sql "processing/sql/highway_area_centerline.sql"
 
-  # * | 00:11 | Dependency: highway_areas, highway_junctions from highway_area_centerline.sql; highway from highway_preparation.sql
+  # * | 00:09 | Dependency: highway_areas, highway_junctions from highway_area_centerline.sql; highway from highway_preparation.sql
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Create stop lines (road_marking_stop_lines)..."
   run_sql "processing/sql/road_marking_stop_lines.sql"
 
-  # + | 00:03 | Dependency: highway_areas, highway_junctions from highway_area_centerline.sql; road_marking_way stop_line rows from road_marking_stop_lines.sql; lanes from lanes_connect_endpoints.sql
+  # + | 00:04 | Dependency: highway_areas, highway_junctions from highway_area_centerline.sql; road_marking_way stop_line rows from road_marking_stop_lines.sql; lanes from lanes_connect_endpoints.sql
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Clip lanes at junctions (road_marking_lanes_prepare)..."
   run_sql "processing/sql/road_marking_lanes_prepare.sql"
 
@@ -277,27 +295,27 @@ else
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Barred area polygons..."
   run_sql "processing/sql/road_marking_barred_area.sql"
 
-  # + | 00:05 | Dependency: lanes_clipped from road_marking_lanes_prepare.sql; lanes, highway
+  # + | 00:06 | Dependency: lanes_clipped from road_marking_lanes_prepare.sql; lanes, highway
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Separation lines..."
   run_sql "processing/sql/road_marking_separation.sql"
 
-  # * | 00:10 | Dependency: lanes_clipped from road_marking_lanes_prepare.sql; highway_areas from highway_area_centerline.sql; lanes, highway
+  # * | 00:14 | Dependency: lanes_clipped from road_marking_lanes_prepare.sql; highway_areas from highway_area_centerline.sql; lanes, highway
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Lane divider markings..."
   run_sql "processing/sql/road_marking_lane_divider.sql"
 
-  # * | 00:00 | Dependency: lanes_clipped from road_marking_lanes_prepare.sql; highway_areas from highway_area_centerline.sql
+  # * | 00:01 | Dependency: lanes_clipped from road_marking_lanes_prepare.sql; highway_areas from highway_area_centerline.sql
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Crossing edge markings..."
   run_sql "processing/sql/road_marking_crossing_edge.sql"
 
-  # * | 00:03 | Dependency: lanes_clipped_for_arrows from road_marking_lanes_prepare.sql; lanes from lanes_connect_endpoints.sql; road_marking_stop_lines.sql
+  # * | 00:01 | Dependency: lanes_clipped_for_arrows from road_marking_lanes_prepare.sql; lanes from lanes_connect_endpoints.sql; road_marking_stop_lines.sql
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Turn lane arrows..."
   run_sql "processing/sql/road_marking_arrows.sql"
 
-  # * | 00:01 | Dependency: lanes_clipped from road_marking_lanes_prepare.sql
+  # * | 00:00 | Dependency: lanes_clipped from road_marking_lanes_prepare.sql
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Snap directional road marking nodes..."
   run_sql "processing/sql/road_marking_nodes.sql"
 
-  # * | 00:01 | Dependency: highway_areas from highway_area_centerline.sql; highway_junctions_clipping_areas from road_marking_lanes_prepare.sql
+  # * | 00:02 | Dependency: highway_areas from highway_area_centerline.sql; highway_junctions_clipping_areas from road_marking_lanes_prepare.sql
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Merge centerline areas at junctions..."
   run_sql "processing/sql/highway_area_centerline_junctions.sql"
 
@@ -305,23 +323,71 @@ else
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Merge centerline areas into highway_area..."
   run_sql "processing/sql/highway_area_merge.sql"
 
-  # * | 00:00 | Dependency: highway_area from highway_area_merge.sql; highway from highway_preparation.sql
+  # * | 00:03 | Dependency: highway_transformed; highway_area from highway_area_merge.sql;
+  #            highway_area_tunnel from highway_area_centerline.sql;
+  #            railway_way / waterway / tunnel_way: shared OSM vertices (no distance snap)
+  echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Create tunnel entrance polygons..."
+  run_sql "processing/sql/tunnel_entrance.sql"
+
+  # * | 00:01 | Dependency: highway_area from highway_area_merge.sql; highway from highway_preparation.sql
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Derive surface for OSM highway_area without surface..."
   run_sql "processing/sql/highway_area_surface.sql"
 
-  # * | 00:01 | Dependency: highway_area from highway_area_merge.sql; highway from highway_preparation.sql
+  # + | 00:27 | Dependency: highway_area from highway_area_merge.sql;
+  #            parking/street_parking.gpkg (TILDA) or parking/street_parking_lines.geojson
+  PARKING_FILE=""
+  if [ -f "$DIR/parking/street_parking.gpkg" ]; then
+    PARKING_FILE="$DIR/parking/street_parking.gpkg"
+  elif [ -f "$DIR/parking/street_parking_lines.geojson" ]; then
+    PARKING_FILE="$DIR/parking/street_parking_lines.geojson"
+  elif [ -f "$DIR/parking/street_parking.geojson" ]; then
+    PARKING_FILE="$DIR/parking/street_parking.geojson"
+  fi
+  if [ -n "$PARKING_FILE" ]; then
+    echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Import street parking ($(basename "$PARKING_FILE")) and snap to carriageway edges..."
+    OGR_PARKING_ARGS=(
+      -f PostgreSQL
+      "PG:dbname=${DB_NAME} host=${DB_HOST} port=${DB_PORT} user=${DB_USER}"
+      "$PARKING_FILE"
+      -nln street_parking_import
+      -overwrite
+      -t_srs "EPSG:${CRS}"
+      -nlt LINESTRING
+      -dim XY
+      -lco GEOMETRY_NAME=geom
+      -lco FID=fid
+    )
+    if [ "$DATA_EXTRACT" != "false" ]; then
+      IFS=',' read -r _pxmin _pymin _pxmax _pymax <<< "$DATA_EXTRACT"
+      OGR_PARKING_ARGS+=(-spat "$_pxmin" "$_pymin" "$_pxmax" "$_pymax" -spat_srs EPSG:4326)
+    fi
+    if ! ogr2ogr "${OGR_PARKING_ARGS[@]}"; then
+      echo "$(date +'%Y-%m-%d %H:%M:%S')  [ERROR] ogr2ogr failed: $PARKING_FILE" >&2
+      exit 1
+    fi
+    run_sql "processing/sql/street_parking.sql"
+    # + | 00:10 | Dependency: street_parking; landuse
+    echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Place vehicle points on street parking..."
+    run_sql "processing/sql/street_parking_point.sql"
+  else
+    echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Skip street parking (no parking/street_parking.gpkg or *.geojson)."
+    psql_base -d "$DB_NAME" -c "DROP TABLE IF EXISTS street_parking;"
+    psql_base -d "$DB_NAME" -c "DROP TABLE IF EXISTS street_parking_point;"
+  fi
+
+  # * | 00:00 | Dependency: highway_area from highway_area_merge.sql; highway from highway_preparation.sql
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Derive street class for parking highway_area..."
   run_sql "processing/sql/highway_area_parking_class.sql"
 
-  # * | 00:02 | Dependency: highway_area from highway_area_merge.sql; highway_transformed from lanes_spread_dual_carriageway.sql; lanes
+  # * | 00:03 | Dependency: highway_area from highway_area_merge.sql; highway_transformed from lanes_spread_dual_carriageway.sql; lanes
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Parking road markings (outlines + symbols)..."
   run_sql "processing/sql/road_marking_parking.sql"
 
-  # * | 00:01 | Dependency: lanes_clipped from road_marking_lanes_prepare.sql; highway_area from highway_area_merge.sql
+  # * | 00:00 | Dependency: lanes_clipped from road_marking_lanes_prepare.sql; highway_area from highway_area_merge.sql
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Surface colour road markings (lanes + highway_area)..."
   run_sql "processing/sql/road_marking_colour.sql"
 
-  # * | 00:02 | Dependency: highway_transformed from lanes_spread_dual_carriageway.sql
+  # * | 00:03 | Dependency: highway_transformed from lanes_spread_dual_carriageway.sql
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Get direction of area polygons (highway, landuse paving_stones/sett, road marking)..."
   run_sql "processing/sql/highway_area_direction.sql"
 
@@ -329,7 +395,7 @@ else
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Generate restriction road marking patterns..."
   run_sql "processing/sql/road_marking_restriction.sql"
 
-  # * | 00:12 | Dependency: highway_area from highway_area_merge.sql; highway from highway_preparation.sql
+  # * | 00:14 | Dependency: highway_area from highway_area_merge.sql; highway from highway_preparation.sql
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Crossing road markings..."
   run_sql "processing/sql/road_marking_crossing.sql"
 
@@ -337,9 +403,13 @@ else
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Buffer marking road markings..."
   run_sql "processing/sql/road_marking_buffer_marking.sql"
 
-  # + | 00:00 | Dependency: highway from highway_preparation.sql
+  # + | 00:00 | Dependency: highway from highway_preparation.sql; highway_area from highway_area_merge.sql
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Unify service roads..."
   run_sql "processing/sql/service.sql"
+
+  # + | 00:02 | Dependency: highway from highway_preparation.sql; highway_area from highway_area_merge.sql; lanes.turn
+  echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Create one-way street lines..."
+  run_sql "processing/sql/oneway.sql"
 
   # + | 00:01
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Create bridge shadow areas..."
@@ -357,9 +427,17 @@ else
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Create geometries for waterway labeling..."
   run_sql "processing/sql/label_waterway.sql"
 
-  # + | 00:10 | Dependency: highway from highway_preparation.sql
+  # + | 00:13 | Dependency: highway from highway_preparation.sql
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Create geometries for highway labeling..."
   run_sql "processing/sql/label_highway.sql"
+
+  # * | 00:01 | Dependency: barrier_way from import; after scripts that cover/clip against kerbs
+  echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Open closed kerb rings for Lineburst offset..."
+  run_sql "processing/sql/barrier_kerb_open_rings.sql"
+
+  # + | 00:04 | GIST + tid key + VACUUM ANALYZE for every rendered table
+  echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Index, tid key and VACUUM ANALYZE render tables..."
+  run_sql "processing/sql/render_prepare.sql"
 
 fi
 

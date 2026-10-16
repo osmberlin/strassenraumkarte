@@ -10,13 +10,15 @@
 \i 'processing/sql/helper/highway_road_area.sql'
 
 
--- 1) Filter stop positions: exclude stop_line=no and nodes touched by mapped road_marking=stop_line
+-- 1) Filter stop positions: exclude stop_line=no, traffic_signals=emergency,
+--    and nodes touched by mapped road_marking=stop_line
 DROP TABLE IF EXISTS stop_positions_filtered;
 CREATE TABLE stop_positions_filtered AS
 SELECT sp.*
 FROM stop_positions sp
 WHERE
     (sp.stop_line IS NULL OR sp.stop_line != 'no')
+    AND NOT (sp.highway = 'traffic_signals' AND sp.traffic_signals = 'emergency')
     AND NOT EXISTS (
         SELECT 1 FROM road_marking_way rm
         WHERE rm.road_marking = 'stop_line'

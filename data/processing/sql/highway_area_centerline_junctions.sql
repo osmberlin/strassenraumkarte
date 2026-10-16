@@ -67,6 +67,7 @@ outside_raw AS (
         ha.tunnel,
         ha.hierarchy,
         ha.layer,
+        ha.type,
         CASE
             WHEN local_clips.clip_geom IS NULL THEN ha.geom
             ELSE ST_Difference(ha.geom, local_clips.clip_geom)
@@ -91,7 +92,7 @@ outside_parts AS (
         tunnel,
         hierarchy,
         layer,
-        NULL::text AS type,
+        type,
         (ST_Dump(diff_geom)).geom AS geom
     FROM outside_raw
     WHERE diff_geom IS NOT NULL

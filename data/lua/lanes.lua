@@ -205,6 +205,7 @@ local function get_lanes(object)
 
     -- default values
     local lane_width_default = 3
+    local lane_width_default_motorway = 3.5
     local lane_width_default_bothways = 5
     local cycleway_width_default = 1.5
     local cycleway_width_default_two_way = 2
@@ -253,6 +254,14 @@ local function get_lanes(object)
     local is_footway  = (highway_value == 'footway' or highway_value == 'path')
     local is_crossing = highway_is_crossing(highway_value, object.tags)
     local is_standalone_path = is_cycleway or is_footway
+    -- highway=service with an explicit service=* other than alley uses the
+    -- narrower 3 m default (driveway, parking_aisle, emergency_access, …).
+    -- alley and untagged service keep the 5 m unmarked both-ways default.
+    -- Includes highway=construction + construction=service.
+    local service_narrow_default = highway_value == 'service'
+        and object.tags.service
+        and object.tags.service ~= ''
+        and object.tags.service ~= 'alley'
 
     ----------------------------------------
     -- (motorized) lane count (per driving direction)
@@ -783,9 +792,15 @@ local function get_lanes(object)
                     elseif is_path_highway then
                         lane_width = path_width_default
                     else
-                        -- assume a broader default width for non explicit both-way-roads (two way road without lanes)
+                        -- assume a broader default width for non explicit both-way-roads (two way road without lanes);
+                        -- highway=service with service=* other than alley always uses the narrower 3 m default;
+                        -- motorway/motorway_link use 3.5 m (incl. construction=* remapped into highway_value)
                         lane_width_from_default = true
-                        if dir == 'both_ways' and i == 1 and i == count then
+                        if service_narrow_default then
+                            lane_width = lane_width_default
+                        elseif is_in(highway_value, {'motorway', 'motorway_link'}) then
+                            lane_width = lane_width_default_motorway
+                        elseif dir == 'both_ways' and i == 1 and i == count then
                             lane_width = lane_width_default_bothways
                         else
                             lane_width = lane_width_default
@@ -864,6 +879,7 @@ local function get_lanes(object)
             -- lane markings
             local lane_marking_left = nil
             local lane_marking_right = nil
+            local lane_change = nil
             if is_standalone_path then
                 -- markings for standalone paths (cycleway, footway, path)
                 lane_marking_left = object.tags["marking:left"] or object.tags["marking:both"] or object.tags["marking"]
@@ -885,7 +901,6 @@ local function get_lanes(object)
                 end
             else
                 -- on inner lanes: dashed line (if lane markings are present) or dashed/solid line indicated by overtaking tagging
-                local lane_change = nil
                 if change_lanes_dir[dir] and change_lanes_dir[dir][i] then
                     lane_change = change_lanes_dir[dir][i]
                 elseif oneway ~= 'no' and change_lanes and change_lanes[i] then
@@ -1033,6 +1048,7 @@ local function get_lanes(object)
                 colour = lane_colour,
                 marking_left = lane_marking_left,
                 marking_right = lane_marking_right,
+                change = lane_change,
                 separation_left = lane_separation_left,
                 separation_right = lane_separation_right,
                 buffer_left = lane_buffer_left,
@@ -1568,6 +1584,51 @@ local function get_lanes(object)
             local next_lane = lane_list[i + 1]
             if next_lane and next_lane.marking_left then
                 lane.marking_right = nil
+            end
+        end
+    end
+
+    -- one-sided change: dashed toward the lane that may change, solid toward the lane that may not
+    local function change_allows_left(v)
+        return v == 'yes' or v == 'not_right' or v == 'only_left'
+    end
+    local function change_allows_right(v)
+        return v == 'yes' or v == 'not_left' or v == 'only_right'
+    end
+    local function is_line_marking(v)
+        return v and string.find(v, 'line', 1, true)
+    end
+    for i = 1, #lane_list - 1 do
+        local left_lane = lane_list[i]
+        local right_lane = lane_list[i + 1]
+        if left_lane.direction == right_lane.direction
+            and left_lane.change and right_lane.change
+        then
+            local toward_right, toward_left
+            if left_lane.direction == 'backward' then
+                -- map-left backward driver: left = toward map-right neighbor
+                toward_right = change_allows_left(left_lane.change)
+                toward_left = change_allows_right(right_lane.change)
+            else
+                toward_right = change_allows_right(left_lane.change)
+                toward_left = change_allows_left(right_lane.change)
+            end
+            if toward_right ~= toward_left then
+                local map_left_style = toward_right and 'dashed_line' or 'solid_line'
+                local map_right_style = toward_left and 'dashed_line' or 'solid_line'
+                local value
+                if left_lane.direction == 'backward' then
+                    -- divider geometry is ST_Reverse'd: geom-left is the map-right lane
+                    value = map_right_style .. ';' .. map_left_style
+                else
+                    value = map_left_style .. ';' .. map_right_style
+                end
+                if is_line_marking(right_lane.marking_left) then
+                    right_lane.marking_left = value
+                end
+                if is_line_marking(left_lane.marking_right) then
+                    left_lane.marking_right = value
+                end
             end
         end
     end

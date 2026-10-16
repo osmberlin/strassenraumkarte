@@ -5,6 +5,9 @@
 -- (shared start/end nodes per segment_id) and the offset lanes table
 -- for geometry-based distance checks.
 --
+-- dual_carriageway ↔ shared carriageway of the same street: width and
+-- distance filters are relaxed (lane widths often jump at the split).
+--
 -- For each lane, determines:
 --   prev_segment_id / prev_lane_index  – the preceding lane segment
 --   next_segment_id / next_lane_index  – the following lane segment
@@ -47,6 +50,9 @@ CREATE TEMP TABLE _conn_road_ep AS
 SELECT
     segment_id,
     osm_id,
+    name,
+    highway,
+    dual_carriageway,
     geom,
     ST_StartPoint(geom)  AS spt,
     ST_EndPoint(geom)    AS ept,
@@ -81,6 +87,9 @@ CREATE INDEX _conn_road_ep_segment_id_idx ON _conn_road_ep (segment_id);
 DROP TABLE IF EXISTS _conn_junctions;
 CREATE TEMP TABLE _conn_junctions AS
 
+-- dual_carriageway ↔ shared (non-dual) carriageway of the same street:
+-- at a split/merge the continuation is unique even when lane widths differ.
+WITH pairs AS (
 -- A.end = B.start  (geometries roughly co-directed)
 SELECT
     a.segment_id AS segment_a,
@@ -88,7 +97,13 @@ SELECT
     a.osm_id     AS road_a,
     b.osm_id     AS road_b,
     'end'::text   AS a_end,
-    'start'::text AS b_end
+    'start'::text AS b_end,
+    a.name AS name_a,
+    b.name AS name_b,
+    a.highway AS highway_a,
+    b.highway AS highway_b,
+    a.dual_carriageway AS dual_a,
+    b.dual_carriageway AS dual_b
 FROM _conn_road_ep a
 JOIN _conn_road_ep b
   ON a.segment_id <> b.segment_id
@@ -98,7 +113,8 @@ WHERE cos(a.az_end - b.az_start) > cos(radians(45))
 UNION ALL
 
 -- A.end = B.end  (geometries roughly anti-parallel)
-SELECT a.segment_id, b.segment_id, a.osm_id, b.osm_id, 'end', 'end'
+SELECT a.segment_id, b.segment_id, a.osm_id, b.osm_id, 'end', 'end',
+       a.name, b.name, a.highway, b.highway, a.dual_carriageway, b.dual_carriageway
 FROM _conn_road_ep a
 JOIN _conn_road_ep b
   ON a.segment_id <> b.segment_id
@@ -108,7 +124,8 @@ WHERE cos(a.az_end - b.az_end - pi()) > cos(radians(45))
 UNION ALL
 
 -- A.start = B.start  (geometries roughly anti-parallel)
-SELECT a.segment_id, b.segment_id, a.osm_id, b.osm_id, 'start', 'start'
+SELECT a.segment_id, b.segment_id, a.osm_id, b.osm_id, 'start', 'start',
+       a.name, b.name, a.highway, b.highway, a.dual_carriageway, b.dual_carriageway
 FROM _conn_road_ep a
 JOIN _conn_road_ep b
   ON a.segment_id <> b.segment_id
@@ -118,12 +135,31 @@ WHERE cos(a.az_start + pi() - b.az_start) > cos(radians(45))
 UNION ALL
 
 -- A.start = B.end  (geometries roughly co-directed)
-SELECT a.segment_id, b.segment_id, a.osm_id, b.osm_id, 'start', 'end'
+SELECT a.segment_id, b.segment_id, a.osm_id, b.osm_id, 'start', 'end',
+       a.name, b.name, a.highway, b.highway, a.dual_carriageway, b.dual_carriageway
 FROM _conn_road_ep a
 JOIN _conn_road_ep b
   ON a.segment_id <> b.segment_id
  AND ST_Equals(a.spt, b.ept)
-WHERE cos(a.az_start - b.az_end) > cos(radians(45));
+WHERE cos(a.az_start - b.az_end) > cos(radians(45))
+)
+SELECT
+    segment_a,
+    segment_b,
+    road_a,
+    road_b,
+    a_end,
+    b_end,
+    (
+        name_a IS NOT DISTINCT FROM name_b
+        AND highway_a IS NOT DISTINCT FROM highway_b
+        AND (
+            (dual_a = 'yes' AND dual_b IS DISTINCT FROM 'yes')
+            OR
+            (dual_b = 'yes' AND dual_a IS DISTINCT FROM 'yes')
+        )
+    ) AS dual_single
+FROM pairs;
 
 CREATE INDEX _conn_junctions_segment_a_idx ON _conn_junctions (segment_a);
 CREATE INDEX _conn_junctions_segment_b_idx ON _conn_junctions (segment_b);
@@ -190,6 +226,7 @@ SELECT
     j.segment_b,
     j.a_end,
     j.b_end,
+    j.dual_single,
     ST_Distance(
         CASE WHEN j.a_end = 'end' THEN la.ept ELSE la.spt END,
         CASE WHEN j.b_end = 'start' THEN lb.spt ELSE lb.ept END
@@ -225,11 +262,19 @@ WHERE
         OR (j.a_end = 'start' AND j.b_end = 'end'
             AND la.direction = 'backward' AND lb.direction = 'backward')
     )
-    AND abs(la.width - lb.width) <= :lanes_connectivity_max_width_diff
+    AND (
+        j.dual_single
+        OR abs(la.width - lb.width) <= :lanes_connectivity_max_width_diff
+    )
     AND ST_Distance(
         CASE WHEN j.a_end = 'end' THEN la.ept ELSE la.spt END,
         CASE WHEN j.b_end = 'start' THEN lb.spt ELSE lb.ept END
-    ) <= metres(:lanes_connectivity_max_dist);
+    ) <= metres(
+        CASE
+            WHEN j.dual_single THEN :lanes_connectivity_max_dist_dual_single
+            ELSE :lanes_connectivity_max_dist
+        END
+    );
 
 
 ----------------------------------------------------------------------
@@ -242,10 +287,11 @@ SELECT
     segment_id_a, lane_index_a,
     segment_id_b, lane_index_b,
     osm_id_a, osm_id_b,
-    dist, turn_priority
+    dist, turn_priority, dual_single
 FROM _conn_candidates
 WHERE
-    dist <= metres(:lanes_connectivity_close_threshold)
+    dual_single
+    OR dist <= metres(:lanes_connectivity_close_threshold)
     OR (dist > metres(:lanes_connectivity_close_threshold) AND lane_count_a = lane_count_b);
 
 
@@ -262,7 +308,7 @@ SELECT DISTINCT ON (segment_id_a, lane_index_a)
     dist,
     turn_priority
 FROM _conn_valid
-ORDER BY segment_id_a, lane_index_a, dist;
+ORDER BY segment_id_a, lane_index_a, dual_single DESC, dist;
 
 DROP TABLE IF EXISTS _conn_final;
 CREATE TEMP TABLE _conn_final AS

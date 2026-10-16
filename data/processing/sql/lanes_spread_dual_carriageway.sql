@@ -1,6 +1,12 @@
 -- Spreads street segments of dual carriageways at their junction points
 -- where they split from or merge into a shared carriageway
-
+--
+-- Shift amount is the distance from this segment's OSM centerline to its
+-- left carriageway edge, taken from the lanes of *this* segment (start vs
+-- end, including transition). highway.left_offset is only a fallback: it is
+-- a length-weighted median along the whole road_segment_id and can reflect
+-- a neighbour's placement tag (e.g. placement=right_of:1) rather than the
+-- geometry at this junction.
 
 DROP TABLE IF EXISTS highway_transformed;
 
@@ -14,14 +20,31 @@ dual AS (
     WHERE dual_carriageway = 'yes'
 ),
 
+-- 1b) Left-edge distance at each end, from this segment's own lanes
+dual_lane_left AS (
+    SELECT
+        l.segment_id,
+        GREATEST(-MIN(l."offset" - l.width / 2.0), 0) AS left_at_start,
+        GREATEST(
+            -MIN((l."offset" + COALESCE(l.transition, 0)) - l.width / 2.0),
+            0
+        ) AS left_at_end
+    FROM lanes l
+    WHERE l.width IS NOT NULL
+    GROUP BY l.segment_id
+),
+
 -- 2) extract endpoints
 dual_endpoints AS (
     SELECT
         d.*,
+        COALESCE(ll.left_at_start, GREATEST(d.left_offset, 0)) AS spread_left_start,
+        COALESCE(ll.left_at_end, GREATEST(d.left_offset, 0)) AS spread_left_end,
         ST_StartPoint(geom) AS start_pt,
         ST_EndPoint(geom)   AS end_pt,
         ST_NPoints(geom)    AS npts
     FROM dual d
+    LEFT JOIN dual_lane_left ll ON ll.segment_id = d.segment_id
 ),
 
 -- 3) find matching single carriageways at start point
@@ -31,7 +54,7 @@ start_candidates AS (
         d.osm_id,
         d.geom,
         d.start_pt,
-        d.left_offset,
+        d.spread_left_start AS left_offset,
         s.geom AS single_geom,
 
         -- direction of dual segment (start → next point)
@@ -98,7 +121,7 @@ start_candidates_any AS (
         d.osm_id,
         d.geom,
         d.start_pt,
-        d.left_offset,
+        d.spread_left_start AS left_offset,
         s.geom AS single_geom,
         -- dual direction from start
         ST_Azimuth(
@@ -208,7 +231,7 @@ end_candidates AS (
         d.osm_id,
         d.geom,
         d.end_pt,
-        d.left_offset,
+        d.spread_left_end AS left_offset,
         s.geom AS single_geom,
 
         ST_Azimuth(
@@ -270,7 +293,7 @@ end_candidates_any AS (
         d.osm_id,
         d.geom,
         d.end_pt,
-        d.left_offset,
+        d.spread_left_end AS left_offset,
         s.geom AS single_geom,
         -- dual direction into end
         ST_Azimuth(

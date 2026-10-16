@@ -32,8 +32,8 @@ CANDIDATE_TABLES = (
 )
 
 
-def qgis_extent_string(xmin: float, xmax: float, ymin: float, ymax: float, epsg: int) -> str:
-    return f"{xmin},{xmax},{ymin},{ymax} [EPSG:{epsg}]"
+def qgis_extent_string(xmin: float, ymin: float, xmax: float, ymax: float, epsg: int) -> str:
+    return f"{xmin},{ymin},{xmax},{ymax} [EPSG:{epsg}]"
 
 
 def extent_from_postgis() -> str | None:
@@ -113,7 +113,7 @@ WHERE e IS NOT NULL;
     if not row or row.count(",") != 3:
         return None
     xmin, xmax, ymin, ymax = (float(v) for v in row.split(","))
-    return qgis_extent_string(xmin, xmax, ymin, ymax, 4326)
+    return qgis_extent_string(xmin, ymin, xmax, ymax, 4326)
 
 
 def read_qgs_xml(project_path: str) -> ET.Element:
@@ -156,7 +156,7 @@ def extent_from_mapcanvas(project_path: str) -> str | None:
 
     # Reproject to 4326 with psql if needed (avoids extra Python GIS deps)
     if epsg == 4326:
-        return qgis_extent_string(xmin, xmax, ymin, ymax, 4326)
+        return qgis_extent_string(xmin, ymin, xmax, ymax, 4326)
 
     env = os.environ.copy()
     if "PGPASSFILE" not in env and os.path.isfile(os.path.expanduser("~/.pgpass")):
@@ -190,12 +190,12 @@ FROM (
         ).strip()
         if row and row.count(",") == 3:
             x0, x1, y0, y1 = (float(v) for v in row.split(","))
-            return qgis_extent_string(x0, x1, y0, y1, 4326)
+            return qgis_extent_string(x0, y0, x1, y1, 4326)
     except (subprocess.CalledProcessError, FileNotFoundError):
         pass
 
     # Last resort: pass original project CRS to qgis_process
-    return qgis_extent_string(xmin, xmax, ymin, ymax, epsg)
+    return qgis_extent_string(xmin, ymin, xmax, ymax, epsg)
 
 
 def main() -> int:

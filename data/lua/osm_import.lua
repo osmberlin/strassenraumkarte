@@ -18,6 +18,7 @@
 --   - road_marking (lane and road markings, derived from highway tags or explicitely mapped with Key:road_marking)
 --   - highway_area also includes amenity=parking / motorcycle_parking / parking_space polygons
 --   - railway (railway tracks)
+--   - tunnel_way (non-highway tunnel lines + indoor tunnel highways, portal connectivity only; not rendered)
 --   - bridge (bridge areas)
 --   - landscape (landscape features like embankment or cliff lines, springs...)
 --   - water_body (natural=water and natural=wetland)
@@ -71,7 +72,6 @@ local layers = {
             'height',
             'circumference',
             'genus',
-            'rotation',
             'source', -- 'osm_feature' at import; 'forest_generated' added in tree.sql
         },
         geometries = { "node" }
@@ -84,6 +84,9 @@ local layers = {
             'capacity',
             'diameter',
             'direction',
+            'height',
+            'width',
+            'length',
             'markings',
             'position',
             'ref',
@@ -162,6 +165,8 @@ local layers = {
             'spacing',
             'opening',
             'overlap',
+            'direction',
+            'width',
 
             'layer',
         },
@@ -304,6 +309,7 @@ local layers = {
     stop_positions = {
         attributes = {
             'highway',
+            'traffic_signals',
             'direction',
             'stop_line',
             'stop_line:angle',
@@ -350,8 +356,23 @@ local layers = {
             'service',
             'tunnel',
             'layer',
+            'direction',
         },
         geometries = { "way", "node" }
+    },
+    -- Lines with tunnel=* that are not a rendered highway / railway track /
+    -- waterway: outdoor non-highway tunnels (e.g. railway=platform) and
+    -- indoor highway tunnels (skipped for highway, kept for portal topology).
+    -- highway/type/width are set only for indoor highway tunnels.
+    tunnel_way = {
+        attributes = {
+            'tunnel',
+            'layer',
+            'highway',
+            'type',
+            'width',
+        },
+        geometries = { "way" }
     },
     bridge = {
         attributes = {
@@ -434,10 +455,14 @@ types = {
     left_offset             = 'real',
     length                  = 'real',
     level                   = 'integer',
+    ['maxwidth:physical']   = 'real',
     min_height              = 'real',
     offset                  = 'real',
+    opening                 = 'real',
+    overlap                 = 'real',
     placement_offset        = 'real',
     rotation                = 'integer',
+    spacing                 = 'real',
     ['stop_line:angle']     = 'real',
     transition              = 'real',
     width                   = 'real',
@@ -491,17 +516,20 @@ highway_hierarchy = {
 local feature_advertising = { 'column' }
 local feature_amenity = { 'bench', 'bicycle_parking', 'bicycle_rental', 'charging_station', 'clock', 'drinking_water', 'fountain', 'grit_bin', 'loading_ramp', 'mobility_hub', 'parking_entrance', 'post_box', 'public_bookcase', 'recycling', 'shelter', 'small_electric_vehicle_parking', 'telephone', 'toilets', 'vending_machine', 'waste_basket', 'waste_disposal' }
 local feature_emergency = { 'fire_hydrant' }
-local feature_highway = { 'street_lamp', 'traffic_sign' }
+local feature_highway = { 'street_lamp', 'traffic_sign', 'traffic_calming' }
 local feature_historic = { 'memorial' }
 local feature_leisure = { 'outdoor_seating', 'picnic_table', 'table', 'parklet' }
-local feature_man_made = { 'chimney', 'flagpole', 'guard_stone', 'manhole', 'mast', 'monitoring_station', 'pier', 'planter', 'pole', 'street_cabinet', 'water_well' }
+local feature_man_made = { 'chimney', 'flagpole', 'gantry', 'guard_stone', 'manhole', 'mast', 'monitoring_station', 'pier', 'planter', 'pole', 'street_cabinet', 'water_well' }
 local feature_sport = { 'table_tennis' } -- also needs leisure = pitch
 local feature_tourism = { 'artwork', 'information', 'viewpoint' }
 local feature_waterway = { 'lock_gate' }
 
-local feature_linear = { 'bench' }
+local feature_linear = { 'bench', 'gantry' }
 
-local landuse_class = { 'allotments', 'bare_ground', 'bare_rock', 'basin', 'bbq', 'beach', 'biergarten', 'blockfield', 'brownfield', 'car_rental', 'cemetery', 'college', 'community_centre', 'construction', 'dog_park', 'dune', 'farmland', 'fell', 'fire_station', 'fitness_station', 'flowerbed', 'forest', 'fuel', 'garden', 'glacier', 'grass', 'grassland', 'gravel', 'greenery', 'greenhouse_horticulture', 'ground', 'heath', 'kindergarten', 'landfill', 'meadow', 'miniature_golf', 'mud', 'orchard', 'outdoor_seating', 'park', 'parking', 'motorcycle_parking', 'plant_nursery', 'playground', 'quarry', 'railway', 'recreation_ground', 'reef', 'rock', 'salt_pond', 'sand', 'school', 'scree', 'scrub', 'shingle', 'shoal', 'shrub', 'shrubbery', 'social_facility', 'swimming_pool', 'traffic_park', 'trees', 'tree_pit', 'tundra', 'village_green', 'vineyard', 'wood', 'woodchips' }
+-- Strokes unless a closed way is tagged area=yes.
+local road_marking_linear = { 'lane_divider', 'edge_line', 'crossing_edge' }
+
+local landuse_class = { 'allotments', 'bare_ground', 'bare_rock', 'basin', 'bbq', 'beach', 'biergarten', 'blockfield', 'brownfield', 'car_rental', 'cemetery', 'college', 'commercial', 'community_centre', 'construction', 'dog_park', 'dune', 'farmland', 'fell', 'fire_station', 'fitness_station', 'flowerbed', 'forest', 'fuel', 'garden', 'glacier', 'grass', 'grassland', 'gravel', 'greenery', 'greenhouse_horticulture', 'ground', 'heath', 'industrial', 'kindergarten', 'landfill', 'meadow', 'miniature_golf', 'mud', 'orchard', 'outdoor_seating', 'park', 'parking', 'motorcycle_parking', 'plant_nursery', 'playground', 'quarry', 'railway', 'recreation_ground', 'reef', 'rock', 'salt_pond', 'sand', 'school', 'schoolyard', 'scree', 'scrub', 'shingle', 'shoal', 'shrub', 'shrubbery', 'social_facility', 'swimming_pool', 'traffic_park', 'trees', 'tree_pit', 'tundra', 'village_green', 'vineyard', 'wood', 'woodchips' }
 local landscape_class = { 'arete', 'blowhole', 'cave_entrance', 'cliff', 'crevasse', 'dyke', 'earth_bank', 'embankment', 'fumarole', 'geyser', 'gully', 'hot_spring', 'peak', 'ridge', 'rock', 'spring', 'stone', 'tree_row', 'volcano' }
 
 local highway_motorway_list = { 'motorway', 'motorway_link', 'trunk', 'trunk_link' }
@@ -535,6 +563,8 @@ local function define_tables(layers)
                     -- override: for lanes and stop_positions, direction is a string (forward, backward etc.), not a numeric value
                     if attribute == 'direction' and (name == 'lanes' or name == 'stop_positions') then
                         table.insert(columns, { column = attribute, type = 'text' })
+                    elseif attribute == 'direction' and (name == 'barrier' or name == 'railway') then
+                        table.insert(columns, { column = attribute, type = 'integer' })
                     else
                         table.insert(columns, { column = attribute, type = types[attribute] })
                     end
@@ -577,6 +607,14 @@ local function is_in(value, list)
         end
     end
     return false
+end
+
+-- lane_divider / edge_line / crossing_edge stay lines unless area=yes.
+-- area:highway=prohibited is stored as a restriction polygon and stays an area.
+local function road_marking_is_linear(tags)
+    return tags["area:highway"] ~= 'prohibited'
+        and tags.area ~= 'yes'
+        and is_in(tags.road_marking, road_marking_linear)
 end
 
 -- Checks whether a value is a negative number
@@ -849,6 +887,53 @@ local function tag_present(v)
     return not tag_empty(v) and v ~= 'no' and v ~= 'none'
 end
 
+-- Highway / railway / platform continuation underground (building_passage stays visible)
+local function is_real_tunnel(tags)
+    return tag_present(tags.tunnel) and tags.tunnel ~= 'building_passage'
+end
+
+local function is_indoor_or_underground(tags)
+    return is_in(tags.location, {'indoor', 'underground'}) or tag_present(tags.indoor)
+end
+
+-- Same grouping as process_highway (motorway / road / service / path)
+local function highway_group_type(tags)
+    local highway_value = tags.highway
+    if tags.highway == 'construction' and tag_present(tags.construction) then
+        highway_value = tags.construction
+    end
+    if is_in(highway_value, highway_motorway_list) then
+        return 'motorway'
+    elseif is_in(highway_value, highway_road_list) then
+        return 'road'
+    elseif is_in(highway_value, highway_service_list) then
+        return 'service'
+    elseif is_in(highway_value, highway_path_list) then
+        return 'path'
+    end
+    return nil
+end
+
+-- Connectivity-only tunnel lines (not drawn as highway)
+local function process_tunnel_way(object)
+    local typ = highway_group_type(object.tags)
+    local width = nil
+    if typ then
+        width = tometricnumber(object.tags.width)
+            or tometricnumber(object.tags['width:carriageway'])
+            or tometricnumber(object.tags.est_width)
+            or (typ == 'path' and 2.0 or 3.0)
+    end
+    tables.tunnel_way:insert({
+        tunnel = object.tags.tunnel,
+        layer = tometricnumber(object.tags.layer),
+        highway = object.tags.highway,
+        type = typ,
+        width = width,
+        geom = object:as_linestring(),
+    })
+end
+
 --------------------------------------------------------------------------------------
 -- Processing functions for filling the tables
 --------------------------------------------------------------------------------------
@@ -969,10 +1054,6 @@ function process_tree(object, geom, table, keys)
                 entry[key] = object.tags["tree:ref"]
             end
 
-        -- add a random rotation value for less uniform rendering
-        elseif key == 'rotation' then
-            entry[key] = round(math.random() * 40) - 20
-
         -- provenance: OSM-imported trees (not OSM's source=* tag)
         elseif key == 'source' then
             entry[key] = 'osm_feature'
@@ -1071,6 +1152,8 @@ function process_feature(object, geom, table, keys)
             elseif is_in(object.tags["disused:waterway"], feature_waterway) then
                 entry[key] = object.tags["disused:waterway"]
                 entry["disused"] = 'yes'
+            elseif object.tags.traffic_calming then
+                entry[key] = 'traffic_calming'
             end
 
         -- distinguish subclasses for some feature classes
@@ -1095,7 +1178,7 @@ function process_feature(object, geom, table, keys)
                 if object.tags.bicycle_parking then
                     subclass_list[#subclass_list + 1] = object.tags.bicycle_parking
                 end
-                if object.tags.cargo_bike == 'designated' then
+                if is_in(object.tags.cargo_bike, {'yes', 'designated'}) then
                     subclass_list[#subclass_list + 1] = 'cargo_bike'
                 end
                 if object.tags.position then
@@ -1164,12 +1247,14 @@ function process_feature(object, geom, table, keys)
                 entry[key] = object.tags.vending
             elseif feature_class == 'viewpoint' and is_in(object.tags.direction, {"all", "0-360", "0..360"}) then
                 entry[key] = 'all_directions'
+            elseif feature_class == 'traffic_calming' then
+                entry[key] = object.tags.traffic_calming
             -- waste_disposal -> see recycling
             end
 
-        -- normalize access (subclass "cargo_bike" (cargo_bike=designated) means access=yes)
+        -- normalize access (cargo_bike=yes/designated on bicycle_parking means access=yes)
         elseif key == 'access' then
-            if entry["subclass"] == 'cargo_bike' then
+            if entry["class"] == 'bicycle_parking' and is_in(object.tags.cargo_bike, {'yes', 'designated'}) then
                 entry[key] = 'yes'
             else
                 entry[key] = object.tags.access
@@ -1301,6 +1386,33 @@ function process_barrier_node(object, geom, table, keys)
         -- interpret basic access values for different traffic modes
         if is_in(key, { 'foot', 'bicycle', 'motor_vehicle' }) then
             entry[key] = getaccess(object.tags, key)
+        elseif key == 'direction' then
+            local deg = directiontodegree(object.tags.direction)
+            if deg ~= nil then
+                entry[key] = math.floor(deg + 0.5)
+            end
+        elseif types[key] then
+            entry[key] = tometricnumber(object.tags[key])
+        else
+            entry[key] = object.tags[key]
+        end
+    end
+    entry['geom'] = geom
+    table:insert(entry)
+end
+
+-- railway nodes: keep an explicit OSM direction (degrees or cardinal).
+-- SQL fills NULL from the track azimuth. Buffer stops point away from a track
+-- end found by walking the rails; a switch stops that walk.
+-- Ways use the same function so a direction tag is stored as an integer.
+function process_railway_node(object, geom, table, keys)
+    local entry = {}
+    for _, key in ipairs(keys) do
+        if key == 'direction' then
+            local deg = directiontodegree(object.tags.direction)
+            if deg ~= nil then
+                entry[key] = math.floor(deg + 0.5)
+            end
         elseif types[key] then
             entry[key] = tometricnumber(object.tags[key])
         else
@@ -1556,6 +1668,9 @@ function process_highway_area(object, geom, table, keys)
     if highway_class == 'prohibited' then
         return
     end
+    -- tunnel polygons are imported, then moved to highway_area_tunnel in
+    -- highway_area_centerline.sql (portal shared-edge); they are not rendered as roads.
+    -- building_passage stays in highway_area and remains visible.
     local typ, class = highway_area_type_class(object.tags.junction, object.tags.crossing)
     for _, key in ipairs(keys) do
         if key == 'area:highway' then
@@ -1692,7 +1807,16 @@ function process_road_marking(object, geom, table, keys, opts)
             elseif road_marking_val == 'stop_line' then
                 entry[key] = 0.5
             elseif is_in(road_marking_val, {'lane_divider', 'edge_line', 'crossing_edge'}) then
-                entry[key] = 0.12
+                -- Schmalstrich default; motorway / motorway_link use 0.15 m
+                local hv = object.tags.highway
+                if hv == 'construction' and tag_present(object.tags.construction) then
+                    hv = object.tags.construction
+                end
+                if is_in(hv, {'motorway', 'motorway_link'}) then
+                    entry[key] = 0.15
+                else
+                    entry[key] = 0.12
+                end
             end
         elseif key == 'colour' then
             if not tag_empty(object.tags.colour) then
@@ -1805,14 +1929,24 @@ end
 -- osm2pgsql trigger functions, called for each object in the osm data according to its geometry to write it in a fitting table
 -- Note:
 --    - some closed lines are interpreted as polygons (e.g. buildings), others are not (e.g. fences) or only if explicitely mapped as area (area=yes, e.g. benches)
+--    - road_marking lane_divider, edge_line and crossing_edge stay lines when closed unless area=yes
 --    - relations with type 'multipolygon' are dismantled as single parts and handled as several polygons
 --------------------------------------------------------------------------------------
 
 -- lines/polygons
 function osm2pgsql.process_way(object)
 
-    -- exclude underground and indoor features
-    if is_in(object.tags.location, {'indoor', 'underground'}) or tag_present(object.tags.indoor) then
+    -- exclude underground and indoor features from rendered tables.
+    -- Real tunnels still go to tunnel_way so portals can be built where
+    -- an indoor tunnel meets a surface highway (indoor lines stay off highway).
+    if is_indoor_or_underground(object.tags) then
+        -- only linear indoor *highways* (not indoor areas / platforms)
+        if is_real_tunnel(object.tags)
+            and highway_group_type(object.tags)
+            and not (object.is_closed and object.tags.area == 'yes')
+        then
+            process_tunnel_way(object)
+        end
         return
     end
 
@@ -1824,9 +1958,10 @@ function osm2pgsql.process_way(object)
     -- feature (also disused:)
     if is_in(object.tags.advertising, feature_advertising) or is_in(object.tags.amenity, feature_amenity) or is_in(object.tags.emergency, feature_emergency) or is_in(object.tags.highway, feature_highway) or is_in(object.tags.historic, feature_historic) or is_in(object.tags.leisure, feature_leisure) or is_in(object.tags.man_made, feature_man_made) or (object.tags.leisure == 'pitch' and is_in(object.tags.sport, feature_sport)) or is_in(object.tags.tourism, feature_tourism) or is_in(object.tags.waterway, feature_waterway)
     or is_in(object.tags["disused:advertising"], feature_advertising) or is_in(object.tags["disused:amenity"], feature_amenity) or is_in(object.tags["disused:emergency"], feature_emergency) or is_in(object.tags["disused:highway"], feature_highway) or is_in(object.tags["disused:historic"], feature_historic) or is_in(object.tags["disused:leisure"], feature_leisure) or is_in(object.tags["disused:man_made"], feature_man_made) or (object.tags["disused:leisure"] == 'pitch' and (is_in(object.tags.sport, feature_sport) or is_in(object.tags["disused:sport"], feature_sport))) or is_in(object.tags["disused:tourism"], feature_tourism) or is_in(object.tags["disused:waterway"], feature_waterway)
-    or object.tags["skatepark:obstacles"] then
+    or object.tags["skatepark:obstacles"]
+    or object.tags.traffic_calming then
         -- for some features, closed lines should be interpreted as lines, unless they are explicitely tagged as area (area=yes)
-        if object.is_closed and not (is_in(object.tags.amenity, feature_linear) and object.tags.area ~= 'yes') then
+        if object.is_closed and not ((is_in(object.tags.amenity, feature_linear) or is_in(object.tags.man_made, feature_linear) or is_in(object.tags["disused:man_made"], feature_linear)) and object.tags.area ~= 'yes') then
             -- exclude large recycling areas as they are more of a landuse type
             if not (object.tags.amenity == 'recycling' and object:as_polygon():area() > 200) then
                 process_feature(object, object:as_polygon(), tables.feature_polygon, layers.feature.attributes)
@@ -1904,9 +2039,10 @@ function osm2pgsql.process_way(object)
     end
 
     -- road_marking
-    -- Fallback for older area:highway=prohibited areas
+    -- Fallback for older area:highway=prohibited areas.
+    -- lane_divider, edge_line and crossing_edge stay lines when closed unless area=yes.
     if object.tags.road_marking or object.tags["area:highway"] == 'prohibited' then
-        if object.is_closed then
+        if object.is_closed and not road_marking_is_linear(object.tags) then
             process_road_marking(object, object:as_polygon(), tables.road_marking_polygon, layers.road_marking.attributes)
         else
             process_road_marking(object, object:as_linestring(), tables.road_marking_way, layers.road_marking.attributes)
@@ -1920,7 +2056,17 @@ function osm2pgsql.process_way(object)
 
     -- railway
     if is_in(object.tags.railway, {'abandoned', 'construction', 'disused', 'funicular', 'light_rail', 'miniature', 'monorail', 'narrow_gauge', 'rail', 'subway', 'tram'}) then
-        process(object, object:as_linestring(), tables.railway_way, layers.railway.attributes)
+        -- same integer direction normalization as nodes; ways rarely carry the tag
+        process_railway_node(object, object:as_linestring(), tables.railway_way, layers.railway.attributes)
+    end
+
+    -- other tunnel=yes lines (platforms, …) for portal connectivity
+    if is_real_tunnel(object.tags)
+        and not object.tags.highway
+        and not object.tags.waterway
+        and not is_in(object.tags.railway, {'abandoned', 'construction', 'disused', 'funicular', 'light_rail', 'miniature', 'monorail', 'narrow_gauge', 'rail', 'subway', 'tram'})
+    then
+        process_tunnel_way(object)
     end
 
     -- bridge
@@ -1976,7 +2122,8 @@ function osm2pgsql.process_relation(object)
         -- feature (also disused:)
         if is_in(object.tags.advertising, feature_advertising) or is_in(object.tags.amenity, feature_amenity) or is_in(object.tags.emergency, feature_emergency) or is_in(object.tags.highway, feature_highway) or is_in(object.tags.historic, feature_historic) or is_in(object.tags.leisure, feature_leisure) or is_in(object.tags.man_made, feature_man_made) or (object.tags.leisure == 'pitch' and is_in(object.tags.sport, feature_sport)) or is_in(object.tags.tourism, feature_tourism) or is_in(object.tags.waterway, feature_waterway)
         or is_in(object.tags["disused:advertising"], feature_advertising) or is_in(object.tags["disused:amenity"], feature_amenity) or is_in(object.tags["disused:emergency"], feature_emergency) or is_in(object.tags["disused:highway"], feature_highway) or is_in(object.tags["disused:historic"], feature_historic) or is_in(object.tags["disused:leisure"], feature_leisure) or is_in(object.tags["disused:man_made"], feature_man_made) or (object.tags["disused:leisure"] == 'pitch' and (is_in(object.tags.sport, feature_sport) or is_in(object.tags["disused:sport"], feature_sport))) or is_in(object.tags["disused:tourism"], feature_tourism) or is_in(object.tags["disused:waterway"], feature_waterway)
-        or object.tags["skatepark:obstacles"] then
+        or object.tags["skatepark:obstacles"]
+        or object.tags.traffic_calming then
             for geom in mp:geometries() do
                 process_feature(object, geom, tables.feature_polygon, layers.feature.attributes)
             end
@@ -2019,7 +2166,7 @@ function osm2pgsql.process_relation(object)
             end
         end
 
-        -- road_marking
+        -- road_marking (type=multipolygon is an explicit area)
         if object.tags.road_marking or object.tags["area:highway"] == 'prohibited' then
             for geom in mp:geometries() do
                 process_road_marking(object, geom, tables.road_marking_polygon, layers.road_marking.attributes)
@@ -2086,7 +2233,8 @@ function osm2pgsql.process_node(object)
     if is_in(object.tags.advertising, feature_advertising) or is_in(object.tags.amenity, feature_amenity) or is_in(object.tags.emergency, feature_emergency) or is_in(object.tags.highway, feature_highway) or is_in(object.tags.historic, feature_historic) or is_in(object.tags.leisure, feature_leisure) or is_in(object.tags.man_made, feature_man_made) or (object.tags.leisure == 'pitch' and is_in(object.tags.sport, feature_sport)) or is_in(object.tags.tourism, feature_tourism) or is_in(object.tags.waterway, feature_waterway)
     or is_in(object.tags["disused:advertising"], feature_advertising) or is_in(object.tags["disused:amenity"], feature_amenity) or is_in(object.tags["disused:emergency"], feature_emergency) or is_in(object.tags["disused:highway"], feature_highway) or is_in(object.tags["disused:historic"], feature_historic) or is_in(object.tags["disused:leisure"], feature_leisure) or is_in(object.tags["disused:man_made"], feature_man_made) or (object.tags["disused:leisure"] == 'pitch' and (is_in(object.tags.sport, feature_sport) or is_in(object.tags["disused:sport"], feature_sport))) or is_in(object.tags["disused:tourism"], feature_tourism) or is_in(object.tags["disused:waterway"], feature_waterway)
     or tag_present(object.tags.entrance) or object.tags["entrance_marker:subway"] or object.tags["entrance_marker:s-train"] or object.tags["entrance_marker:train"] or object.tags["entrance_marker:tram"] or object.tags["entrance_marker:bus"]
-    or object.tags["skatepark:obstacles"] then
+    or object.tags["skatepark:obstacles"]
+    or object.tags.traffic_calming then
         process_feature(object, object:as_point(), tables.feature_node, layers.feature.attributes)
     end
 
@@ -2139,7 +2287,7 @@ function osm2pgsql.process_node(object)
 
     -- railway
     if is_in(object.tags.railway, {'buffer_stop', 'signal'}) then
-        process(object, object:as_point(), tables.railway_node, layers.railway.attributes)
+        process_railway_node(object, object:as_point(), tables.railway_node, layers.railway.attributes)
     end
 
     -- landscape

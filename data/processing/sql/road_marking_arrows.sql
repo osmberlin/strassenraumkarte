@@ -263,9 +263,11 @@ params AS (
     SELECT
         metres(:'turn_arrow_start_offset'::double precision) AS first_offset_m,
         metres(:'turn_arrow_spacing'::double precision) AS spacing_m,
+        metres(:'turn_arrow_spacing_motorway'::double precision) AS spacing_motorway_m,
         metres(:'turn_arrow_min_dist_from_end'::double precision) AS min_from_end_m,
         metres(:'turn_arrow_min_dist_from_start'::double precision) AS min_from_start_m,
         :'turn_arrow_length'::double precision AS arrow_len_m,
+        :'turn_arrow_length_motorway'::double precision AS arrow_len_motorway_m,
         :'turn_arrow_length_bicycle'::double precision AS arrow_len_bicycle_m
 ),
 arrow_frame AS (
@@ -278,22 +280,36 @@ arrow_frame AS (
         r.colour,
         r.layer,
         r.end_offset,
-        ST_Length(r.geom) AS line_len
+        ST_Length(r.geom) AS line_len,
+        EXISTS (
+            SELECT 1
+            FROM highway h
+            WHERE h.osm_id = r.osm_id
+              AND (
+                  h.highway IN ('motorway', 'motorway_link')
+                  OR (
+                      h.highway = 'construction'
+                      AND h.construction IN ('motorway', 'motorway_link')
+                  )
+              )
+        ) AS is_motorway
     FROM road_marking_arrow_line r
     WHERE r.geom IS NOT NULL
       AND NOT ST_IsEmpty(r.geom)
       AND ST_Length(r.geom) > metres(0.01)
 ),
--- Single 12 m grid anchored at end_offset + 7.5 m from ST_EndPoint (toward ST_StartPoint).
--- Regular: anchor + k*12 (k>=0). Extension (overshoot past stop line): anchor - m*12 (m>=1).
+-- Grid anchored at end_offset + 7.5 m from ST_EndPoint (toward ST_StartPoint).
+-- Spacing 12 m, or 24 m on motorway/motorway_link (not bicycle).
+-- Regular: anchor + k*spacing (k>=0). Extension: anchor - m*spacing (m>=1).
 arrow_k AS (
     SELECT
         f.*,
-        p.spacing_m,
+        sp.spacing_m,
         p.min_from_end_m,
         p.min_from_start_m,
         CASE
             WHEN f.type = 'bicycle' THEN p.arrow_len_bicycle_m
+            WHEN f.is_motorway THEN p.arrow_len_motorway_m
             ELSE p.arrow_len_m
         END AS arrow_len_m,
         f.end_offset + p.first_offset_m AS d_anchor,
@@ -302,7 +318,7 @@ arrow_k AS (
             GREATEST(
                 0,
                 ceil(
-                    (f.line_len - p.min_from_start_m) / NULLIF(p.spacing_m, 0)
+                    (f.line_len - p.min_from_start_m) / NULLIF(sp.spacing_m, 0)
                 )::int + 2
             )
         ) AS k_max_reg,
@@ -312,12 +328,19 @@ arrow_k AS (
                 0,
                 floor(
                     (f.end_offset + p.first_offset_m - p.min_from_end_m)
-                    / NULLIF(p.spacing_m, 0)
+                    / NULLIF(sp.spacing_m, 0)
                 )::int
             )
         ) AS m_max_ext
     FROM arrow_frame f
     CROSS JOIN params p
+    CROSS JOIN LATERAL (
+        SELECT CASE
+            WHEN f.type IS DISTINCT FROM 'bicycle' AND f.is_motorway
+            THEN p.spacing_motorway_m
+            ELSE p.spacing_m
+        END AS spacing_m
+    ) sp
 ),
 arrow_pts_reg AS (
     SELECT

@@ -36,6 +36,16 @@
     .srk-meta label { max-width: 18rem; }
     .srk-meta input[type="checkbox"],
     .srk-run input[type="checkbox"] { margin: 0.15em 0 0; flex-shrink: 0; }
+    .srk-meta button {
+      font: inherit;
+      padding: 0.3em 0.55em;
+      border: 1px solid #888;
+      border-radius: 3px;
+      background: #f4f4f4;
+      color: #222;
+      cursor: pointer;
+    }
+    .srk-meta button:hover { background: #ebebeb; }
     .srk-meta .srk-meta-params {
       display: flex;
       flex-wrap: wrap;
@@ -104,6 +114,7 @@
       box-sizing: border-box;
     }
     .srk-run input[type="number"] { width: 4.5em; }
+    .srk-run #srk-jobs { width: 6em; }
     .srk-run button {
       font: inherit;
       padding: 0.35em 0.65em;
@@ -232,6 +243,154 @@
     .srk-handle-e, .srk-handle-w { cursor: ew-resize; }
     .srk-handle-ne, .srk-handle-sw { cursor: nesw-resize; }
     .srk-handle-nw, .srk-handle-se { cursor: nwse-resize; }
+
+    .srk-compare {
+      margin-top: 0.45em;
+      padding-top: 0.45em;
+      border-top: 1px solid #ddd;
+    }
+    .srk-compare-path {
+      display: block;
+      font-size: 11px;
+      color: #444;
+      max-width: 16rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      margin: 0.25em 0 0.35em;
+    }
+    .srk-compare-path.srk-muted { color: #888; }
+    .srk-compare .srk-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35em;
+      align-items: center;
+    }
+    .srk-compare-warn {
+      font-size: 11px;
+      color: #8a5a00;
+      margin: 0.2em 0 0.35em;
+    }
+    .srk-opacity-row {
+      display: flex;
+      align-items: center;
+      gap: 0.4em;
+      font-size: 12px;
+      margin-top: 0.2em;
+    }
+    .srk-opacity-row input[type="range"] {
+      flex: 1;
+      min-width: 6rem;
+      margin: 0;
+    }
+    .srk-opacity-row .srk-opacity-val {
+      font-variant-numeric: tabular-nums;
+      min-width: 3.2em;
+      text-align: right;
+      color: #555;
+    }
+
+    .srk-dir-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 2000;
+      background: rgba(0, 0, 0, 0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    .srk-dir-modal[hidden] { display: none !important; }
+    .srk-dir-dialog {
+      background: #fff;
+      border-radius: 6px;
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+      width: min(36rem, calc(100vw - 2rem));
+      max-height: calc(100vh - 2rem);
+      overflow: auto;
+      padding: 0.9rem 1rem 1rem;
+      font: 14px/1.4 system-ui, sans-serif;
+      color: #222;
+    }
+    .srk-dir-dialog h2 {
+      margin: 0 0 0.45em;
+      font-size: 15px;
+    }
+    .srk-dir-dialog .srk-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35em;
+      align-items: center;
+      margin-bottom: 0.55em;
+    }
+    .srk-dir-dialog input[type="text"] {
+      font: inherit;
+      padding: 0.3em 0.45em;
+      border: 1px solid #bbb;
+      border-radius: 3px;
+      background: #fff;
+      color: #222;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .srk-dir-dialog button {
+      font: inherit;
+      padding: 0.35em 0.65em;
+      border: 1px solid #888;
+      border-radius: 3px;
+      background: #f4f4f4;
+      color: #222;
+      cursor: pointer;
+    }
+    .srk-dir-dialog button:hover { background: #ebebeb; }
+    .srk-dir-dialog button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+    .srk-dir-dialog button.srk-primary {
+      background: #2a2a2a;
+      border-color: #2a2a2a;
+      color: #fff;
+    }
+    .srk-dir-dialog button.srk-primary:hover { background: #111; }
+    .srk-dir-shortcuts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35em;
+      margin-bottom: 0.45em;
+    }
+    .srk-dir-list {
+      border: 1px solid #ddd;
+      border-radius: 3px;
+      max-height: 16rem;
+      overflow: auto;
+      background: #fafafa;
+      margin-bottom: 0.45em;
+    }
+    .srk-dir-item {
+      display: block;
+      width: 100%;
+      text-align: left;
+      border: none !important;
+      border-bottom: 1px solid #eee !important;
+      border-radius: 0 !important;
+      background: transparent !important;
+      padding: 0.4em 0.55em !important;
+      font: inherit;
+      cursor: pointer;
+    }
+    .srk-dir-item:hover { background: #eef3f9 !important; }
+    .srk-dir-empty {
+      padding: 0.6em 0.55em;
+      color: #777;
+      font-size: 13px;
+    }
+    .srk-dir-ok { color: #1a5f2a !important; }
+    .srk-dir-error {
+      font-size: 12px;
+      color: #a22;
+      margin: 0 0 0.45em;
+    }
   </style>
 </head>
 <body>
@@ -244,6 +403,28 @@
       cd render/tiles && python3 -m http.server 8000
   -->
   <div id="map"></div>
+  <div class="srk-dir-modal" id="srk-dir-modal" hidden>
+    <div class="srk-dir-dialog" role="dialog" aria-labelledby="srk-dir-title" aria-modal="true">
+      <h2 id="srk-dir-title">Kachelverzeichnis wählen</h2>
+      <p class="srk-hint">Lokaler Ordner mit XYZ-Kacheln (<code>z/x/y.webp</code> bzw. jpg/png). Über <em>Durchsuchen…</em> öffnet sich der Systemdialog.</p>
+      <div class="srk-dir-shortcuts" id="srk-dir-shortcuts"></div>
+      <div class="srk-field" style="margin-bottom:0.45em">
+        <input type="text" id="srk-dir-path" spellcheck="false" placeholder="/pfad/zu/kacheln" />
+      </div>
+      <div class="srk-row" style="margin-bottom:0.45em">
+        <button type="button" id="srk-dir-native">Durchsuchen…</button>
+        <button type="button" id="srk-dir-go">Gehe zu</button>
+        <button type="button" id="srk-dir-up">Übergeordnet</button>
+      </div>
+      <div class="srk-dir-error" id="srk-dir-error" hidden></div>
+      <div class="srk-dir-list" id="srk-dir-list"></div>
+      <p class="srk-hint" id="srk-dir-hint"></p>
+      <div class="srk-row" style="margin-bottom:0">
+        <button type="button" class="srk-primary" id="srk-dir-use">Dieses Verzeichnis verwenden</button>
+        <button type="button" id="srk-dir-cancel">Abbrechen</button>
+      </div>
+    </div>
+  </div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     // Match render defaults (render_tiles.sh / xyz_tiles.py)
@@ -257,6 +438,14 @@
         id: "neukoelln",
         label: "Neukölln",
         bbox: "13.3924,52.4543,13.4859,52.5009",
+        data: "https://download.geofabrik.de/europe/germany/berlin-latest.osm.pbf",
+      },
+      {
+        id: "berlin-innenstadt",
+        label: "Berlin Innenstadt",
+        bbox: "13.274574,52.443141,13.484859,52.558195",
+        zmin: 13,
+        zmax: 20,
         data: "https://download.geofabrik.de/europe/germany/berlin-latest.osm.pbf",
       },
     ];
@@ -300,53 +489,494 @@
       },
     ];
 
+    const DEFAULT_CENTER = [52.4675, 13.4336];
+    const DEFAULT_ZOOM = 17;
+
     const map = L.map("map", {
-      center: [52.4675, 13.4336],
-      zoom: 17,
-      minZoom: 10,
-      maxZoom: 20,
+      center: DEFAULT_CENTER,
+      zoom: DEFAULT_ZOOM,
+      fadeAnimation: false,
     });
 
     const osmLayer = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      minZoom: 10,
-      maxZoom: 20,
+      minZoom: 0,
+      maxZoom: 24,
       maxNativeZoom: 19,
       tileSize: TILE_PX,
       opacity: 0.85,
       attribution: "© OpenStreetMap",
       zIndex: 100,
+      fadeAnimation: false,
     });
 
-    let tileFormat = "jpg";
+    const TRANSPARENT_PIXEL =
+      "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+
+    let tileFormat = "webp";
     const streetLayer = L.tileLayer("{z}/{x}/{y}." + tileFormat, {
-      minZoom: 15,
-      maxZoom: 20,
-      maxNativeZoom: 20,
+      minZoom: 0,
+      maxZoom: 24,
       tileSize: TILE_PX,
       attribution: "Straßenraumkarte · © OpenStreetMap",
       zIndex: 200,
-    }).addTo(map);
+      fadeAnimation: false,
+      errorTileUrl: TRANSPARENT_PIXEL,
+    });
 
     function setTileFormat(fmt) {
-      tileFormat = fmt === "png" ? "png" : "jpg";
+      tileFormat = ["webp", "png", "jpg"].indexOf(fmt) >= 0 ? fmt : "webp";
       streetLayer.setUrl("{z}/{x}/{y}." + tileFormat);
       const sel = document.getElementById("srk-view-format");
       if (sel && sel.value !== tileFormat) sel.value = tileFormat;
     }
 
-    async function syncTileFormatFromServer() {
+    function applyTileStartView(info) {
+      if (
+        !info ||
+        !Array.isArray(info.center) ||
+        info.center.length !== 2 ||
+        !Number.isFinite(info.center[0]) ||
+        !Number.isFinite(info.center[1])
+      ) {
+        return;
+      }
+      let z = Number(info.zoom);
+      if (!Number.isInteger(z)) z = DEFAULT_ZOOM;
+      map.setView(info.center, z);
+    }
+
+    async function syncTilesFromServer(opts) {
+      opts = opts || {};
       try {
         const res = await fetch("/api/tiles/info");
-        if (!res.ok) return;
-        const info = await res.json();
-        if (!info || !info.suggested) return;
-        setTileFormat(info.suggested);
+        if (res.ok) {
+          const info = await res.json();
+          if (info && info.suggested) setTileFormat(info.suggested);
+          if (opts.setView) applyTileStartView(info);
+        }
       } catch (_) {
         /* preview opened without preview_server */
       }
+      if (!map.hasLayer(streetLayer)) streetLayer.addTo(map);
     }
 
-    syncTileFormatFromServer();
+    syncTilesFromServer({ setView: true });
+
+    const COMPARE_LS_PATH = "srkComparePath";
+    const COMPARE_LS_ON = "srkCompareOn";
+    const COMPARE_LS_OPACITY = "srkCompareOpacity";
+
+    let compareFormat = "webp";
+    let comparePath = null;
+    let compareEnabled = false;
+    let compareOpacity = 0.7;
+    let compareGen = 0;
+    let compareLayer = null;
+    let compareApiOk = false;
+    let pickerCurrentPath = "";
+    let pickerParentPath = null;
+
+    function compareTileUrl() {
+      return "/compare/{z}/{x}/{y}." + compareFormat + "?v=" + compareGen;
+    }
+
+    function createCompareLayer() {
+      return L.tileLayer(compareTileUrl(), {
+        minZoom: 0,
+        maxZoom: 24,
+        tileSize: TILE_PX,
+        opacity: compareOpacity,
+        attribution: "Vergleichskacheln",
+        zIndex: 250,
+        errorTileUrl: TRANSPARENT_PIXEL,
+        fadeAnimation: false,
+      });
+    }
+
+    function ensureCompareLayer() {
+      if (!compareLayer) compareLayer = createCompareLayer();
+      return compareLayer;
+    }
+
+    function setCompareFormat(fmt) {
+      compareFormat = ["webp", "png", "jpg"].indexOf(fmt) >= 0 ? fmt : "webp";
+      if (compareLayer) compareLayer.setUrl(compareTileUrl());
+    }
+
+    function setCompareOpacity(value) {
+      const n = Number(value);
+      compareOpacity = Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0.7;
+      try {
+        localStorage.setItem(COMPARE_LS_OPACITY, String(compareOpacity));
+      } catch (_) {
+        /* ignore quota / private mode */
+      }
+      if (compareLayer) compareLayer.setOpacity(compareOpacity);
+      const out = document.getElementById("srk-compare-opacity-val");
+      if (out) out.textContent = Math.round(compareOpacity * 100) + "\u00a0%";
+      const range = document.getElementById("srk-compare-opacity");
+      if (range) {
+        const asPct = String(Math.round(compareOpacity * 100));
+        if (range.value !== asPct) range.value = asPct;
+      }
+    }
+
+    function updateCompareUi(opts) {
+      opts = opts || {};
+      const pathEl = document.getElementById("srk-compare-path");
+      const check = document.getElementById("srk-compare-toggle");
+      const warn = document.getElementById("srk-compare-warn");
+      if (pathEl) {
+        pathEl.textContent = comparePath || "Kein Verzeichnis gewählt";
+        pathEl.title = comparePath || "";
+        pathEl.classList.toggle("srk-muted", !comparePath);
+      }
+      if (check && check.checked !== compareEnabled) check.checked = compareEnabled;
+      if (warn) {
+        if (opts.warning) {
+          warn.hidden = false;
+          warn.textContent = opts.warning;
+        } else if (!compareApiOk) {
+          warn.hidden = false;
+          warn.textContent = "Verzeichniswahl braucht den Preview-Server.";
+        } else {
+          warn.hidden = true;
+          warn.textContent = "";
+        }
+      }
+    }
+
+    function setCompareVisible(on, opts) {
+      opts = opts || {};
+      if (on && !comparePath) {
+        compareEnabled = false;
+        updateCompareUi();
+        if (!opts.skipPicker) openDirPicker();
+        return;
+      }
+      compareEnabled = !!on;
+      try {
+        localStorage.setItem(COMPARE_LS_ON, compareEnabled ? "1" : "0");
+      } catch (_) {
+        /* ignore */
+      }
+      const layer = ensureCompareLayer();
+      if (compareEnabled) {
+        if (!map.hasLayer(layer)) layer.addTo(map);
+        layer.setUrl(compareTileUrl());
+        layer.setOpacity(compareOpacity);
+        layer.redraw();
+      } else if (map.hasLayer(layer)) {
+        map.removeLayer(layer);
+      }
+      updateCompareUi(opts);
+    }
+
+    async function applyCompareDir(path, opts) {
+      opts = opts || {};
+      const res = await fetch("/api/compare", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: path }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || "Verzeichnis konnte nicht gesetzt werden");
+      }
+      compareApiOk = true;
+      comparePath = data.path;
+      compareGen += 1;
+      if (data.suggested) setCompareFormat(data.suggested);
+      else if (compareLayer) compareLayer.setUrl(compareTileUrl());
+      try {
+        localStorage.setItem(COMPARE_LS_PATH, comparePath || "");
+      } catch (_) {
+        /* ignore */
+      }
+      const enable = opts.enable !== false;
+      setCompareVisible(enable, { skipPicker: true, warning: data.warning });
+      return data;
+    }
+
+    function dirPickerEls() {
+      return {
+        modal: document.getElementById("srk-dir-modal"),
+        path: document.getElementById("srk-dir-path"),
+        list: document.getElementById("srk-dir-list"),
+        hint: document.getElementById("srk-dir-hint"),
+        up: document.getElementById("srk-dir-up"),
+        use: document.getElementById("srk-dir-use"),
+        cancel: document.getElementById("srk-dir-cancel"),
+        go: document.getElementById("srk-dir-go"),
+        native: document.getElementById("srk-dir-native"),
+        shortcuts: document.getElementById("srk-dir-shortcuts"),
+        error: document.getElementById("srk-dir-error"),
+      };
+    }
+
+    async function browseDir(path) {
+      const els = dirPickerEls();
+      els.error.hidden = true;
+      els.error.textContent = "";
+      const q = path ? "?path=" + encodeURIComponent(path) : "";
+      const res = await fetch("/api/fs/browse" + q);
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        els.error.hidden = false;
+        els.error.textContent = data.error || "Lesen fehlgeschlagen";
+        compareApiOk = res.status !== 404;
+        return null;
+      }
+      compareApiOk = true;
+      pickerCurrentPath = data.path;
+      pickerParentPath = data.parent || null;
+      els.path.value = data.path;
+      els.up.disabled = !pickerParentPath;
+      els.list.innerHTML = "";
+      if (!data.dirs || !data.dirs.length) {
+        const empty = document.createElement("div");
+        empty.className = "srk-dir-empty";
+        empty.textContent = "Keine Unterordner";
+        els.list.appendChild(empty);
+      } else {
+        for (const d of data.dirs) {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "srk-dir-item";
+          btn.textContent = d.name + "/";
+          btn.title = d.path;
+          btn.addEventListener("click", function () {
+            browseDir(d.path);
+          });
+          els.list.appendChild(btn);
+        }
+      }
+      if (els.shortcuts && data.shortcuts) {
+        els.shortcuts.innerHTML = "";
+        for (const s of data.shortcuts) {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.textContent = s.label;
+          btn.title = s.path;
+          btn.addEventListener("click", function () {
+            browseDir(s.path);
+          });
+          els.shortcuts.appendChild(btn);
+        }
+      }
+      if (data.looks_like_tiles) {
+        const zooms = (data.zoom_levels || []).join(", ");
+        els.hint.textContent =
+          "Sieht nach XYZ-Kacheln aus" + (zooms ? " (Zoom " + zooms + ")" : "") + ".";
+        els.hint.className = "srk-hint srk-dir-ok";
+      } else {
+        els.hint.textContent =
+          "Keine XYZ-Kacheln (z/x/y) in diesem Ordner erkannt.";
+        els.hint.className = "srk-hint";
+      }
+      if (data.error) {
+        els.error.hidden = false;
+        els.error.textContent = data.error;
+      }
+      return data;
+    }
+
+    async function pickDirectoryNative() {
+      const res = await fetch("/api/fs/pick", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ start: comparePath || pickerCurrentPath || "" }),
+      });
+      let data = {};
+      try {
+        data = await res.json();
+      } catch (_) {
+        data = {};
+      }
+      if (res.status === 501 || data.fallback) {
+        return { fallback: true, error: data.error };
+      }
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || "Verzeichnisdialog fehlgeschlagen");
+      }
+      if (data.cancelled) return { cancelled: true };
+      return { path: data.path };
+    }
+
+    async function applyPickedPath(path) {
+      await applyCompareDir(path, { enable: true });
+      closeDirPicker();
+    }
+
+    function openDirPickerModal() {
+      const els = dirPickerEls();
+      if (!els.modal) return;
+      els.modal.hidden = false;
+      if (els.path) els.path.focus();
+      browseDir(comparePath || "").catch(function (err) {
+        els.error.hidden = false;
+        els.error.textContent = String(err);
+        compareApiOk = false;
+        updateCompareUi();
+      });
+    }
+
+    async function openDirPicker() {
+      const pickBtn = document.getElementById("srk-compare-pick");
+      const prevLabel = pickBtn ? pickBtn.textContent : "";
+      if (pickBtn) {
+        pickBtn.disabled = true;
+        pickBtn.textContent = "Dialog geöffnet…";
+      }
+      updateCompareUi({
+        warning: "Ordnerdialog im Dateimanager — bitte dort ein Verzeichnis wählen.",
+      });
+      try {
+        const result = await pickDirectoryNative();
+        if (result.cancelled) {
+          updateCompareUi();
+          return;
+        }
+        if (result.fallback) {
+          updateCompareUi({ warning: result.error });
+          openDirPickerModal();
+          return;
+        }
+        if (result.path) await applyPickedPath(result.path);
+      } catch (err) {
+        updateCompareUi({ warning: String(err.message || err) });
+        openDirPickerModal();
+      } finally {
+        if (pickBtn) {
+          pickBtn.disabled = false;
+          pickBtn.textContent = prevLabel || "Verzeichnis wählen";
+        }
+      }
+    }
+
+    function closeDirPicker() {
+      const els = dirPickerEls();
+      if (els.modal) els.modal.hidden = true;
+    }
+
+    function setupDirPicker() {
+      const els = dirPickerEls();
+      if (!els.modal) return;
+
+      function goToTypedPath() {
+        const typed = (els.path.value || "").trim();
+        browseDir(typed).catch(function (err) {
+          els.error.hidden = false;
+          els.error.textContent = String(err);
+        });
+      }
+
+      els.go.addEventListener("click", function (e) {
+        e.preventDefault();
+        goToTypedPath();
+      });
+      if (els.native) {
+        els.native.addEventListener("click", async function (e) {
+          e.preventDefault();
+          els.native.disabled = true;
+          try {
+            const result = await pickDirectoryNative();
+            if (result.cancelled) return;
+            if (result.fallback) {
+              els.error.hidden = false;
+              els.error.textContent = result.error || "Systemdialog nicht verfügbar";
+              return;
+            }
+            if (result.path) await applyPickedPath(result.path);
+          } catch (err) {
+            els.error.hidden = false;
+            els.error.textContent = String(err.message || err);
+          } finally {
+            els.native.disabled = false;
+          }
+        });
+      }
+      els.path.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          goToTypedPath();
+        }
+      });
+      els.up.addEventListener("click", function (e) {
+        e.preventDefault();
+        if (!pickerParentPath) return;
+        browseDir(pickerParentPath);
+      });
+      els.use.addEventListener("click", async function (e) {
+        e.preventDefault();
+        const path = pickerCurrentPath || (els.path.value || "").trim();
+        if (!path) {
+          els.error.hidden = false;
+          els.error.textContent = "Bitte ein Verzeichnis wählen";
+          return;
+        }
+        try {
+          await applyCompareDir(path, { enable: true });
+          closeDirPicker();
+        } catch (err) {
+          els.error.hidden = false;
+          els.error.textContent = String(err.message || err);
+        }
+      });
+      els.cancel.addEventListener("click", function (e) {
+        e.preventDefault();
+        closeDirPicker();
+        updateCompareUi();
+      });
+      els.modal.addEventListener("click", function (e) {
+        if (e.target === els.modal) closeDirPicker();
+      });
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape" && els.modal && !els.modal.hidden) {
+          closeDirPicker();
+        }
+      });
+    }
+
+    async function restoreCompare() {
+      try {
+        const savedOp = localStorage.getItem(COMPARE_LS_OPACITY);
+        if (savedOp != null) {
+          const n = Number(savedOp);
+          if (Number.isFinite(n)) compareOpacity = Math.min(1, Math.max(0, n));
+        }
+      } catch (_) {
+        /* ignore */
+      }
+      setCompareOpacity(compareOpacity);
+      let savedPath = null;
+      let savedOn = false;
+      try {
+        savedPath = localStorage.getItem(COMPARE_LS_PATH) || null;
+        savedOn = localStorage.getItem(COMPARE_LS_ON) === "1";
+      } catch (_) {
+        /* ignore */
+      }
+      try {
+        const infoRes = await fetch("/api/compare/info");
+        if (!infoRes.ok) throw new Error("no api");
+        compareApiOk = true;
+        const info = await infoRes.json();
+        if (info.path) {
+          comparePath = info.path;
+          if (info.suggested) setCompareFormat(info.suggested);
+          updateCompareUi({ warning: info.warning });
+          if (savedOn) setCompareVisible(true, { skipPicker: true });
+        } else if (savedPath) {
+          await applyCompareDir(savedPath, { enable: savedOn });
+        } else {
+          updateCompareUi();
+        }
+      } catch (_) {
+        compareApiOk = false;
+        updateCompareUi();
+      }
+    }
 
     /** True if (tx,ty) lies in some metatile's gutter ring (render-only, not core). */
     function isGutterTile(tx, ty, z) {
@@ -418,6 +1048,19 @@
         }
         ctx.stroke();
 
+        const label = tx + " / " + ty;
+        ctx.font = "600 11px system-ui, sans-serif";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "top";
+        const padX = 3;
+        const padY = 1;
+        const textW = Math.ceil(ctx.measureText(label).width);
+        const boxH = 14;
+        ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+        ctx.fillRect(2, 2, textW + padX * 2, boxH);
+        ctx.fillStyle = "#111";
+        ctx.fillText(label, 2 + padX, 2 + padY);
+
         return canvas;
       },
     });
@@ -478,13 +1121,50 @@
         fmtSelect.style.border = "1px solid #bbb";
         fmtSelect.style.borderRadius = "3px";
         fmtSelect.style.background = "#fff";
-        [["jpg", "JPG"], ["png", "PNG"]].forEach(function (pair) {
+        [["webp", "WebP"], ["jpg", "JPG"], ["png", "PNG"]].forEach(function (pair) {
           const opt = document.createElement("option");
           opt.value = pair[0];
           opt.textContent = pair[1];
           if (pair[0] === tileFormat) opt.selected = true;
           fmtSelect.appendChild(opt);
         });
+
+        const compareBox = L.DomUtil.create("div", "srk-compare", div);
+
+        const cmpLabel = L.DomUtil.create("label", "", compareBox);
+        const cmpInput = L.DomUtil.create("input", "", cmpLabel);
+        cmpInput.type = "checkbox";
+        cmpInput.id = "srk-compare-toggle";
+        cmpLabel.appendChild(document.createTextNode("Vergleichskacheln anzeigen"));
+
+        const cmpPath = L.DomUtil.create("span", "srk-compare-path srk-muted", compareBox);
+        cmpPath.id = "srk-compare-path";
+        cmpPath.textContent = "Kein Verzeichnis gewählt";
+
+        const cmpWarn = L.DomUtil.create("div", "srk-compare-warn", compareBox);
+        cmpWarn.id = "srk-compare-warn";
+        cmpWarn.hidden = true;
+
+        const cmpRow = L.DomUtil.create("div", "srk-row", compareBox);
+        cmpRow.style.marginBottom = "0.35em";
+        const cmpPick = L.DomUtil.create("button", "", cmpRow);
+        cmpPick.type = "button";
+        cmpPick.id = "srk-compare-pick";
+        cmpPick.textContent = "Verzeichnis wählen";
+        cmpPick.title = "Systemdialog zum Durchsuchen der Festplatte";
+
+        const opRow = L.DomUtil.create("div", "srk-opacity-row", compareBox);
+        const opCaption = L.DomUtil.create("span", "", opRow);
+        opCaption.textContent = "Deckkraft";
+        const opInput = L.DomUtil.create("input", "", opRow);
+        opInput.type = "range";
+        opInput.id = "srk-compare-opacity";
+        opInput.min = "0";
+        opInput.max = "100";
+        opInput.value = String(Math.round(compareOpacity * 100));
+        const opVal = L.DomUtil.create("span", "srk-opacity-val", opRow);
+        opVal.id = "srk-compare-opacity-val";
+        opVal.textContent = Math.round(compareOpacity * 100) + "\u00a0%";
 
         const metaLabel = L.DomUtil.create("label", "", div);
         metaLabel.style.marginTop = "0.4em";
@@ -540,6 +1220,16 @@
         });
         L.DomEvent.on(fmtSelect, "change", function () {
           setTileFormat(fmtSelect.value);
+        });
+        L.DomEvent.on(cmpInput, "change", function () {
+          setCompareVisible(cmpInput.checked);
+        });
+        L.DomEvent.on(cmpPick, "click", function (e) {
+          L.DomEvent.stop(e);
+          openDirPicker();
+        });
+        L.DomEvent.on(opInput, "input", function () {
+          setCompareOpacity(Number(opInput.value) / 100);
         });
         L.DomEvent.on(metaInput, "change", function () {
           metatileVisible = metaInput.checked;
@@ -616,7 +1306,7 @@
             </div>
           </div>
 
-          <div class="srk-field">
+          <div class="srk-field" id="srk-data-field">
             <span>Datenquelle</span>
             <div class="srk-radios">
               <label><input type="radio" name="srk-source" value="local" checked /> Lokal (data/osm)</label>
@@ -640,18 +1330,23 @@
           </div>
 
           <div class="srk-opts">
-            <label class="srk-check"><input type="checkbox" id="srk-refresh" checked /> --refresh</label>
-            <label class="srk-check"><input type="checkbox" id="srk-skip-render" /> --skip-render</label>
+            <label class="srk-check" title="Löscht die bestehende Datenbank und schreibt die Daten neu"><input type="checkbox" id="srk-refresh" checked title="Löscht die bestehende Datenbank und schreibt die Daten neu" /> --refresh</label>
+            <label class="srk-check" title="Beendet die Pipeline nach der Datenaufbereitung, ohne Kacheln zu schreiben"><input type="checkbox" id="srk-skip-render" title="Beendet die Pipeline nach der Datenaufbereitung, ohne Kacheln zu schreiben" /> --skip-render</label>
+            <label class="srk-check" title="Rendert aus der bestehenden Datenbank, ohne Import und Prozessierung"><input type="checkbox" id="srk-render-only" title="Rendert aus der bestehenden Datenbank, ohne Import und Prozessierung" /> --render-only</label>
+            <label class="srk-check" title="Schreibt nur Kacheln, die vollständig in der BBOX liegen. Randkacheln bleiben unverändert."><input type="checkbox" id="srk-inside" title="Schreibt nur Kacheln, die vollständig in der BBOX liegen. Randkacheln bleiben unverändert." /> --inside</label>
           </div>
           <div class="srk-zoom-row">
-            <label>--zmin <input type="number" id="srk-zmin" min="10" max="20" value="15" /></label>
-            <label>--zmax <input type="number" id="srk-zmax" min="10" max="20" value="19" /></label>
-            <label>--format
-              <select id="srk-format" style="width:auto">
-                <option value="jpg" selected>jpg</option>
+            <label title="Niedrigste Zoomstufe, die gerendert wird">--zmin <input type="number" id="srk-zmin" min="10" max="20" value="15" title="Niedrigste Zoomstufe, die gerendert wird" /></label>
+            <label title="Höchste Zoomstufe, die gerendert wird">--zmax <input type="number" id="srk-zmax" min="10" max="20" value="19" title="Höchste Zoomstufe, die gerendert wird" /></label>
+            <label title="Dateiformat der geschriebenen Kacheln">--format
+              <select id="srk-format" style="width:auto" title="Dateiformat der geschriebenen Kacheln">
+                <option value="webp" selected>webp</option>
+                <option value="jpg">jpg</option>
                 <option value="png">png</option>
               </select>
             </label>
+            <label title="Qualität für JPEG und WebP von 0 bis 100. 100 ist verlustfreies WebP.">--quality <input type="number" id="srk-quality" min="0" max="100" value="95" title="Qualität für JPEG und WebP von 0 bis 100. 100 ist verlustfreies WebP." /></label>
+            <label title="Worker-Prozesse: dynamic passt die Anzahl an den freien Speicher an, 1 rendert nacheinander.">--jobs <input type="text" id="srk-jobs" value="dynamic" title="Worker-Prozesse: dynamic passt die Anzahl an den freien Speicher an, 1 rendert nacheinander." /></label>
           </div>
 
           <div class="srk-row">
@@ -679,9 +1374,14 @@
           geoUrl: root.querySelector("#srk-geo-url"),
           refresh: root.querySelector("#srk-refresh"),
           skipRender: root.querySelector("#srk-skip-render"),
+          renderOnly: root.querySelector("#srk-render-only"),
+          inside: root.querySelector("#srk-inside"),
+          dataField: root.querySelector("#srk-data-field"),
           zmin: root.querySelector("#srk-zmin"),
           zmax: root.querySelector("#srk-zmax"),
           format: root.querySelector("#srk-format"),
+          quality: root.querySelector("#srk-quality"),
+          jobs: root.querySelector("#srk-jobs"),
           start: root.querySelector("#srk-start"),
           stop: root.querySelector("#srk-stop"),
           copy: root.querySelector("#srk-copy-cmd"),
@@ -729,6 +1429,20 @@
           const local = mode === "local";
           els.localWrap.hidden = !local;
           els.geoWrap.hidden = local;
+        }
+
+        function applyRenderOnlyMode() {
+          const on = els.renderOnly.checked;
+          if (on) els.skipRender.checked = false;
+          els.refresh.disabled = on;
+          els.skipRender.disabled = on;
+          els.localSelect.disabled = on;
+          els.geoPreset.disabled = on;
+          els.geoUrl.disabled = on;
+          root.querySelectorAll('input[name="srk-source"]').forEach((r) => {
+            r.disabled = on;
+          });
+          if (els.dataField) els.dataField.style.opacity = on ? "0.55" : "";
         }
 
         function clearHandles() {
@@ -995,20 +1709,49 @@
         }
 
         function selectedFormat() {
-          return els.format.value === "png" ? "png" : "jpg";
+          const fmt = els.format.value;
+          return ["webp", "png", "jpg"].indexOf(fmt) >= 0 ? fmt : "webp";
+        }
+
+        function selectedQuality() {
+          const raw = (els.quality.value || "").trim();
+          const n = raw === "" ? 95 : Number(raw);
+          if (!Number.isInteger(n) || n < 0 || n > 100) return null;
+          return n;
+        }
+
+        function selectedJobs() {
+          const raw = (els.jobs.value || "").trim().toLowerCase();
+          if (raw === "" || raw === "dynamic") return "dynamic";
+          const n = Number(raw);
+          if (!Number.isInteger(n) || n < 1) return null;
+          return n;
         }
 
         function buildCommand() {
+          const renderOnly = els.renderOnly.checked;
           const data = selectedData();
-          if (!currentBbox || !data) return null;
-          const parts = ["./run.sh", "--data", data, "--bbox", currentBbox];
-          if (els.refresh.checked) parts.push("--refresh");
-          if (els.skipRender.checked) parts.push("--skip-render");
+          if (!currentBbox) return null;
+          if (!renderOnly && !data) return null;
+          const parts = ["./run.sh"];
+          if (renderOnly) {
+            parts.push("--render-only");
+          } else {
+            parts.push("--data", data);
+          }
+          parts.push("--bbox", currentBbox);
+          if (!renderOnly && els.refresh.checked) parts.push("--refresh");
+          if (!renderOnly && els.skipRender.checked) parts.push("--skip-render");
+          if (els.inside.checked) parts.push("--inside");
           const zmin = els.zmin.value.trim();
           const zmax = els.zmax.value.trim();
           if (zmin) parts.push("--zmin", zmin);
           if (zmax) parts.push("--zmax", zmax);
           parts.push("--format", selectedFormat());
+          const quality = selectedQuality();
+          if (quality != null) parts.push("--quality", String(quality));
+          const jobs = selectedJobs();
+          if (jobs != null) parts.push("--jobs", String(jobs));
           return parts.join(" ");
         }
 
@@ -1048,7 +1791,7 @@
                 wasRunning = false;
                 if (data.exit_code === 0) {
                   setStatus("Fertig (exit 0) — Kacheln aktualisiert", null);
-                  syncTileFormatFromServer().then(function () {
+                  syncTilesFromServer().then(function () {
                     streetLayer.redraw();
                   });
                 } else if (data.exit_code != null) {
@@ -1130,6 +1873,7 @@
             els.geoWrap.hidden = local;
           });
         });
+        L.DomEvent.on(els.renderOnly, "change", applyRenderOnlyMode);
 
         L.DomEvent.on(els.pipelinePreset, "change", function () {
           const id = els.pipelinePreset.value;
@@ -1147,6 +1891,8 @@
             (o) => o.value === preset.data
           );
           els.geoPreset.value = match ? preset.data : "";
+          if (preset.zmin != null) els.zmin.value = String(preset.zmin);
+          if (preset.zmax != null) els.zmax.value = String(preset.zmax);
           setBbox(bounds, { rawString: preset.bbox, fit: true });
           setStatus("Voreinstellung „" + preset.label + "“ geladen");
         });
@@ -1221,7 +1967,12 @@
           L.DomEvent.stop(e);
           const cmd = buildCommand();
           if (!cmd) {
-            setStatus("BBOX und Datenquelle erforderlich", "error");
+            setStatus(
+              els.renderOnly.checked
+                ? "BBOX erforderlich"
+                : "BBOX und Datenquelle erforderlich",
+              "error"
+            );
             return;
           }
           try {
@@ -1238,26 +1989,41 @@
           if (!currentBbox && els.bbox.value.trim()) {
             if (!applyBboxInput()) return;
           }
+          const renderOnly = els.renderOnly.checked;
           const data = selectedData();
           if (!currentBbox) {
             setStatus("Bitte zuerst eine BBOX setzen", "error");
             return;
           }
-          if (!data) {
+          if (!renderOnly && !data) {
             setStatus("Bitte eine Datenquelle wählen", "error");
             return;
           }
           const payload = {
-            data: data,
+            data: renderOnly ? "" : data,
             bbox: currentBbox,
-            refresh: els.refresh.checked,
-            skip_render: els.skipRender.checked,
+            refresh: renderOnly ? false : els.refresh.checked,
+            skip_render: renderOnly ? false : els.skipRender.checked,
+            render_only: renderOnly,
+            inside: els.inside.checked,
             format: selectedFormat(),
           };
           const zmin = els.zmin.value.trim();
           const zmax = els.zmax.value.trim();
           if (zmin) payload.zmin = Number(zmin);
           if (zmax) payload.zmax = Number(zmax);
+          const quality = selectedQuality();
+          if (quality == null) {
+            setStatus("--quality muss eine ganze Zahl 0–100 sein", "error");
+            return;
+          }
+          payload.quality = quality;
+          const jobs = selectedJobs();
+          if (jobs === null) {
+            setStatus("--jobs muss 'dynamic' oder eine ganze Zahl >= 1 sein", "error");
+            return;
+          }
+          payload.jobs = jobs;
 
           els.log.textContent = "";
           els.log.hidden = false;
@@ -1304,6 +2070,8 @@
     new ZoomControl().addTo(map);
     new LayerTogglesControl().addTo(map);
     new RunControl().addTo(map);
+    setupDirPicker();
+    restoreCompare();
   </script>
 </body>
 </html>

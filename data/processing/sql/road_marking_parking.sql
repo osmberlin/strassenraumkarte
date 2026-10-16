@@ -1,12 +1,15 @@
--- road_marking_parking.sql — parking area outlines and parking_space symbols
+-- road_marking_parking.sql — parking area outlines, parking_space symbols,
+--   and stall markings from street_parking lines.
 -- Depends on: highway_area (highway_area_merge.sql), feature_polygon (import),
---   barrier_way / barrier_polygon (import), highway_transformed, lanes.
+--   barrier_way / barrier_polygon (import), highway_transformed, lanes;
+--   street_parking optional (street_parking.sql).
 --
 -- 1) Outline segments from parking highway_area + selected feature_polygon
 -- 2) Drop segments covered by barrier=kerb; parking_space edges covered by
 --    parent parking lot outer boundaries; dedupe shared edges
 -- 3) Merge connected outline fragments → road_marking_way (parking_edge)
 -- 4) parking_space symbols → road_marking_node with geometry-based direction
+-- 5) Stall frames + dividers from marked on-street parking lines
 
 \i 'processing/sql/params/params.sql'
 
@@ -656,6 +659,504 @@ FROM _parking_symbol_direction d;
 
 
 ----------------------------------------------------------------------
+-- 6) Stall markings from street_parking (markings=yes, source not separate)
+----------------------------------------------------------------------
+
+DROP TABLE IF EXISTS _spm_const;
+CREATE TEMP TABLE _spm_const AS
+SELECT
+    :'street_parking_point_parallel_m'::double precision AS parallel_m,
+    :'street_parking_point_diagonal_m'::double precision AS diagonal_m,
+    :'street_parking_point_perpendicular_m'::double precision AS perpendicular_m,
+    :'street_parking_point_bus_m'::double precision AS bus_m,
+    :'street_parking_point_bus_end_m'::double precision AS bus_end_m,
+    :'street_parking_point_offset_parallel_m'::double precision AS offset_parallel_m,
+    :'street_parking_point_offset_diagonal_m'::double precision AS offset_diagonal_m,
+    :'street_parking_point_offset_perpendicular_m'::double precision AS offset_perp_m,
+    :'street_parking_point_diagonal_along_m'::double precision AS diagonal_along_m,
+    :'street_parking_sample_m'::double precision AS sample_m,
+    :'street_parking_parallel_az_window_m'::double precision AS az_window_m,
+    :'parking_outline_min_length'::double precision AS min_length_m;
+
+CREATE OR REPLACE FUNCTION pg_temp.spm_vtype(cat text, primary_cat text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+PARALLEL SAFE
+AS $$
+    SELECT CASE
+        WHEN primary_cat IN ('emergency', 'bus', 'hgv') THEN primary_cat
+        WHEN cat ~* '(^|;\s*)emergency(\s*\(|\s*;|$)' THEN 'emergency'
+        WHEN cat ~* '(^|;\s*)bus(\s*\(|\s*;|$)' THEN 'bus'
+        WHEN cat ~* '(^|;\s*)hgv(\s*\(|\s*;|$)' THEN 'hgv'
+        WHEN cat ~* 'vehicle_restriction\s*\([^)]*only[^)]*\yemergency\y' THEN 'emergency'
+        WHEN cat ~* 'vehicle_restriction\s*\([^)]*only[^)]*\ybus\y' THEN 'bus'
+        WHEN cat ~* 'vehicle_restriction\s*\([^)]*only[^)]*\yhgv\y' THEN 'hgv'
+        WHEN primary_cat = 'taxi' THEN 'taxi'
+        ELSE 'motor_vehicle'
+    END;
+$$;
+
+CREATE OR REPLACE FUNCTION pg_temp.spm_car_len_m(orientation text)
+RETURNS double precision
+LANGUAGE sql
+STABLE
+PARALLEL SAFE
+AS $$
+    SELECT CASE orientation
+        WHEN 'diagonal' THEN c.diagonal_m
+        WHEN 'perpendicular' THEN c.perpendicular_m
+        ELSE c.parallel_m
+    END
+    FROM _spm_const c;
+$$;
+
+CREATE OR REPLACE FUNCTION pg_temp.spm_stall_layout(
+    len_m double precision,
+    capacity integer,
+    car_len double precision,
+    vtype text,
+    bus_m double precision,
+    bus_end_m double precision,
+    OUT start_m double precision,
+    OUT spacing_m double precision
+)
+LANGUAGE plpgsql
+IMMUTABLE
+AS $$
+DECLARE
+    half_m double precision;
+    nom_start double precision;
+    nom_spacing double precision;
+    n integer;
+BEGIN
+    n := COALESCE(capacity, 0);
+    IF vtype = 'bus' THEN
+        spacing_m := bus_m;
+        start_m := bus_end_m + (len_m - bus_m * n) / 2.0;
+        RETURN;
+    END IF;
+    IF n <= 1 THEN
+        spacing_m := 0.0;
+        start_m := len_m / 2.0;
+        RETURN;
+    END IF;
+
+    half_m := car_len / 2.0;
+    nom_spacing := car_len;
+    nom_start := (len_m - car_len * (n - 1)) / 2.0;
+    IF nom_start >= half_m
+       AND nom_start + (n - 1) * nom_spacing <= len_m - half_m
+    THEN
+        start_m := nom_start;
+        spacing_m := nom_spacing;
+    ELSIF len_m > car_len THEN
+        start_m := half_m;
+        spacing_m := (len_m - car_len) / (n - 1);
+    ELSE
+        start_m := nom_start;
+        spacing_m := nom_spacing;
+    END IF;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION pg_temp.spm_az(
+    line geometry,
+    f double precision,
+    len_m double precision
+)
+RETURNS double precision
+LANGUAGE sql
+STABLE
+PARALLEL SAFE
+AS $$
+    SELECT degrees(ST_Azimuth(
+        ST_LineInterpolatePoint(
+            line,
+            GREATEST(
+                0.0,
+                f - metres(c.az_window_m) / NULLIF(len_m, 0.0)
+            )
+        ),
+        ST_LineInterpolatePoint(
+            line,
+            LEAST(
+                1.0,
+                f + metres(c.az_window_m) / NULLIF(len_m, 0.0)
+            )
+        )
+    ))
+    FROM _spm_const c;
+$$;
+
+-- Same kerb-side sign as street_parking_point.parking_kerb_sign.
+-- TILDA separate-area lane/half_on_kerb: vehicles/stalls on the right.
+CREATE OR REPLACE FUNCTION pg_temp.spm_kerb_sign(
+    parking text,
+    street_side_back boolean,
+    tilda_separate_area boolean DEFAULT false
+)
+RETURNS double precision
+LANGUAGE sql
+IMMUTABLE
+PARALLEL SAFE
+AS $$
+    SELECT CASE
+        WHEN COALESCE(tilda_separate_area, false)
+             AND parking IN ('lane', 'half_on_kerb')
+        THEN CASE WHEN COALESCE(street_side_back, false) THEN 1.0 ELSE -1.0 END
+        WHEN parking IN ('on_kerb', 'shoulder') THEN -1.0
+        WHEN parking = 'street_side' THEN
+            CASE WHEN COALESCE(street_side_back, false) THEN 1.0 ELSE -1.0 END
+        WHEN parking = 'half_on_kerb' THEN 0.0
+        ELSE 1.0
+    END;
+$$;
+
+CREATE OR REPLACE FUNCTION pg_temp.spm_translate(
+    pt geometry,
+    line_az double precision,
+    orientation text,
+    side_sign double precision,
+    scale double precision,
+    road_oneway text,
+    side text,
+    road_left boolean
+)
+RETURNS geometry
+LANGUAGE sql
+STABLE
+PARALLEL SAFE
+AS $$
+    SELECT ST_Translate(
+        pt,
+        metres(
+            -cos(radians(line_az))
+            * CASE orientation
+                WHEN 'diagonal' THEN c.offset_diagonal_m
+                WHEN 'perpendicular' THEN c.offset_perp_m
+                ELSE c.offset_parallel_m
+              END
+            * scale
+            * side_sign
+            * CASE WHEN COALESCE(road_left, true) THEN 1.0 ELSE -1.0 END
+            + sin(radians(line_az))
+            * CASE WHEN orientation = 'diagonal' THEN c.diagonal_along_m ELSE 0.0 END
+            * scale
+            * CASE WHEN road_oneway = 'yes' AND side = 'left' THEN 1.0 ELSE -1.0 END
+            * side_sign
+            * CASE WHEN COALESCE(road_left, true) THEN 1.0 ELSE -1.0 END
+        ),
+        metres(
+            sin(radians(line_az))
+            * CASE orientation
+                WHEN 'diagonal' THEN c.offset_diagonal_m
+                WHEN 'perpendicular' THEN c.offset_perp_m
+                ELSE c.offset_parallel_m
+              END
+            * scale
+            * side_sign
+            * CASE WHEN COALESCE(road_left, true) THEN 1.0 ELSE -1.0 END
+            + cos(radians(line_az))
+            * CASE WHEN orientation = 'diagonal' THEN c.diagonal_along_m ELSE 0.0 END
+            * scale
+            * CASE WHEN road_oneway = 'yes' AND side = 'left' THEN 1.0 ELSE -1.0 END
+            * side_sign
+            * CASE WHEN COALESCE(road_left, true) THEN 1.0 ELSE -1.0 END
+        )
+    )
+    FROM _spm_const c;
+$$;
+
+DROP TABLE IF EXISTS _spm_src;
+CREATE TEMP TABLE _spm_src (
+    line_rid bigint,
+    source_id text,
+    parking text,
+    orientation text,
+    capacity integer,
+    condition_category text,
+    condition_category_primary text,
+    road_oneway text,
+    side text,
+    road_left boolean,
+    vtype text,
+    geom geometry,
+    len_m double precision,
+    layer integer,
+    street_side_back boolean,
+    tilda_separate_area boolean
+);
+
+DO $spm$
+BEGIN
+    IF to_regclass('public.street_parking') IS NULL THEN
+        RETURN;
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'street_parking'
+          AND column_name = 'source'
+    ) THEN
+        RAISE NOTICE 'street_parking.source missing — skip stall markings';
+        RETURN;
+    END IF;
+    ALTER TABLE public.street_parking ADD COLUMN IF NOT EXISTS layer integer;
+    ALTER TABLE public.street_parking ADD COLUMN IF NOT EXISTS street_side_back boolean;
+    ALTER TABLE public.street_parking ADD COLUMN IF NOT EXISTS tilda_separate_area boolean;
+
+    INSERT INTO _spm_src
+    SELECT
+        row_number() OVER () AS line_rid,
+        s.source_id,
+        s.parking,
+        s.orientation,
+        s.capacity,
+        s.condition_category,
+        s.condition_category_primary,
+        s.road_oneway,
+        s.side,
+        COALESCE(s.road_left, true) AS road_left,
+        pg_temp.spm_vtype(s.condition_category, s.condition_category_primary) AS vtype,
+        s.geom,
+        ST_Length(s.geom) / metres(1) AS len_m,
+        s.layer,
+        COALESCE(s.street_side_back, false) AS street_side_back,
+        COALESCE(s.tilda_separate_area, false) AS tilda_separate_area
+    FROM street_parking s
+    WHERE s.geom IS NOT NULL
+      AND NOT ST_IsEmpty(s.geom)
+      AND ST_GeometryType(s.geom) = 'ST_LineString'
+      AND ST_NPoints(s.geom) >= 2
+      AND s.capacity IS NOT NULL
+      AND s.capacity >= 1
+      AND s.markings = 'yes'
+      AND COALESCE(s.source, '') NOT ILIKE '%separate%'
+      AND ST_Length(s.geom) > 0;
+END;
+$spm$;
+
+CREATE INDEX _spm_src_rid_idx ON _spm_src (line_rid);
+
+DROP TABLE IF EXISTS _spm_side;
+CREATE TEMP TABLE _spm_side AS
+SELECT
+    s.*,
+    CASE
+        WHEN s.parking = 'half_on_kerb'
+             AND NOT COALESCE(s.tilda_separate_area, false)
+        THEN 1.0
+        ELSE 2.0
+    END AS scale,
+    gs.side_sign
+FROM _spm_src s
+CROSS JOIN LATERAL (
+    SELECT unnest(
+        CASE
+            WHEN s.parking = 'half_on_kerb'
+                 AND NOT COALESCE(s.tilda_separate_area, false)
+            THEN ARRAY[-1.0, 1.0]
+            ELSE ARRAY[
+                pg_temp.spm_kerb_sign(
+                    s.parking, s.street_side_back, s.tilda_separate_area
+                )
+            ]
+        END
+    ) AS side_sign
+) gs;
+
+DROP TABLE IF EXISTS _spm_frame;
+CREATE TEMP TABLE _spm_frame AS
+SELECT
+    x.source_id,
+    'outer'::text AS class,
+    ST_MakeLine(x.pts) AS geom,
+    x.layer
+FROM (
+    SELECT
+        sd.line_rid,
+        sd.source_id,
+        sd.side_sign,
+        sd.layer,
+        array_agg(
+            pg_temp.spm_translate(
+                d.pt,
+                pg_temp.spm_az(sd.geom, d.f, sd.len_m),
+                sd.orientation,
+                sd.side_sign,
+                sd.scale,
+                sd.road_oneway,
+                sd.side,
+                sd.road_left
+            )
+            ORDER BY d.ord
+        ) AS pts
+    FROM _spm_side sd
+    CROSS JOIN LATERAL (
+        SELECT
+            (dp).path[1] AS ord,
+            (dp).geom AS pt,
+            ST_LineLocatePoint(sd.geom, (dp).geom) AS f
+        FROM ST_DumpPoints(
+            ST_Segmentize(sd.geom, metres((SELECT sample_m FROM _spm_const)))
+        ) AS dp
+    ) d
+    GROUP BY sd.line_rid, sd.source_id, sd.side_sign, sd.layer
+) x
+WHERE x.pts IS NOT NULL
+  AND array_length(x.pts, 1) >= 2;
+
+DROP TABLE IF EXISTS _spm_div;
+CREATE TEMP TABLE _spm_div AS
+WITH spaced AS (
+    SELECT
+        s.*,
+        lay.spacing_m,
+        lay.start_m
+    FROM _spm_src s
+    CROSS JOIN _spm_const c
+    CROSS JOIN LATERAL pg_temp.spm_stall_layout(
+        s.len_m,
+        s.capacity,
+        pg_temp.spm_car_len_m(s.orientation),
+        s.vtype,
+        c.bus_m,
+        c.bus_end_m
+    ) AS lay
+),
+fracs AS (
+    SELECT
+        sp.*,
+        0.0::double precision AS f,
+        'outer'::text AS class
+    FROM spaced sp
+    UNION ALL
+    SELECT
+        sp.*,
+        1.0::double precision AS f,
+        'outer'::text AS class
+    FROM spaced sp
+    UNION ALL
+    SELECT
+        sp.*,
+        GREATEST(
+            0.0,
+            LEAST(
+                1.0,
+                (sp.start_m + (gs.i + 0.5) * sp.spacing_m) / NULLIF(sp.len_m, 0.0)
+            )
+        ) AS f,
+        'inner'::text AS class
+    FROM spaced sp
+    CROSS JOIN LATERAL generate_series(0, sp.capacity - 2) AS gs(i)
+    WHERE sp.capacity >= 2
+      AND sp.len_m > 0
+)
+SELECT
+    f.source_id,
+    f.class,
+    f.layer,
+    CASE
+        WHEN f.parking = 'half_on_kerb'
+             AND NOT COALESCE(f.tilda_separate_area, false) THEN
+            ST_MakeLine(
+                pg_temp.spm_translate(
+                    pt.geom, az.az, f.orientation, -1.0, 1.0, f.road_oneway, f.side, f.road_left
+                ),
+                pg_temp.spm_translate(
+                    pt.geom, az.az, f.orientation, 1.0, 1.0, f.road_oneway, f.side, f.road_left
+                )
+            )
+        ELSE
+            ST_MakeLine(
+                pt.geom,
+                pg_temp.spm_translate(
+                    pt.geom,
+                    az.az,
+                    f.orientation,
+                    pg_temp.spm_kerb_sign(
+                        f.parking, f.street_side_back, f.tilda_separate_area
+                    ),
+                    2.0,
+                    f.road_oneway,
+                    f.side,
+                    f.road_left
+                )
+            )
+    END AS geom
+FROM fracs f
+CROSS JOIN LATERAL (SELECT ST_LineInterpolatePoint(f.geom, f.f) AS geom) pt
+CROSS JOIN LATERAL (SELECT pg_temp.spm_az(f.geom, f.f, f.len_m) AS az) az
+WHERE pt.geom IS NOT NULL
+  AND az.az IS NOT NULL;
+
+DELETE FROM road_marking_way
+WHERE source = 'street_parking';
+
+INSERT INTO road_marking_way (
+    osm_type,
+    osm_id,
+    source,
+    road_marking,
+    stroke,
+    dasharray,
+    pattern,
+    arrow,
+    symbol,
+    width,
+    length,
+    colour,
+    direction,
+    type,
+    class,
+    layer,
+    geom
+)
+SELECT
+    'W'::text AS osm_type,
+    hashtext(m.source_id)::bigint AS osm_id,
+    'street_parking'::text AS source,
+    'parking_edge'::text AS road_marking,
+    'solid'::text AS stroke,
+    NULL::text AS dasharray,
+    NULL::text AS pattern,
+    NULL::text AS arrow,
+    NULL::text AS symbol,
+    0.12::real AS width,
+    NULL::real AS length,
+    'white'::text AS colour,
+    NULL::real AS direction,
+    'parking'::text AS type,
+    m.class,
+    m.layer,
+    m.geom
+FROM (
+    SELECT source_id, class, layer, geom FROM _spm_frame
+    UNION ALL
+    SELECT source_id, class, layer, geom FROM _spm_div
+) m
+WHERE m.geom IS NOT NULL
+  AND NOT ST_IsEmpty(m.geom)
+  AND ST_GeometryType(m.geom) = 'ST_LineString'
+  AND ST_Length(m.geom) > metres(:'parking_outline_min_length'::numeric);
+
+\echo
+\echo '=== street_parking stall markings ==='
+SELECT
+    (SELECT count(*) FROM _spm_src) AS source_lines,
+    (SELECT count(*) FROM _spm_frame) AS frame_lines,
+    (SELECT count(*) FROM road_marking_way WHERE source = 'street_parking' AND class = 'outer') AS outer_rows,
+    (SELECT count(*) FROM road_marking_way WHERE source = 'street_parking' AND class = 'inner') AS inner_rows;
+
+SELECT parking, orientation, count(*) AS n
+FROM _spm_src
+GROUP BY parking, orientation
+ORDER BY n DESC;
+
+
+----------------------------------------------------------------------
 -- Cleanup
 ----------------------------------------------------------------------
 
@@ -671,3 +1172,8 @@ DROP TABLE IF EXISTS _parking_symbol_sources;
 DROP TABLE IF EXISTS _parking_symbol_roads;
 DROP TABLE IF EXISTS _parking_symbol_lanes;
 DROP TABLE IF EXISTS _parking_symbol_direction;
+DROP TABLE IF EXISTS _spm_const;
+DROP TABLE IF EXISTS _spm_src;
+DROP TABLE IF EXISTS _spm_side;
+DROP TABLE IF EXISTS _spm_frame;
+DROP TABLE IF EXISTS _spm_div;

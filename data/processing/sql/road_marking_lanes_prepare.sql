@@ -12,9 +12,11 @@
 -- false junction clips. layer is carried through clipping polygons end-to-end.
 --
 -- lanes_clipped: highway_area junction/crossing is omitted from clipping when markings=yes
---   (markings may continue through the junction polygon).
--- lanes_clipped_for_arrows: same hulls + junction footprints, but junction/crossing areas always
---   clip — turn arrows should not extend through those polygons even if markings=yes.
+--   (markings may continue through the junction polygon), and for area:highway
+--   motorway/motorway_link with junction=y_junction (class = y_junction).
+-- lanes_clipped_for_arrows: same hulls + junction footprints, but junction/crossing areas
+--   clip turn arrows even if markings=yes. motorway/motorway_link y-junctions are omitted
+--   here as well, so their markings continue through the polygon.
 
 -- 1a) Shared basis: junction footprints + hulls between each stop_line and its nearest junction.
 --     This is the expensive part; compute once and reuse.
@@ -75,11 +77,17 @@ WITH merged AS (
     SELECT layer, geom FROM highway_junctions_clipping_base
     UNION ALL
     -- add area:highway junction/crossing polygons (but: if junction/crossing area is tagged
-    -- markings=yes, they should not clip lane markings)
+    -- markings=yes, they should not clip lane markings; motorway/motorway_link
+    -- y-junctions keep their markings too)
     SELECT ha.layer, ha.geom
     FROM highway_area ha
     WHERE ha.type IN ('junction', 'crossing')
       AND (ha.markings IS NULL OR ha.markings <> 'yes')
+      AND NOT (
+          ha."area:highway" IN ('motorway', 'motorway_link')
+          AND ha.type = 'junction'
+          AND ha.class = 'y_junction'
+      )
 )
 SELECT
     layer,
@@ -93,7 +101,8 @@ CREATE INDEX highway_junctions_clipping_areas_geom_idx ON highway_junctions_clip
 
 
 -- 1c) Additional clipping polygons for arrows: only junction/crossing highway_area polygons
---     with markings=yes. Arrows should still be clipped by those (2nd pass).
+--     with markings=yes. Arrows should still be clipped by those (2nd pass), except
+--     motorway/motorway_link y-junctions (markings stay).
 DROP TABLE IF EXISTS highway_junctions_clipping_areas_markings_yes;
 
 CREATE TABLE highway_junctions_clipping_areas_markings_yes AS
@@ -102,6 +111,11 @@ WITH merged AS (
     FROM highway_area ha
     WHERE ha.type IN ('junction', 'crossing')
       AND ha.markings = 'yes'
+      AND NOT (
+          ha."area:highway" IN ('motorway', 'motorway_link')
+          AND ha.type = 'junction'
+          AND ha.class = 'y_junction'
+      )
 )
 SELECT
     layer,
@@ -123,10 +137,19 @@ CREATE INDEX highway_junctions_clipping_areas_markings_yes_geom_idx
 
 -- 1d) Crossing lanes only: trim at road / non-road highway_area boundaries; keep fragment
 --     containing the reference point. Other lanes pass through unchanged.
+--     Tunnel segments are omitted (except building_passage) so no lane markings
+--     are generated underground.
 DROP TABLE IF EXISTS lanes_road_trimmed;
 
 CREATE TABLE lanes_road_trimmed AS
 WITH
+surface_lanes AS (
+    SELECT l.*
+    FROM lanes l
+    LEFT JOIN highway h ON h.segment_id = l.segment_id
+    WHERE h.tunnel IS NULL
+       OR h.tunnel IN ('no', 'none', 'building_passage')
+),
 non_crossing AS (
     SELECT
         l.osm_id,
@@ -152,7 +175,7 @@ non_crossing AS (
         l."offset",
         l.transition,
         l.geom
-    FROM lanes l
+    FROM surface_lanes l
     WHERE l.class IS DISTINCT FROM 'crossing'
        OR NOT (
            (l.marking_left IS NOT NULL AND l.marking_left NOT IN ('no', 'none')
@@ -186,7 +209,7 @@ crossing_candidates AS (
         l."offset",
         l.transition,
         l.geom AS lane_geom
-    FROM lanes l
+    FROM surface_lanes l
     WHERE l.class = 'crossing'
       AND (
           (l.marking_left IS NOT NULL AND l.marking_left NOT IN ('no', 'none')

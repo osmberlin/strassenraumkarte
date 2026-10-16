@@ -1,8 +1,22 @@
 -- highway_area_centerline.sql — create highway_areas from road centerlines, lane and road width attributes
 -- Depends on: highway_transformed (lanes_spread_dual_carriageway.sql), highway_preparation.sql
 
--- TODO: Exclude tunnels
+-- Move OSM-mapped highway areas in tunnels aside (streets underground are not
+-- rendered as road surfaces; building_passage stays visible). Kept in
+-- highway_area_tunnel for tunnel portal shared-edge detection.
+DROP TABLE IF EXISTS highway_area_tunnel;
+CREATE TABLE highway_area_tunnel AS
+SELECT *
+FROM highway_area
+WHERE tunnel IS NOT NULL
+  AND tunnel NOT IN ('no', 'none', 'building_passage');
 
+CREATE INDEX highway_area_tunnel_geom_idx
+    ON highway_area_tunnel USING GIST (geom);
+
+DELETE FROM highway_area
+WHERE tunnel IS NOT NULL
+  AND tunnel NOT IN ('no', 'none', 'building_passage');
 
 -- 1) clip road segments where area:highway polygons exists
 DROP TABLE IF EXISTS highway_clipped;
@@ -10,7 +24,20 @@ CREATE TABLE highway_clipped AS
 
 SELECT
     ht.road_segment_id,
-    ht.highway,
+    CASE
+        WHEN ht.highway = 'construction'
+             AND ht.construction IS NOT NULL
+             AND ht.construction <> ''
+            THEN ht.construction
+        ELSE ht.highway
+    END AS highway,
+    CASE
+        WHEN ht.highway = 'construction'
+             AND ht.construction IS NOT NULL
+             AND ht.construction <> ''
+            THEN 'construction'
+        ELSE NULL
+    END AS type,
     ht.surface,
     ht.osm_type,
     ht.osm_id,
@@ -45,8 +72,10 @@ LEFT JOIN LATERAL (
 ) intersecting_areas
 ON TRUE
 -- only motorways and regular roads (exclude path, service, …); requires highway_preparation.sql
+-- tunnels are not rendered as highway areas
 WHERE ht.type IN ('road', 'motorway')
-  AND ht.road_segment_id IS NOT NULL;
+  AND ht.road_segment_id IS NOT NULL
+  AND (ht.tunnel IS NULL OR ht.tunnel IN ('no', 'none', 'building_passage'));
 
 -- exclude empty geometries
 DELETE FROM highway_clipped
@@ -62,13 +91,14 @@ CREATE INDEX highway_clipped_geom_idx ON highway_clipped USING GIST (geom);
 -- dominant source attributes per merge group (longest centerline)
 DROP TABLE IF EXISTS highway_clipped_attrs;
 CREATE TABLE highway_clipped_attrs AS
-SELECT DISTINCT ON (road_segment_id, highway, surface, layer, tunnel, "sett:length")
+SELECT DISTINCT ON (road_segment_id, highway, surface, layer, tunnel, "sett:length", type)
     road_segment_id,
     highway,
     surface,
     layer,
     tunnel,
     "sett:length",
+    type,
     osm_type,
     osm_id,
     hierarchy
@@ -80,14 +110,15 @@ ORDER BY
     layer,
     tunnel,
     "sett:length",
+    type,
     ST_Length(geom) DESC;
 
 DROP INDEX IF EXISTS highway_clipped_attrs_group_idx;
 CREATE INDEX highway_clipped_attrs_group_idx
-    ON highway_clipped_attrs (road_segment_id, highway, surface, layer, tunnel, "sett:length");
+    ON highway_clipped_attrs (road_segment_id, highway, surface, layer, tunnel, "sett:length", type);
 
 
--- 2) buffer road segments (per road_segment_id, highway, surface, layer, tunnel, sett:length)
+-- 2) buffer road segments (per road_segment_id, highway, surface, layer, tunnel, sett:length, type)
 DROP TABLE IF EXISTS highway_buffers;
 CREATE TABLE highway_buffers AS
 
@@ -98,6 +129,7 @@ SELECT
     layer,
     tunnel,
     "sett:length",
+    type,
     (ST_Dump(
         -- fill gaps and smooth outlines by buffering and shrinking
         ST_Buffer(
@@ -116,6 +148,7 @@ FROM (
         layer,
         tunnel,
         "sett:length",
+        type,
 
         -- buffer on the left and right side of the centerline, then merge
         ST_Union(
@@ -140,14 +173,15 @@ GROUP BY
     surface,
     layer,
     tunnel,
-    "sett:length";
+    "sett:length",
+    type;
 
 -- create spatial index
 DROP INDEX IF EXISTS highway_buffers_geom_idx;
 CREATE INDEX highway_buffers_geom_idx ON highway_buffers USING GIST (geom);
 
 
--- 3) dissolve road areas with matching road_segment_id, highway, surface, layer, tunnel and sett:length
+-- 3) dissolve road areas with matching road_segment_id, highway, surface, layer, tunnel, sett:length and type
 DROP TABLE IF EXISTS highway_areas;
 
 CREATE TABLE highway_areas AS
@@ -161,6 +195,7 @@ SELECT
     grouped.tunnel,
     attrs.hierarchy,
     grouped.layer,
+    grouped.type,
     grouped.geom
 FROM (
     SELECT
@@ -170,6 +205,7 @@ FROM (
         layer,
         tunnel,
         "sett:length",
+        type,
         (ST_Dump(ST_Union(geom))).geom AS geom
     FROM highway_buffers
     GROUP BY
@@ -178,7 +214,8 @@ FROM (
         surface,
         layer,
         tunnel,
-        "sett:length"
+        "sett:length",
+        type
 ) AS grouped
 INNER JOIN highway_clipped_attrs attrs
     ON attrs.road_segment_id = grouped.road_segment_id
@@ -187,6 +224,7 @@ INNER JOIN highway_clipped_attrs attrs
    AND attrs.layer IS NOT DISTINCT FROM grouped.layer
    AND attrs.tunnel IS NOT DISTINCT FROM grouped.tunnel
    AND attrs."sett:length" IS NOT DISTINCT FROM grouped."sett:length"
+   AND attrs.type IS NOT DISTINCT FROM grouped.type
 WHERE ST_Area(grouped.geom) >= 1;
 
 -- create spatial index

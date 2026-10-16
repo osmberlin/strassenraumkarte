@@ -10,17 +10,25 @@ DROP TABLE IF EXISTS lanes_transformed;
 CREATE TABLE lanes_transformed AS
 WITH
 
--- 0) use transformed geometry for dual_carriageway segments (by segment_id; spread at dual carriageway branching start-/end-nodes)
--- except they have an placement/transition value, i.e. their offset is determined by their placement tags
+-- 0) use transformed geometry when the centerline was spread
+-- (dual_carriageway or oneway Y-junctions), except placement/transition
+-- segments whose offset is determined by placement tags
 lanes_input AS (
     SELECT
         l.*,
-        COALESCE(h.geom, l.geom) AS geom_overridden
+        CASE
+            WHEN ht.geom IS NOT NULL
+             AND COALESCE(ht.transition, 0) = 0
+             AND hw.geom IS NOT NULL
+             AND NOT ST_Equals(ht.geom, hw.geom)
+            THEN ht.geom
+            ELSE l.geom
+        END AS geom_overridden
     FROM lanes l
-    LEFT JOIN highway_transformed h
-      ON h.segment_id = l.segment_id
-     AND h.dual_carriageway = 'yes'
-     AND h.transition = 0
+    LEFT JOIN highway hw
+      ON hw.segment_id = l.segment_id
+    LEFT JOIN highway_transformed ht
+      ON ht.segment_id = l.segment_id
 ),
 
 -- 1) prepare lines (dump multilinestrings)

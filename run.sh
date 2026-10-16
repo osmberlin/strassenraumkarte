@@ -2,11 +2,12 @@
 #
 # Usage:
 #   ./run.sh --data <url|path> [--bbox xmin,ymin,xmax,ymax] [--crs EPSG] [--refresh] [--skip-processing]
-#            [--skip-render] [--setup-db] [--project path] [--out dir] [--zmin N] [--zmax N]
-#            [--metatile N] [--gutter N] [--dpi N] [--background #rrggbb] [--format png|jpg]
+#            [--skip-render] [--render-only] [--setup-db] [--project path] [--out dir] [--zmin N] [--zmax N]
+#            [--metatile N] [--gutter N] [--dpi N] [--background #rrggbb] [--format webp|png|jpg] [--quality N] [--jobs N|dynamic] [--resume] [--inside]
 #
 #   ./run.sh --check            # verify tools + database connectivity
 #   ./run.sh --setup-db         # create database + PostGIS if missing, then exit
+#   ./run.sh --render-only      # skip import and SQL processing; render from the existing DB
 #
 # Runs data preparation then QGIS XYZ tile rendering for the Straßenraumkarte.
 # --data is required for the full pipeline. --bbox is optional.
@@ -19,12 +20,15 @@ PREP_SCRIPT="$REPO_ROOT/data/data_preparation.sh"
 RENDER_SCRIPT="$REPO_ROOT/render/render_tiles.sh"
 # shellcheck source=data/db_config.sh
 source "$REPO_ROOT/data/db_config.sh"
+# shellcheck source=log_tee.sh
+source "$REPO_ROOT/log_tee.sh"
 
 DATA=""
 BBOX=""
 REFRESH="false"
 SKIP_PROCESSING="false"
 SKIP_RENDER="false"
+RENDER_ONLY="false"
 SETUP_DB="false"
 CHECK_ONLY="false"
 PROJECT=""
@@ -36,6 +40,10 @@ GUTTER=""
 DPI=""
 BACKGROUND=""
 FORMAT=""
+QUALITY=""
+JOBS=""
+RESUME="false"
+INSIDE="false"
 # CRS default comes from data/db_config.sh (CRS=3857); override with --crs or env.
 
 log() {
@@ -46,11 +54,12 @@ usage() {
   cat <<EOF
 Usage:
   $0 --data <url|path> [options]
+  $0 --render-only [options]
   $0 --check
   $0 --setup-db
 
 Required for pipeline:
-  --data <url|path>              OSM PBF source (URL or local file)
+  --data <url|path>              OSM PBF source (URL or local file); not needed with --render-only
 
 Optional:
   --bbox xmin,ymin,xmax,ymax    Limit import extract and tile extent (WGS84)
@@ -58,6 +67,7 @@ Optional:
   --refresh                      Drop/recreate DB schema before import
   --skip-processing              Import only (skip SQL processing)
   --skip-render                  Skip tile rendering after data preparation
+  --render-only                  Skip import and SQL processing; render from the existing DB
   --setup-db                     Create database + enable PostGIS if missing
   --check                        Only verify tools and database, then exit
   --project <path>               QGIS project (default: style/strassenraumkarte.qgz)
@@ -67,7 +77,11 @@ Optional:
   --gutter                       Extra tiles around each metatile (default: 1; discarded after render)
   --dpi                          Render DPI (default: 96)
   --background #rrggbb           Tile background colour (default: #ededed)
-  --format png|jpg               Tile format (default: jpg)
+  --format webp|png|jpg          Tile format (default: webp)
+  --quality N                    JPEG/WebP quality 0-100 (default: 95; 100 = lossless WebP)
+  --jobs N|dynamic               QGIS workers (default: dynamic; 1 = sequential)
+  --resume                       Skip metatiles whose tiles are already in --out
+  --inside                       Write only tiles fully inside the bbox
 
 Database defaults (override with env): DB_NAME=$DB_NAME DB_USER=$DB_USER DB_HOST=$DB_HOST DB_PORT=$DB_PORT CRS=$CRS
 EOF
@@ -201,6 +215,10 @@ while [[ $# -gt 0 ]]; do
       SKIP_RENDER="true"
       shift
       ;;
+    --render-only)
+      RENDER_ONLY="true"
+      shift
+      ;;
     --setup-db)
       SETUP_DB="true"
       shift
@@ -250,9 +268,27 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     --format)
-      [[ -z "${2:-}" || "$2" == --* ]] && { log ERROR "--format requires png or jpg"; usage; exit 1; }
+      [[ -z "${2:-}" || "$2" == --* ]] && { log ERROR "--format requires webp, png or jpg"; usage; exit 1; }
       FORMAT="$2"
       shift 2
+      ;;
+    --quality)
+      [[ -z "${2:-}" || "$2" == --* ]] && { log ERROR "--quality requires a number 0-100"; usage; exit 1; }
+      QUALITY="$2"
+      shift 2
+      ;;
+    --jobs)
+      [[ -z "${2:-}" || "$2" == --* ]] && { log ERROR "--jobs requires dynamic or a number >= 1"; usage; exit 1; }
+      JOBS="$2"
+      shift 2
+      ;;
+    --resume)
+      RESUME="true"
+      shift
+      ;;
+    --inside)
+      INSIDE="true"
+      shift
       ;;
     -h|--help)
       usage
@@ -291,13 +327,18 @@ if [[ "$SETUP_DB" = "true" && -z "$DATA" ]]; then
   exit 0
 fi
 
-if [[ -z "$DATA" ]]; then
-  log ERROR "--data is required (or use --check / --setup-db)."
+if [[ "$RENDER_ONLY" = "true" && "$SKIP_RENDER" = "true" ]]; then
+  log ERROR "--render-only and --skip-render cannot be used together."
+  exit 1
+fi
+
+if [[ "$RENDER_ONLY" != "true" && -z "$DATA" ]]; then
+  log ERROR "--data is required (or use --check / --setup-db / --render-only)."
   usage
   exit 1
 fi
 
-if [[ ! -f "$PREP_SCRIPT" ]]; then
+if [[ "$RENDER_ONLY" != "true" && ! -f "$PREP_SCRIPT" ]]; then
   log ERROR "Missing data preparation script: $PREP_SCRIPT"
   exit 1
 fi
@@ -316,15 +357,26 @@ fi
 
 check_database || { log ERROR "Database not ready. Run: ./run.sh --setup-db"; exit 1; }
 
-log INFO "Starting Straßenraumkarte pipeline (CRS EPSG:$CRS)..."
+if [[ "$RENDER_ONLY" = "true" ]]; then
+  log INFO "Starting tile rendering from existing database (CRS EPSG:$CRS)..."
+  ignored=()
+  [[ -n "$DATA" ]] && ignored+=("--data")
+  [[ "$REFRESH" = "true" ]] && ignored+=("--refresh")
+  [[ "$SKIP_PROCESSING" = "true" ]] && ignored+=("--skip-processing")
+  if [[ ${#ignored[@]} -gt 0 ]]; then
+    log INFO "Ignoring with --render-only: ${ignored[*]}"
+  fi
+else
+  log INFO "Starting Straßenraumkarte pipeline (CRS EPSG:$CRS)..."
 
-PREP_ARGS=(--data "$DATA" --crs "$CRS")
-[[ -n "$BBOX" ]] && PREP_ARGS+=(--bbox "$BBOX")
-[[ "$REFRESH" = "true" ]] && PREP_ARGS+=(--refresh)
-[[ "$SKIP_PROCESSING" = "true" ]] && PREP_ARGS+=(--skip-processing)
+  PREP_ARGS=(--data "$DATA" --crs "$CRS")
+  [[ -n "$BBOX" ]] && PREP_ARGS+=(--bbox "$BBOX")
+  [[ "$REFRESH" = "true" ]] && PREP_ARGS+=(--refresh)
+  [[ "$SKIP_PROCESSING" = "true" ]] && PREP_ARGS+=(--skip-processing)
 
-log INFO "Running data preparation..."
-bash "$PREP_SCRIPT" "${PREP_ARGS[@]}"
+  log INFO "Running data preparation..."
+  bash "$PREP_SCRIPT" "${PREP_ARGS[@]}"
+fi
 
 if [[ "$SKIP_RENDER" = "true" ]]; then
   log INFO "Skipping render (--skip-render)."
@@ -343,6 +395,10 @@ RENDER_ARGS=()
 [[ -n "$DPI" ]] && RENDER_ARGS+=(--dpi "$DPI")
 [[ -n "$BACKGROUND" ]] && RENDER_ARGS+=(--background "$BACKGROUND")
 [[ -n "$FORMAT" ]] && RENDER_ARGS+=(--format "$FORMAT")
+[[ -n "$QUALITY" ]] && RENDER_ARGS+=(--quality "$QUALITY")
+[[ -n "$JOBS" ]] && RENDER_ARGS+=(--jobs "$JOBS")
+[[ "$RESUME" = "true" ]] && RENDER_ARGS+=(--resume)
+[[ "$INSIDE" = "true" ]] && RENDER_ARGS+=(--inside)
 
 log INFO "Running tile rendering..."
 # CRS remains exported for project_extent.py when --bbox is omitted

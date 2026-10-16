@@ -6,6 +6,8 @@ data/parking/**
 render/tiles/**
 !render/tiles/.gitkeep
 !render/tiles/preview.html
+logs/*
+!logs/.gitkeep
 
 # Python
 __pycache__/
@@ -26,7 +28,7 @@ backup/
 data/.venv/
 .pgpass
 
-# Local notes / legacy (not for remote)
+# Local notes / legacy
 TODO.txt
 todo_from_post_processing.py
 style/lanes.qgz

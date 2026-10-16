@@ -23,7 +23,8 @@
 
 BEGIN; -- Using BEGIN-END-transaction for autodeleting temporary tables at the end
 
--- 0) Extract roads, exclude longer tunnels
+-- 0) Extract roads. Tunnel sections (tunnel set and not no/none, including
+-- building_passage) are omitted so dissolved label lines do not run through them.
 CREATE TEMP TABLE highway_selection_raw AS
     SELECT
         row_number() OVER () AS id,
@@ -55,10 +56,10 @@ CREATE TEMP TABLE highway_selection_raw AS
             'path', 'footway', 'cycleway', 'bridleway', 'steps', 'corridor', 'via_ferrata',
             'construction'
         )
-        -- exclude longer tunnel segments
-        AND NOT (
-            NOT (highway.tunnel = 'no' OR highway.tunnel IS NULL)
-            AND ST_Length(highway.geom) > metres(100)
+        -- omit tunnel sections so labels are not placed along them
+        AND (
+            highway.tunnel IS NULL
+            OR highway.tunnel IN ('no', 'none')
         );
 
 CREATE INDEX highway_selection_raw_a_idx ON highway_selection_raw USING GIST (a);

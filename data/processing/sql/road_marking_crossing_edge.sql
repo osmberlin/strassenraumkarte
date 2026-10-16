@@ -183,7 +183,7 @@ edge_markings AS (
         layer,
         side,
         CASE
-            WHEN marking_value LIKE '%line%' THEN regexp_replace(marking_value, '_line$', '')
+            WHEN marking_value LIKE '%line%' THEN regexp_replace(marking_value, '_line', '', 'g')
             WHEN marking_value = 'barred_area' THEN 'solid'::text
         END AS stroke,
         lane_geom
@@ -517,25 +517,71 @@ WHERE geom IS NOT NULL
 -- keep OSM tag or apply defaults. Run after all inserts into this table.
 ----------------------------------------------------------------------
 
-UPDATE road_marking_way
+UPDATE road_marking_way rmw
 SET dasharray = CASE
-    WHEN (stroke IS NULL OR stroke NOT LIKE '%dashed%')
-     AND (stroke IS NULL OR stroke IS DISTINCT FROM 'sharks_teeth')
+    WHEN (rmw.stroke IS NULL OR rmw.stroke NOT LIKE '%dashed%')
+     AND (rmw.stroke IS NULL OR rmw.stroke IS DISTINCT FROM 'sharks_teeth')
     THEN NULL
     ELSE COALESCE(
-        NULLIF(btrim(dasharray), ''),
+        NULLIF(btrim(rmw.dasharray), ''),
         CASE
-            WHEN road_marking = 'crossing_edge' THEN :'dasharray_crossing_edge'::text
-            WHEN type = 'bicycle' THEN :'dasharray_bicycle'::text
-            WHEN type = 'bus' THEN :'dasharray_bus'::text
-            WHEN type = 'parking' THEN :'dasharray_parking'::text
-            WHEN road_marking = 'stop_line' OR stroke = 'sharks_teeth'
+            WHEN rmw.road_marking = 'crossing_edge' THEN :'dasharray_crossing_edge'::text
+            WHEN rmw.type = 'bicycle' THEN :'dasharray_bicycle'::text
+            WHEN rmw.type = 'bus' THEN :'dasharray_bus'::text
+            WHEN rmw.type = 'parking' THEN :'dasharray_parking'::text
+            WHEN rmw.road_marking = 'stop_line' OR rmw.stroke = 'sharks_teeth'
             THEN :'dasharray_stop_line'::text
-            WHEN road_marking = 'edge_line' THEN :'dasharray_edge_line'::text
+            WHEN rmw.road_marking = 'edge_line' THEN :'dasharray_edge_line'::text
+            WHEN EXISTS (
+                SELECT 1
+                FROM highway h
+                WHERE h.osm_id = rmw.osm_id
+                  AND (
+                      h.highway IN ('motorway', 'motorway_link')
+                      OR (
+                          h.highway = 'construction'
+                          AND h.construction IN ('motorway', 'motorway_link')
+                      )
+                  )
+            ) THEN :'dasharray_motorway'::text
             ELSE :'dasharray_default'::text
         END
     )
 END;
+
+----------------------------------------------------------------------
+-- 6b) Motorway stroke widths (Schmal-/Breitstrich)
+--
+-- Remap generated and OSM-default widths on motorway / motorway_link
+-- (incl. construction=*). Explicit OSM widths other than the defaults
+-- stay unchanged.
+----------------------------------------------------------------------
+
+UPDATE road_marking_way rmw
+SET width = CASE
+    WHEN abs(rmw.width::double precision - :'narrow_stroke_width'::double precision) < 0.005
+    THEN :'narrow_stroke_width_motorway'::real
+    WHEN abs(rmw.width::double precision - :'wide_stroke_width'::double precision) < 0.005
+    THEN :'wide_stroke_width_motorway'::real
+    ELSE rmw.width
+END
+WHERE rmw.width IS NOT NULL
+  AND (
+      abs(rmw.width::double precision - :'narrow_stroke_width'::double precision) < 0.005
+      OR abs(rmw.width::double precision - :'wide_stroke_width'::double precision) < 0.005
+  )
+  AND EXISTS (
+      SELECT 1
+      FROM highway h
+      WHERE h.osm_id = rmw.osm_id
+        AND (
+            h.highway IN ('motorway', 'motorway_link')
+            OR (
+                h.highway = 'construction'
+                AND h.construction IN ('motorway', 'motorway_link')
+            )
+        )
+  );
 
 -- Cleanup temporary tables
 DROP TABLE IF EXISTS _crossing_lane_edges_raw;

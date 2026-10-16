@@ -14,7 +14,7 @@
 ----------------------------------------------------------------------
 
 ----------------------------------------------------------------------
--- 0) Lane flow counts + spread flags (needed to know which endpoints move)
+-- 0) Lane flow counts + spread flags (dual_carriageway and Y-junctions)
 ----------------------------------------------------------------------
 
 DROP TABLE IF EXISTS _lane_flow_counts;
@@ -44,7 +44,8 @@ SELECT
     ) AS end_spread
 FROM highway h
 JOIN highway_transformed ht ON h.segment_id = ht.segment_id
-WHERE h.dual_carriageway = 'yes';
+WHERE NOT ST_Equals(ST_StartPoint(h.geom), ST_StartPoint(ht.geom))
+   OR NOT ST_Equals(ST_EndPoint(h.geom), ST_EndPoint(ht.geom));
 
 CREATE INDEX _snap_spread_ends_idx ON _snap_spread_ends (segment_id);
 

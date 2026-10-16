@@ -115,7 +115,7 @@ divider_lines AS (
         side,
         marking_kind,
         CASE
-            WHEN marking_kind = 'line' THEN regexp_replace(marking_value, '_line$', '')
+            WHEN marking_kind = 'line' THEN regexp_replace(marking_value, '_line', '', 'g')
             WHEN marking_kind = 'barred_area' THEN 'solid'::text
         END AS stroke,
         NULL::text AS arrow,

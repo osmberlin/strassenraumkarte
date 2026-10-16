@@ -3,7 +3,7 @@
 # Usage:
 #   ./render_tiles.sh [--bbox xmin,ymin,xmax,ymax] [--project path] [--out dir]
 #                     [--zmin N] [--zmax N] [--metatile N] [--gutter N]
-#                     [--dpi N] [--background #rrggbb] [--format png|jpg]
+#                     [--dpi N] [--background #rrggbb] [--format webp|png|jpg] [--quality N] [--jobs N|dynamic] [--resume] [--inside]
 #
 #   --bbox         Optional WGS84 extent (xmin,ymin,xmax,ymax). Without it, combined
 #                  project layer extent is used.
@@ -11,12 +11,18 @@
 #   --out          Output directory for XYZ tiles. Default: <repo>/render/tiles
 #   --zmin         Minimum zoom (default: 15)
 #   --zmax         Maximum zoom (default: 20)
-#   --metatile     Metatile size (default: 8)
+#   --metatile     Metatile size (default: 8); upper bound with --jobs dynamic,
+#                  halved down to 2 under memory pressure
 #   --gutter       Extra tiles around each metatile for labels/symbols (default: 1);
 #                  rendered then discarded (not written)
 #   --dpi          Render DPI (default: 96)
 #   --background   Tile background colour as #rrggbb (default: #ededed)
-#   --format       png or jpg (default: jpg)
+#   --format       webp, png or jpg (default: webp)
+#   --quality      JPEG/WebP quality 0-100 (default: 95; 100 = lossless WebP)
+#   --jobs         QGIS workers: dynamic (default; grow by measured RAM, brake at
+#                  95% RAM or on swap growth) or N >= 1 (1 = sequential)
+#   --resume       Skip metatiles whose tiles are already in --out
+#   --inside       Write only tiles fully inside the bbox (edge tiles are skipped)
 #
 # Rendering uses a custom PyQGIS metatile loop (render/xyz_tiles.py) with
 # per-metatile progress. Tiles are rendered directly in EPSG:3857; ground-metre
@@ -31,6 +37,8 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
 # shellcheck source=../data/db_config.sh
 source "$REPO_ROOT/data/db_config.sh"
+# shellcheck source=../log_tee.sh
+source "$REPO_ROOT/log_tee.sh"
 
 BBOX=""
 PROJECT="$REPO_ROOT/style/strassenraumkarte.qgz"
@@ -41,14 +49,18 @@ METATILE=8
 GUTTER=1
 DPI=96
 BACKGROUND="#ededed"
-FORMAT="jpg"
+FORMAT="webp"
+QUALITY=95
+JOBS=""
+RESUME="false"
+INSIDE="false"
 
 log() {
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [$1] $2"
 }
 
 usage() {
-  echo "Usage: $0 [--bbox xmin,ymin,xmax,ymax] [--project path] [--out dir] [--zmin N] [--zmax N] [--metatile N] [--gutter N] [--dpi N] [--background #rrggbb] [--format png|jpg]"
+  echo "Usage: $0 [--bbox xmin,ymin,xmax,ymax] [--project path] [--out dir] [--zmin N] [--zmax N] [--metatile N] [--gutter N] [--dpi N] [--background #rrggbb] [--format webp|png|jpg] [--quality N] [--jobs N|dynamic] [--resume] [--inside]"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -99,9 +111,27 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     --format)
-      [[ -z "${2:-}" || "$2" == --* ]] && { log ERROR "--format requires png or jpg"; usage; exit 1; }
+      [[ -z "${2:-}" || "$2" == --* ]] && { log ERROR "--format requires webp, png or jpg"; usage; exit 1; }
       FORMAT="$2"
       shift 2
+      ;;
+    --quality)
+      [[ -z "${2:-}" || "$2" == --* ]] && { log ERROR "--quality requires a number 0-100"; usage; exit 1; }
+      QUALITY="$2"
+      shift 2
+      ;;
+    --jobs)
+      [[ -z "${2:-}" || "$2" == --* ]] && { log ERROR "--jobs requires dynamic or a number >= 1"; usage; exit 1; }
+      JOBS="$2"
+      shift 2
+      ;;
+    --resume)
+      RESUME="true"
+      shift
+      ;;
+    --inside)
+      INSIDE="true"
+      shift
       ;;
     -h|--help)
       usage
@@ -158,12 +188,25 @@ fi
 BACKGROUND="#${bg_hex,,}"
 
 case "$FORMAT" in
-  png|PNG|jpg|jpeg|JPG|JPEG) ;;
+  webp|WEBP|png|PNG|jpg|jpeg|JPG|JPEG) ;;
   *)
-    log ERROR "Invalid --format: $FORMAT (use png or jpg)"
+    log ERROR "Invalid --format: $FORMAT (use webp, png or jpg)"
     exit 1
     ;;
 esac
+
+if ! [[ "$QUALITY" =~ ^[0-9]+$ && "$QUALITY" -ge 0 && "$QUALITY" -le 100 ]]; then
+  log ERROR "Invalid --quality: $QUALITY (use 0-100)"
+  exit 1
+fi
+
+if [[ -n "$JOBS" ]]; then
+  jobs_lc="${JOBS,,}"
+  if [[ "$jobs_lc" != "dynamic" ]] && ! [[ "$JOBS" =~ ^[0-9]+$ && "$JOBS" -ge 1 ]]; then
+    log ERROR "Invalid --jobs: $JOBS (use dynamic or >= 1)"
+    exit 1
+  fi
+fi
 
 if [[ -n "$BBOX" ]]; then
   if ! [[ "$BBOX" =~ ^-?[0-9]+(\.[0-9]+)?,-?[0-9]+(\.[0-9]+)?,-?[0-9]+(\.[0-9]+)?,-?[0-9]+(\.[0-9]+)?$ ]]; then
@@ -171,7 +214,7 @@ if [[ -n "$BBOX" ]]; then
     exit 1
   fi
   IFS=',' read -r XMIN YMIN XMAX YMAX <<< "$BBOX"
-  EXTENT="${XMIN},${XMAX},${YMIN},${YMAX} [EPSG:4326]"
+  EXTENT="${XMIN},${YMIN},${XMAX},${YMAX} [EPSG:4326]"
   log INFO "Using bbox extent: $EXTENT"
 else
   log INFO "No --bbox given; computing combined project layer extent..."
@@ -187,16 +230,23 @@ mkdir -p "$OUT"
 log INFO "Starting PyQGIS metatile renderer..."
 log INFO "  project=$PROJECT"
 log INFO "  out=$OUT"
-log INFO "  zoom=${ZMIN}-${ZMAX} metatile=$METATILE gutter=$GUTTER dpi=$DPI format=$FORMAT bg=$BACKGROUND"
+log INFO "  zoom=${ZMIN}-${ZMAX} metatile=$METATILE gutter=$GUTTER dpi=$DPI format=$FORMAT quality=$QUALITY jobs=${JOBS:-dynamic} bg=$BACKGROUND"
 
-exec python3 "$SCRIPT_DIR/xyz_tiles.py" \
-  --project "$PROJECT" \
-  --extent "$EXTENT" \
-  --out "$OUT" \
-  --zmin "$ZMIN" \
-  --zmax "$ZMAX" \
-  --metatile "$METATILE" \
-  --gutter "$GUTTER" \
-  --dpi "$DPI" \
-  --background "$BACKGROUND" \
+XYZ_ARGS=(
+  --project "$PROJECT"
+  --extent "$EXTENT"
+  --out "$OUT"
+  --zmin "$ZMIN"
+  --zmax "$ZMAX"
+  --metatile "$METATILE"
+  --gutter "$GUTTER"
+  --dpi "$DPI"
+  --background "$BACKGROUND"
   --format "$FORMAT"
+  --quality "$QUALITY"
+)
+[[ -n "$JOBS" ]] && XYZ_ARGS+=(--jobs "$JOBS")
+[[ "$RESUME" = "true" ]] && XYZ_ARGS+=(--resume)
+[[ "$INSIDE" = "true" ]] && XYZ_ARGS+=(--inside)
+
+exec python3 "$SCRIPT_DIR/xyz_tiles.py" "${XYZ_ARGS[@]}"
