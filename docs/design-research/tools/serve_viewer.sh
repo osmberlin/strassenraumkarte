@@ -13,8 +13,9 @@
 #   SKIP_RENDER=1        only serve existing tiles
 #   VARIANTS="la ink"    render only these variants (default: all, see render calls below)
 #   ZMAX=20              highest zoom to render (default 19)
-#   QGIS_TILES=<dir>     today's QGIS tiles as reference layer "qgis" (default: render/tiles of
-#                        this checkout or of the main checkout, if present; jpg z15–20)
+#   QGIS_TILES=<dir>     today's QGIS tiles as reference layer "qgis" (default for the Berlin bbox:
+#                        render/tiles of this checkout or of the main checkout, if present; jpg z15–20;
+#                        other areas get no qgis layer unless QGIS_TILES is set)
 #   AREA_NAME="Berlin · Neukölln"  title of the area (default: Berlin area with the Berlin scenes
 #                        when no bbox is given, else none)
 #   SCENES=berlin|none   scene list of THIS area in area.json (default berlin when the default bbox
@@ -65,9 +66,12 @@ if [[ -z ${SKIP_RENDER:-} ]]; then
   render full-approx full-approx
 fi
 
-# reference layer: today's QGIS tiles (symlink, nothing is copied)
+# reference layer: today's QGIS tiles (symlink, nothing is copied). render/tiles covers the Berlin
+# area only, so it is linked automatically for the default bbox; another area needs QGIS_TILES=<dir>.
 MAIN=$(git -C "$ROOT" worktree list --porcelain 2>/dev/null | sed -n '1s/^worktree //p')
-for q in "${QGIS_TILES:-}" "$ROOT/render/tiles" "${MAIN:-/nonexistent}/render/tiles"; do
+QGIS_CANDIDATES=("${QGIS_TILES:-}")
+[[ $BBOX == "$DEFAULT_BBOX" ]] && QGIS_CANDIDATES+=("$ROOT/render/tiles" "${MAIN:-/nonexistent}/render/tiles")
+for q in "${QGIS_CANDIDATES[@]}"; do
   if [[ -n $q && -d $q/19 ]]; then
     ln -sfn "$q" "$OUT/qgis"
     echo "· qgis → $q"
