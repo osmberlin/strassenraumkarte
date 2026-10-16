@@ -186,7 +186,15 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
     }
 
     // ---- railways: double line with cross ties (old-map railway sign)
-    for (pts, main) in railway_lines(&mut ctx)? {
+    // unclipped lines: ties are spaced from the line start, which must not move with the tile
+    let rails = ctx.lines_full(
+        "osm_id AS id, railway AS class, COALESCE(service, '') AS sub, 0::float8 AS num",
+        "railway_way WHERE railway IN ('rail', 'light_rail', 'subway', 'disused', 'tram', 'narrow_gauge') AND COALESCE(tunnel, 'no') = 'no'",
+        "ORDER BY COALESCE(layer, 0)",
+    )?;
+    let rails: Vec<(Vec<(f32, f32)>, bool)> =
+        rails.iter().map(|f| (line_pts(&ctx, &f.geom), f.sub.is_empty() && f.class != "disused")).collect();
+    for (pts, main) in rails {
         let w = ctx.m(if main { 1.6 } else { 1.1 }).max(3.0);
         if let Some(p) = pts_path(&pts, false) {
             line(&mut pm, &p, &paint(ink(0.95)), &stroke(w + lw * 1.6), None);
@@ -290,7 +298,8 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
     }
 
     // ---- embankments / cliffs: hachures
-    let slopes = ctx.lines("osm_id AS id, class, NULL::text AS sub, 0::float8 AS num", "landscape_way WHERE class IN ('cliff', 'embankment', 'earth_bank')", "")?;
+    // unclipped (lines_full) so hachures, fence ticks and hedge loops keep their phase across tiles
+    let slopes = ctx.lines_full("osm_id AS id, class, NULL::text AS sub, 0::float8 AS num", "landscape_way WHERE class IN ('cliff', 'embankment', 'earth_bank')", "")?;
     for f in &slopes {
         let pts = line_pts(&ctx, &f.geom);
         if let Some(p) = pts_path(&wobble_pts(&ctx, &pts, 0.3, 5.0, 17), false) {
@@ -303,7 +312,7 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
     }
 
     // ---- fences (+-+-), walls (heavy), hedges (bumpy line)
-    let barriers = ctx.lines("osm_id AS id, barrier AS class, NULL::text AS sub, 0::float8 AS num", "barrier_way", "")?;
+    let barriers = ctx.lines_full("osm_id AS id, barrier AS class, NULL::text AS sub, 0::float8 AS num", "barrier_way", "")?;
     for f in &barriers {
         let pts = line_pts(&ctx, &f.geom);
         match f.class.as_str() {
@@ -841,12 +850,12 @@ fn draw_tree(ctx: &Ctx, pm: &mut Pixmap, x: f32, y: f32, r: f32, id: i64, lw: f3
     let bumps = 7 + (rand01(id, 3) * 5.0) as u32;
     let shape = (rand01(id, 8) * 10.0) as u32; // 0–5 scalloped, 6–8 round, 9 tall
     let pts: Vec<(f32, f32)> = match shape {
-        6..=8 => scallop_pts(cx, cy, r, 5, 0.05, rand01(id, 4) * 6.28),
-        9 => scallop_pts(cx, cy - r * 0.35, r, bumps, 0.12, rand01(id, 4) * 6.28)
+        6..=8 => scallop_pts(cx, cy, r, 5, 0.05, rand01(id, 4) * std::f32::consts::TAU),
+        9 => scallop_pts(cx, cy - r * 0.35, r, bumps, 0.12, rand01(id, 4) * std::f32::consts::TAU)
             .into_iter()
             .map(|(px, py)| (cx + (px - cx) * 0.7, (cy - r * 0.35) + (py - (cy - r * 0.35)) * 1.35))
             .collect(),
-        _ => scallop_pts(cx, cy, r, bumps, 0.16, rand01(id, 4) * 6.28),
+        _ => scallop_pts(cx, cy, r, bumps, 0.16, rand01(id, 4) * std::f32::consts::TAU),
     };
     let pts = wobble_pts(ctx, &pts, 0.3, 4.0, id as u64);
     if let Some(p) = pts_path(&pts, true) {
@@ -980,7 +989,7 @@ fn draw_forest(ctx: &Ctx, pm: &mut Pixmap, crowns: &mut [(f32, f32, f32, i64)], 
     }
     crowns.sort_by(|a, b| a.1.total_cmp(&b.1));
     let shape = |&(x, y, r, id): &(f32, f32, f32, i64)| {
-        let pts = scallop_pts(x, y - r * 0.7, r, 7 + (rand01(id, 3) * 4.0) as u32, 0.16, rand01(id, 4) * 6.28);
+        let pts = scallop_pts(x, y - r * 0.7, r, 7 + (rand01(id, 3) * 4.0) as u32, 0.16, rand01(id, 4) * std::f32::consts::TAU);
         pts_path(&wobble_pts(ctx, &pts, 0.3, 4.0, id as u64), true)
     };
     let mut all = PathBuilder::new();
