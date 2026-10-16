@@ -236,7 +236,9 @@ WHERE NOT (u.n = 1 OR (u.n <= 60 AND ST_Area(u.geom) <= metres(1) ^ 2 * 9000));
 CREATE TABLE roof_mass AS
 SELECT
     ROW_NUMBER() OVER (ORDER BY kind, ids[1])::int AS mass_id,
-    kind,
+    -- a centreline split only reads on rectangle-like masses: L shapes and U shapes become hips
+    CASE WHEN kind = 'gabled' AND ST_Area(geom) / NULLIF(ST_Area(ST_OrientedEnvelope(geom)), 0) < 0.75
+         THEN 'hipped' ELSE kind END AS kind,
     n AS n_buildings,
     ids AS osm_ids,
     geom
@@ -260,10 +262,14 @@ CREATE INDEX roof_mass_geom_idx ON roof_mass USING GIST (geom);
 -- ---------------------------------------------------------------------------
 
 CREATE TABLE roof_facet (
+    facet_id   bigserial PRIMARY KEY,
     mass_id    integer NOT NULL,
     kind       text NOT NULL,
     aspect_deg double precision,
     dir        text,
+    ux         double precision,   -- unit downslope vector (east, north)
+    uy         double precision,
+    centroid   geometry(Point, 3857),
     geom       geometry(Polygon, 3857) NOT NULL
 );
 
@@ -272,6 +278,72 @@ CREATE TABLE roof_shape_line (
     class   text NOT NULL,      -- ridge | hip | parapet
     geom    geometry(LineString, 3857) NOT NULL
 );
+
+-- Merge facets under p_min_area into the neighbour they share the longest edge with.
+-- Removes the small bowtie facets where narrow courtyard wings meet; the lines are derived from
+-- facet boundaries afterwards, so the stray lines disappear with them.
+CREATE OR REPLACE FUNCTION roof_merge_slivers(p_mass integer, p_min_area double precision)
+RETURNS integer
+LANGUAGE plpgsql AS $$
+DECLARE
+    s   record;
+    cur record;
+    nb  record;
+    n_merged integer := 0;
+BEGIN
+    FOR s IN SELECT facet_id FROM roof_facet
+             WHERE mass_id = p_mass AND ST_Area(geom) < p_min_area ORDER BY ST_Area(geom) LOOP
+        SELECT facet_id, geom INTO cur FROM roof_facet WHERE facet_id = s.facet_id;
+        IF NOT FOUND OR ST_Area(cur.geom) >= p_min_area THEN
+            CONTINUE;
+        END IF;
+        SELECT f.facet_id, f.geom INTO nb
+        FROM roof_facet AS f
+        WHERE f.mass_id = p_mass AND f.facet_id <> cur.facet_id AND ST_Intersects(f.geom, cur.geom)
+        ORDER BY ST_Length(ST_Intersection(f.geom, cur.geom)) DESC
+        LIMIT 1;
+        IF NOT FOUND THEN
+            CONTINUE;  -- isolated sliver: keep it
+        END IF;
+        UPDATE roof_facet
+        SET geom = (SELECT d.geom FROM ST_Dump(ST_Union(nb.geom, cur.geom)) AS d ORDER BY ST_Area(d.geom) DESC LIMIT 1)
+        WHERE facet_id = nb.facet_id;
+        DELETE FROM roof_facet WHERE facet_id = cur.facet_id;
+        n_merged := n_merged + 1;
+    END LOOP;
+    RETURN n_merged;
+END $$;
+
+-- Edge class for a straight-skeleton edge between two facets of one mass:
+--   ridge  when the facets face opposite ways (>= 150° apart),
+--   valley when both facets drain towards the edge (concave crease),
+--   hip    otherwise (convex edge, or an edge without exactly two facets).
+CREATE OR REPLACE FUNCTION roof_edge_class(p_mass integer, e geometry)
+RETURNS text
+LANGUAGE plpgsql STABLE AS $$
+DECLARE
+    m  geometry := ST_LineInterpolatePoint(e, 0.5);
+    n  integer;
+    a  roof_facet%ROWTYPE;
+    b  roof_facet%ROWTYPE;
+    d  double precision;
+BEGIN
+    SELECT count(*) INTO n FROM roof_facet WHERE mass_id = p_mass AND ST_DWithin(geom, m, 0.02);
+    IF n <> 2 THEN
+        RETURN 'hip';
+    END IF;
+    SELECT * INTO a FROM roof_facet WHERE mass_id = p_mass AND ST_DWithin(geom, m, 0.02) ORDER BY facet_id LIMIT 1;
+    SELECT * INTO b FROM roof_facet WHERE mass_id = p_mass AND ST_DWithin(geom, m, 0.02) ORDER BY facet_id DESC LIMIT 1;
+    d := abs(a.aspect_deg - b.aspect_deg);
+    IF LEAST(d, 360 - d) >= 150 THEN
+        RETURN 'ridge';
+    END IF;
+    IF a.ux * (ST_X(b.centroid) - ST_X(a.centroid)) + a.uy * (ST_Y(b.centroid) - ST_Y(a.centroid)) > 0
+       AND b.ux * (ST_X(a.centroid) - ST_X(b.centroid)) + b.uy * (ST_Y(a.centroid) - ST_Y(b.centroid)) > 0 THEN
+        RETURN 'valley';
+    END IF;
+    RETURN 'hip';
+END $$;
 
 DO $$
 DECLARE
@@ -284,6 +356,7 @@ BEGIN
                 INSERT INTO roof_facet (mass_id, kind, aspect_deg, dir, geom)
                 SELECT m.mass_id, 'hipped', h.aspect_deg, roof_dir(h.aspect_deg), h.facet
                 FROM roof_hip_faces(m.geom) AS h;
+                PERFORM roof_merge_slivers(m.mass_id, metres(1) ^ 2 * 3);
             ELSIF m.kind = 'gabled' THEN
                 INSERT INTO roof_facet (mass_id, kind, aspect_deg, dir, geom)
                 SELECT m.mass_id, 'gabled', g.aspect_deg, roof_dir(g.aspect_deg), g.facet
@@ -307,43 +380,28 @@ BEGIN
     RAISE NOTICE 'roof masses skipped: %', n_fail;
 END $$;
 
--- Hip vs ridge on straight-skeleton edges: the edge between two facets that face opposite
--- ways (≥150° apart) is a ridge, every other interior edge is a hip (or valley).
+UPDATE roof_facet
+SET ux = sin(radians(aspect_deg)),
+    uy = cos(radians(aspect_deg)),
+    centroid = ST_Centroid(geom);
+
+-- Ridge / hip / valley on straight-skeleton edges (see roof_edge_class).
 INSERT INTO roof_shape_line (mass_id, class, geom)
-SELECT
-    p.mass_id,
-    CASE
-        WHEN cardinality(p.asp) = 2
-         AND LEAST(abs(p.asp[1] - p.asp[2]), 360 - abs(p.asp[1] - p.asp[2])) >= 150
-        THEN 'ridge' ELSE 'hip'
-    END,
-    p.geom
+SELECT pc.mass_id, roof_edge_class(pc.mass_id, pc.geom), pc.geom
 FROM (
-    SELECT
-        pc.mass_id,
-        pc.geom,
-        (SELECT ARRAY_AGG(f.aspect_deg)
-           FROM roof_facet AS f
-          WHERE f.mass_id = pc.mass_id
-            AND ST_DWithin(f.geom, ST_LineInterpolatePoint(pc.geom, 0.5), 0.02)) AS asp
+    SELECT n.mass_id, (ST_Dump(n.lines)).geom AS geom
     FROM (
         SELECT
-            n.mass_id,
-            (ST_Dump(n.lines)).geom AS geom
-        FROM (
-            SELECT
-                f.mass_id,
-                ST_CollectionExtract(
-                    ST_LineMerge(ST_Difference(ST_Union(ST_Boundary(f.geom)), ST_Boundary(m.geom))),
-                2) AS lines
-            FROM roof_facet AS f
-            JOIN roof_mass AS m USING (mass_id)
-            WHERE f.kind = 'hipped'
-            GROUP BY f.mass_id, m.geom
-        ) AS n
-    ) AS pc
-) AS p
-WHERE p.asp IS NOT NULL;
+            f.mass_id,
+            ST_CollectionExtract(
+                ST_LineMerge(ST_Difference(ST_Union(ST_Boundary(f.geom)), ST_Boundary(m.geom))),
+            2) AS lines
+        FROM roof_facet AS f
+        JOIN roof_mass AS m USING (mass_id)
+        WHERE f.kind = 'hipped'
+        GROUP BY f.mass_id, m.geom
+    ) AS n
+) AS pc;
 
 CREATE INDEX roof_facet_geom_idx ON roof_facet USING GIST (geom);
 CREATE INDEX roof_facet_mass_idx ON roof_facet (mass_id);
