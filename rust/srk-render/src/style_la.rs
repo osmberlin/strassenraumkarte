@@ -352,6 +352,7 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
         40_000.0,
         16.0,
     )?;
+    extra::draw_water_labels(&mut ctx, &mut pm)?;
     if z >= 17 {
         draw_street_labels(
             &mut ctx,

@@ -21,7 +21,6 @@ pub struct GenusSpec {
     pub variant: u8,
     pub default_d: f64,
     pub colour: usize,
-    pub name: &'static str,
 }
 
 /// Symbol ids ≥ 4 are drawn here; 0–3 are the generic symbols in `style_la::draw_crown`.
@@ -37,20 +36,20 @@ pub const V_CONIFER: u8 = 3;
 
 pub fn genus_spec(genus: &str) -> Option<GenusSpec> {
     let g = genus.split([';', ' ']).next().unwrap_or("").to_ascii_lowercase();
-    let (variant, default_d, colour, name) = match g.as_str() {
-        "tilia" => (V_TILIA, 8.0, 0, "Tilia (lime)"),
-        "acer" => (V_ACER, 7.0, 5, "Acer (maple)"),
-        "betula" => (V_BETULA, 6.0, 2, "Betula (birch)"),
-        "quercus" => (V_QUERCUS, 12.0, 3, "Quercus (oak)"),
-        "platanus" => (V_PLATANUS, 13.0, 4, "Platanus (plane)"),
-        "prunus" | "malus" | "pyrus" | "sorbus" | "crataegus" | "cercis" | "magnolia" => (V_BLOSSOM, 4.0, 2, "Prunus, Malus … (blossom)"),
-        "salix" => (V_SALIX, 9.0, 1, "Salix (willow)"),
-        "carpinus" | "fagus" | "ulmus" => (V_CARPINUS, 6.0, 1, "Carpinus, Fagus (hornbeam)"),
-        "robinia" | "sophora" | "styphnolobium" | "gleditsia" | "fraxinus" => (1, 7.0, 0, "Robinia, Fraxinus (pinnate)"),
-        "pinus" | "pseudotsuga" | "picea" | "abies" | "taxus" | "larix" | "thuja" => (V_CONIFER, 6.0, 3, "Pinus, Picea … (conifer)"),
+    let (variant, default_d, colour) = match g.as_str() {
+        "tilia" => (V_TILIA, 8.0, 0),
+        "acer" => (V_ACER, 7.0, 5),
+        "betula" => (V_BETULA, 6.0, 2),
+        "quercus" => (V_QUERCUS, 12.0, 3),
+        "platanus" => (V_PLATANUS, 13.0, 4),
+        "prunus" | "malus" | "pyrus" | "sorbus" | "crataegus" | "cercis" | "magnolia" => (V_BLOSSOM, 4.0, 2),
+        "salix" => (V_SALIX, 9.0, 1),
+        "carpinus" | "fagus" | "ulmus" => (V_CARPINUS, 6.0, 1),
+        "robinia" | "sophora" | "styphnolobium" | "gleditsia" | "fraxinus" => (1, 7.0, 0),
+        "pinus" | "pseudotsuga" | "picea" | "abies" | "taxus" | "larix" | "thuja" => (V_CONIFER, 6.0, 3),
         _ => return None,
     };
-    Some(GenusSpec { variant, default_d, colour, name })
+    Some(GenusSpec { variant, default_d, colour })
 }
 
 /// Genus symbols. Same light model as the generic crowns: translucent NW-lit fill + darker line.
@@ -110,35 +109,43 @@ pub fn draw_genus_crown(pm: &mut Pixmap, c: &Crown, k: f32) {
             }
             if c.r > 3.0 {
                 let mut pb = PathBuilder::new();
-                let n = (c.r * c.r * 0.35).clamp(6.0, 60.0) as i64;
+                let n = (c.r * c.r * 0.2).clamp(5.0, 40.0) as i64;
                 for i in 0..n {
                     let a = rand01(c.seed.wrapping_add(i), 31) * tau;
                     let d = rand01(c.seed.wrapping_add(i), 32).sqrt() * c.r * 0.85;
                     pb.push_circle(c.x + d * a.cos(), c.y + d * a.sin(), (c.r * 0.05).clamp(0.5, 1.1));
                 }
                 if let Some(p) = pb.finish() {
-                    fill(pm, &p, &paint(with_alpha(dark, 0.6)), None);
+                    fill(pm, &p, &paint(with_alpha(dark, 0.45)), None);
                 }
             }
         }
         // oak: broad irregular cloud of overlapping sub-crowns, darker and heavier
         V_QUERCUS => {
+            // sub-crowns filled one by one into an opaque layer (no even-odd holes, overlaps do
+            // not darken), composited translucent; the outer scallop gives the silhouette
             let n = 6;
-            let mut pb = PathBuilder::new();
+            let mut subs = Vec::with_capacity(n + 1);
             for i in 0..n {
                 let t = phase + i as f32 / n as f32 * tau;
-                let rr = c.r * (0.42 + 0.1 * rand01(c.seed.wrapping_add(i), 41));
-                pb.push_circle(c.x + (c.r - rr) * t.cos(), c.y + (c.r - rr) * t.sin(), rr);
+                let rr = c.r * (0.42 + 0.1 * rand01(c.seed.wrapping_add(i as i64), 41));
+                subs.push((c.x + (c.r - rr) * t.cos(), c.y + (c.r - rr) * t.sin(), rr));
             }
-            pb.push_circle(c.x, c.y, c.r * 0.5);
+            subs.push((c.x, c.y, c.r * 0.5));
+            let mut layer = Pixmap::new(pm.width(), pm.height()).expect("pixmap");
+            let fillp = super::sphere_paint(c, 1.0);
+            let mut pb = PathBuilder::new();
+            for &(x, y, r) in &subs {
+                if let Some(p) = PathBuilder::from_circle(x, y, r) {
+                    fill(&mut layer, &p, &fillp, None);
+                }
+                pb.push_circle(x, y, r);
+            }
+            draw_layer(pm, &layer, (0.62 * k).min(1.0), BlendMode::SourceOver);
             if let Some(p) = pb.finish() {
-                // union via a layer: draw opaque, composite translucent
-                let mut layer = Pixmap::new(pm.width(), pm.height()).expect("pixmap");
-                fill(&mut layer, &p, &super::sphere_paint(c, 1.0), None);
-                draw_layer(pm, &layer, (0.62 * k).min(1.0), BlendMode::SourceOver);
-                line(pm, &p, &paint(with_alpha(dark, 0.35)), &stroke(w * 0.6), None);
+                line(pm, &p, &paint(with_alpha(dark, 0.22)), &stroke(w * 0.6), None);
             }
-            let pts = scallop_pts(c.x, c.y, c.r, 6, 0.1, phase);
+            let pts = scallop_pts(c.x, c.y, c.r * 0.95, 6, 0.08, phase);
             if let Some(p) = pts_path(&pts, true) {
                 line(pm, &p, &paint(with_alpha(dark, 0.85)), &stroke(w * 1.1), None);
             }
@@ -605,4 +612,105 @@ pub fn draw_furniture(ctx: &mut Ctx, pm: &mut Pixmap) -> Result<()> {
         }
     }
     Ok(())
+}
+
+// ---------------------------------------------------------------------------------------------
+// water names
+
+fn font_db() -> std::sync::Arc<resvg::usvg::fontdb::Database> {
+    static DB: std::sync::OnceLock<std::sync::Arc<resvg::usvg::fontdb::Database>> = std::sync::OnceLock::new();
+    DB.get_or_init(|| {
+        let mut db = resvg::usvg::fontdb::Database::new();
+        db.load_system_fonts();
+        std::sync::Arc::new(db)
+    })
+    .clone()
+}
+
+/// Names of ponds and basins in italic, in the bank colour, centred on the water (cartographic
+/// convention: water italic, land upright). Skipped when the name would not fit the surface.
+pub fn draw_water_labels(ctx: &mut Ctx, pm: &mut Pixmap) -> Result<()> {
+    if ctx.z < 17 {
+        return Ok(());
+    }
+    let from = r#"(SELECT osm_id, name, ST_Area(geom) AS a, ST_PointOnSurface(geom) AS geom FROM water_body
+                   WHERE name IS NOT NULL AND geom && ST_MakeEnvelope($1::float8, $2::float8, $3::float8, $4::float8, 3857)) q"#;
+    let pts = ctx.points("osm_id AS id, name AS class, NULL::text AS sub, a::float8 AS num", from, "")?;
+    let mpp = ctx.extent.metres_per_px();
+    let mut texts = String::new();
+    for f in &pts {
+        let area_px = f.num / (mpp * mpp);
+        let size = (10.5 * (area_px / 4000.0).powf(0.1) as f32).clamp(10.0, 15.0);
+        let est = f.class.chars().count() as f32 * size * 0.62;
+        if f64::from(est) > area_px.sqrt() * 2.2 {
+            continue;
+        }
+        let (x, y) = ctx.px(f.geom.0);
+        let name = f.class.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
+        texts.push_str(&format!("<text x=\"{x:.1}\" y=\"{y:.1}\" font-size=\"{size:.1}\" text-anchor=\"middle\">{name}</text>"));
+    }
+    if texts.is_empty() {
+        return Ok(());
+    }
+    let (w, h) = (ctx.extent.width_px, ctx.extent.height_px);
+    let svg = format!(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}">
+<g font-family="Avenir Next" font-style="italic" font-weight="500" letter-spacing="0.6" fill="#4F6866"
+   stroke="#BFD0CE" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke" dominant-baseline="central">{texts}</g></svg>"##
+    );
+    let mut opts = resvg::usvg::Options::default();
+    opts.fontdb = font_db();
+    let Ok(tree) = resvg::usvg::Tree::from_str(&svg, &opts) else { return Ok(()) };
+    let Some(mut layer) = resvg::tiny_skia::Pixmap::new(w, h) else { return Ok(()) };
+    resvg::render(&tree, resvg::tiny_skia::Transform::identity(), &mut layer.as_mut());
+    if let Some(ours) = tiny_skia::IntSize::from_wh(w, h).and_then(|sz| Pixmap::from_vec(layer.take(), sz)) {
+        pm.draw_pixmap(0, 0, ours.as_ref(), &tiny_skia::PixmapPaint::default(), tiny_skia::Transform::identity(), None);
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------------------------
+// legend
+
+/// Tree symbol legend: `SRK_LA_LEGEND=out.png cargo test --release la_tree_legend -- --ignored`
+/// (labels are added afterwards, see docs/design-research/01-landscape-architecture/README.md).
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    pub const LEGEND: [&str; 12] =
+        ["Tilia", "Acer", "Betula", "Quercus", "Platanus", "Prunus", "Salix", "Carpinus", "Robinia", "Pinus", "", ""];
+
+    #[test]
+    #[ignore]
+    fn la_tree_legend() {
+        let out = std::env::var("SRK_LA_LEGEND").unwrap_or_else(|_| "/tmp/la-tree-legend.png".into());
+        let (cell, cols) = (120u32, 6u32);
+        let rows = (LEGEND.len() as u32).div_ceil(cols);
+        let mut pm = Pixmap::new(cell * cols, cell * rows).unwrap();
+        pm.fill(hex("#EAE9E3"));
+        let px_per_m = 6.0f32;
+        let palette = super::super::crown_palette();
+        let mut crowns = Vec::new();
+        for (i, g) in LEGEND.iter().enumerate() {
+            let (cx, cy) = ((i as u32 % cols * cell + cell / 2) as f32, (i as u32 / cols * cell + cell / 2 - 8) as f32);
+            let (variant, colour, d) = match genus_spec(g) {
+                Some(s) => (s.variant, palette[s.colour], s.default_d as f32),
+                None => ((i - 10) as u8 * 2, palette[i % 6], 7.0),
+            };
+            crowns.push(Crown { x: cx, y: cy, r: (d / 2.0 * px_per_m).min(cell as f32 * 0.4), variant, colour: hex(colour), seed: 17 + i as i64 });
+        }
+        let mut sh = Pixmap::new(pm.width(), pm.height()).unwrap();
+        let mut pb = PathBuilder::new();
+        for c in &crowns {
+            pb.push_circle(c.x + c.r * 0.35, c.y + c.r * 0.28, c.r);
+        }
+        fill(&mut sh, &pb.finish().unwrap(), &paint(hex(SHADOW)), None);
+        blur_layer(&mut sh, 4);
+        draw_layer(&mut pm, &sh, 0.26, BlendMode::Multiply);
+        for c in &crowns {
+            super::super::draw_crown(&mut pm, c, 1.0);
+        }
+        pm.save_png(&out).unwrap();
+    }
 }
