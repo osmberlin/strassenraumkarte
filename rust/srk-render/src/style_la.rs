@@ -268,17 +268,22 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
     }
 
     // ---- buildings: hard SE shadow, white volume, crisp outline, rare red roof
+    // `sub` = building:part | mapped roof colour (empty when not tagged or not imported)
+    let roof_sql = extra::roof_colour_sql(ctx.client);
     let buildings = ctx.polygons(
-        r#"osm_id AS id, COALESCE(building, 'yes') AS class, "building:part" AS sub,
-           COALESCE(height, "building:levels" * 3.0, 9)::float8 AS num"#,
+        &format!(
+            r#"osm_id AS id, COALESCE(building, 'yes') AS class, COALESCE("building:part", '') || '|' || {roof_sql} AS sub,
+               COALESCE(height, "building:levels" * 3.0, 9)::float8 AS num"#
+        ),
         "building",
         "ORDER BY COALESCE(height, 0), osm_id",
     )?;
+    let is_part = |f: &Feature<Polygon<f64>>| !f.sub.starts_with('|');
     let sh = ctx.m(2.2);
     {
         let mut layer = new_layer(&ctx);
         let mut pb = PathBuilder::new();
-        for f in buildings.iter().filter(|f| f.sub.is_empty()) {
+        for f in buildings.iter().filter(|f| !is_part(f)) {
             let off = sh * (f.num as f32 / 15.0).clamp(0.4, 1.6);
             for k in [0.33f32, 0.66, 1.0] {
                 if let Some(p) = poly_path_shifted(&ctx, &f.geom, off * k, off * k * 0.75) {
@@ -292,7 +297,7 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
         blur_layer(&mut layer, (ctx.m(0.35).max(1.0)) as usize);
         draw_layer(&mut pm, &layer, 0.34, BlendMode::Multiply);
     }
-    for f in buildings.iter().filter(|f| f.sub.is_empty()) {
+    for f in buildings.iter().filter(|f| !is_part(f)) {
         let Some(path) = poly_path(&ctx, &f.geom) else { continue };
         let r = rand01(f.id, 3);
         let landmark = matches!(f.class.as_str(), "church" | "chapel" | "cathedral" | "public" | "civic" | "school");
@@ -301,7 +306,10 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
         let home = matches!(f.class.as_str(), "house" | "detached" | "semidetached_house" | "terrace" | "residential" | "chalet" | "allotment_house" | "bungalow");
         // red roofs: an accent on small homes only (unknown `building=yes` only when tiny)
         let red = !landmark && ((home && area < 250.0) || (f.class == "yes" && area < 120.0)) && r < 0.25;
-        let col = if landmark {
+        let mapped = f.sub.split_once('|').and_then(|(_, c)| extra::roof_tone(c));
+        let col = if let Some(m) = mapped {
+            m
+        } else if landmark {
             "#F5F4EF"
         } else if outbuilding {
             "#DEDBD3"
@@ -313,7 +321,7 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
         fill(&mut pm, &path, &paint(hex(col)), None);
         line(&mut pm, &path, &paint(hex(BUILDING_LINE)), &stroke(ctx.m(0.22).clamp(0.7, 1.6)), None);
     }
-    for f in buildings.iter().filter(|f| !f.sub.is_empty()) {
+    for f in buildings.iter().filter(|f| is_part(f)) {
         if let Some(path) = poly_path(&ctx, &f.geom) {
             line(&mut pm, &path, &paint(with_alpha(hex(BUILDING_LINE), 0.35)), &stroke(ctx.m(0.08).clamp(0.4, 0.8)), None);
         }
