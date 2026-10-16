@@ -62,7 +62,12 @@ impl Ctx<'_> {
         );
         let [a, b, c, d] = self.bounds();
         let mut timers: Option<&mut StageTimers> = None;
+        let t0 = std::time::Instant::now();
         let rows = query_prep(self.client, self.prep, &mut timers, &sql, &[&a, &b, &c, &d])?;
+        if kit_profile() {
+            let what: String = from_where.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(70).collect();
+            eprintln!("kit-sql z{} {:>6}ms {:>6} rows  {what}", self.z, t0.elapsed().as_millis(), rows.len());
+        }
         let mut out = Vec::with_capacity(rows.len());
         for r in &rows {
             let wkb: Option<Vec<u8>> = r.get("wkb");
@@ -149,6 +154,20 @@ impl Ctx<'_> {
         let mpp = self.extent.metres_per_px();
         (self.extent.bounds.minx + f64::from(px) * mpp, self.extent.bounds.maxy - f64::from(py) * mpp)
     }
+}
+
+/// `SRK_KIT_PROFILE=1`: log every style-kit query (ms, rows) and paint stage to stderr.
+pub fn kit_profile() -> bool {
+    static V: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *V.get_or_init(|| std::env::var("SRK_KIT_PROFILE").is_ok())
+}
+
+/// Log the time since `t` under `label` (only with `SRK_KIT_PROFILE`), then reset `t`.
+pub fn lap(t: &mut std::time::Instant, label: &str) {
+    if kit_profile() {
+        eprintln!("kit-lap {:>6}ms  {label}", t.elapsed().as_millis());
+    }
+    *t = std::time::Instant::now();
 }
 
 // ---------------------------------------------------------------- hashing & noise
@@ -663,42 +682,103 @@ fn render_svg_text(ctx: &Ctx, pm: &mut Pixmap, defs: &str, texts: &str, st: &Lab
 }
 
 /// Approximate gaussian blur of a premultiplied layer: three box-blur passes per axis.
+///
+/// Only the bounding box of the non-transparent pixels, grown by the reach of the three passes,
+/// is processed (everything outside stays zero, so the result is identical to a full-frame
+/// blur). The vertical pass sweeps whole rows at once instead of walking columns (cache-friendly).
 pub fn blur_layer(layer: &mut Pixmap, radius: usize) {
     if radius == 0 {
         return;
     }
     let (w, h) = (layer.width() as usize, layer.height() as usize);
     let data = layer.data_mut();
-    let mut buf = vec![0u16; w.max(h) * 4];
+    let Some((bx0, by0, bx1, by1)) = opaque_bbox(data, w, h) else { return };
+    let pad = 3 * radius + 2;
+    let (x0, x1) = (bx0.saturating_sub(pad), (bx1 + pad).min(w - 1));
+    let (y0, y1) = (by0.saturating_sub(pad), (by1 + pad).min(h - 1));
+    let rw = x1 - x0 + 1;
+    let rh = y1 - y0 + 1;
+    let mut src = vec![0u8; rw * rh * 4];
+    let mut acc = vec![0u32; rw * 4];
     for _ in 0..3 {
-        for y in 0..h {
-            box_line(data, &mut buf, y * w * 4, 4, w, radius);
+        for y in y0..=y1 {
+            let row = &mut data[(y * w + x0) * 4..(y * w + x1 + 1) * 4];
+            box_row(row, &mut src[..rw * 4], rw, radius);
         }
-        for x in 0..w {
-            box_line(data, &mut buf, x * 4, w * 4, h, radius);
+        box_cols(data, &mut src, &mut acc, w, x0, rw, y0, rh, radius);
+    }
+}
+
+/// Bounding box (inclusive) of pixels with any non-zero byte.
+fn opaque_bbox(data: &[u8], w: usize, h: usize) -> Option<(usize, usize, usize, usize)> {
+    let mut b: Option<(usize, usize, usize, usize)> = None;
+    for y in 0..h {
+        let row = &data[y * w * 4..(y + 1) * w * 4];
+        let nz = |p: &[u8]| u32::from_ne_bytes([p[0], p[1], p[2], p[3]]) != 0;
+        let Some(first) = row.chunks_exact(4).position(nz) else { continue };
+        let last = row.chunks_exact(4).rposition(nz).unwrap_or(first);
+        b = Some(match b {
+            None => (first, y, last, y),
+            Some((a, by, c, _)) => (a.min(first), by, c.max(last), y),
+        });
+    }
+    b
+}
+
+/// One horizontal box pass over `n` RGBA pixels with clamp-to-edge (same arithmetic as before:
+/// window sum / (2r+1), truncating).
+fn box_row(row: &mut [u8], buf: &mut [u8], n: usize, r: usize) {
+    buf.copy_from_slice(row);
+    let win = (2 * r + 1) as u32;
+    let mut acc = [0u32; 4];
+    for k in 0..=r.min(n - 1) {
+        for c in 0..4 {
+            acc[c] += u32::from(buf[k * 4 + c]);
+        }
+    }
+    for c in 0..4 {
+        acc[c] += u32::from(buf[c]) * r as u32; // clamp-to-edge on the left
+    }
+    for i in 0..n {
+        let add = (i + r + 1).min(n - 1) * 4;
+        let sub = i.saturating_sub(r) * 4;
+        for c in 0..4 {
+            row[i * 4 + c] = (acc[c] / win) as u8;
+            acc[c] += u32::from(buf[add + c]);
+            acc[c] -= u32::from(buf[sub + c]);
         }
     }
 }
 
-fn box_line(data: &mut [u8], buf: &mut [u16], start: usize, stride: usize, n: usize, r: usize) {
-    for i in 0..n {
-        for c in 0..4 {
-            buf[i * 4 + c] = u16::from(data[start + i * stride + c]);
-        }
+/// One vertical box pass over the region columns `x0..x0+rw`, rows `y0..y0+rh`, all columns
+/// swept together row by row.
+#[allow(clippy::too_many_arguments)]
+fn box_cols(data: &mut [u8], src: &mut [u8], acc: &mut [u32], w: usize, x0: usize, rw: usize, y0: usize, rh: usize, r: usize) {
+    let rb = rw * 4;
+    let src = &mut src[..rh * rb];
+    for i in 0..rh {
+        let o = ((y0 + i) * w + x0) * 4;
+        src[i * rb..(i + 1) * rb].copy_from_slice(&data[o..o + rb]);
     }
     let win = (2 * r + 1) as u32;
-    for c in 0..4 {
-        let mut acc: u32 = 0;
-        for k in 0..=r.min(n - 1) {
-            acc += u32::from(buf[k * 4 + c]);
+    for (j, a) in acc.iter_mut().enumerate() {
+        *a = u32::from(src[j]) * r as u32; // clamp-to-edge at the top
+    }
+    for k in 0..=r.min(rh - 1) {
+        let s = &src[k * rb..(k + 1) * rb];
+        for (a, &v) in acc.iter_mut().zip(s) {
+            *a += u32::from(v);
         }
-        acc += u32::from(buf[c]) * r as u32; // clamp-to-edge on the left
-        for i in 0..n {
-            data[start + i * stride + c] = (acc / win) as u8;
-            let add = (i + r + 1).min(n - 1);
-            let sub = i.saturating_sub(r);
-            acc += u32::from(buf[add * 4 + c]);
-            acc -= u32::from(buf[sub * 4 + c]);
+    }
+    for i in 0..rh {
+        let o = ((y0 + i) * w + x0) * 4;
+        let add = (i + r + 1).min(rh - 1) * rb;
+        let sub = i.saturating_sub(r) * rb;
+        let out = &mut data[o..o + rb];
+        for j in 0..rb {
+            out[j] = (acc[j] / win) as u8;
+            acc[j] += u32::from(src[add + j]);
+            acc[j] -= u32::from(src[sub + j]);
         }
     }
 }
