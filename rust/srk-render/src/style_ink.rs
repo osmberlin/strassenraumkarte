@@ -275,7 +275,7 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
     }
     if let Some(mask) = mask_of(&ctx, &playgrounds).filter(|_| pg_on) {
         let (w, h) = (ctx.extent.width_px as f32, ctx.extent.height_px as f32);
-        if let Some(p) = hatch_path(&ctx, ctx.m(1.1).max(4.0), 45.0, 0.0, 0.0, w, h) {
+        if let Some(p) = extra::hatch_world(&ctx, ctx.m(1.1).max(4.0), 45.0, 0.0, 0.0, w, h) {
             line(&mut pm, &p, &paint(with_alpha(accent, 0.45)), &stroke(lw * 0.7), Some(&mask));
         }
         let p = PathBuilder::from_rect(tiny_skia::Rect::from_xywh(0.0, 0.0, w, h).unwrap());
@@ -603,7 +603,7 @@ fn draw_buildings(ctx: &mut Ctx, pm: &mut Pixmap, lw: f32) -> Result<()> {
             if let Some(mut mask) = tiny_skia::Mask::new(ctx.extent.width_px, ctx.extent.height_px) {
                 mask.fill_path(&sp, tiny_skia::FillRule::Winding, true, tiny_skia::Transform::identity());
                 let (w, h) = (ctx.extent.width_px as f32, ctx.extent.height_px as f32);
-                if let Some(hp) = hatch_path(ctx, hatch_sp * 0.9, 45.0, 0.0, 0.0, w, h) {
+                if let Some(hp) = extra::hatch_world(ctx, hatch_sp * 0.9, 45.0, 0.0, 0.0, w, h) {
                     line(pm, &hp, &paint(ink(0.42)), &stroke(lw * 0.55), Some(&mask));
                 }
             }

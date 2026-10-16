@@ -487,3 +487,40 @@ pub fn draw_furniture(pm: &mut Pixmap, kind: u8, x: f32, y: f32, s: f32, lw: f32
         line(pm, p, &paint(pen), &stroke(lw * 0.9), None);
     }
 }
+
+// ---------------------------------------------------------------- hatching
+
+/// Like `hatch_path`, but every line is split into segments of a fixed length whose ends sit at
+/// world-anchored positions. Lines as long as the render buffer rasterise slightly differently
+/// when the buffer grows (metatiles), so only short world-anchored pieces are seam-safe.
+pub fn hatch_world(ctx: &Ctx, spacing_px: f32, angle_deg: f32, x0: f32, y0: f32, x1: f32, y1: f32) -> Option<tiny_skia::Path> {
+    const SEG: f64 = 128.0;
+    let a = f64::from(angle_deg).to_radians();
+    let (dx, dy) = (a.cos(), a.sin());
+    let (nx, ny) = (-dy, dx);
+    let sp = f64::from(spacing_px);
+    let mpp = ctx.extent.metres_per_px();
+    // world pixel = buffer pixel + origin (f64: world pixels are ~1e8 at z19)
+    let (ox, oy) = (ctx.extent.bounds.minx / mpp, -ctx.extent.bounds.maxy / mpp);
+    let offset = (-(ox * nx + oy * ny)).rem_euclid(sp);
+    let (cx, cy) = (f64::from(x0 + x1) / 2.0, f64::from(y0 + y1) / 2.0);
+    let r = f64::from(((x1 - x0).powi(2) + (y1 - y0).powi(2)).sqrt() / 2.0 + spacing_px);
+    let c = cx * nx + cy * ny;
+    let k0 = ((c - r - offset) / sp).floor() as i64;
+    let k1 = ((c + r - offset) / sp).ceil() as i64;
+    let mut pb = PathBuilder::new();
+    for k in k0..=k1 {
+        let t = offset + k as f64 * sp;
+        let (fx, fy) = (cx + nx * (t - c), cy + ny * (t - c));
+        // position along the line in world pixels
+        let sf = (fx + ox) * dx + (fy + oy) * dy;
+        let m0 = ((sf - r) / SEG).floor() as i64;
+        let m1 = ((sf + r) / SEG).ceil() as i64;
+        for m in m0..m1 {
+            let (u0, u1) = (m as f64 * SEG - sf, (m + 1) as f64 * SEG - sf);
+            pb.move_to((fx + dx * u0) as f32, (fy + dy * u0) as f32);
+            pb.line_to((fx + dx * u1) as f32, (fy + dy * u1) as f32);
+        }
+    }
+    pb.finish()
+}
