@@ -511,6 +511,9 @@ fn draw_buildings(ctx: &mut Ctx, pm: &mut Pixmap, lw: f32) -> Result<()> {
     let oblique = std::env::var("SRK_INK_OBLIQUE").map(|v| v == "freestanding").unwrap_or(false) && ctx.z >= 17;
     let mut lifts: std::collections::HashMap<i64, f32> = std::collections::HashMap::new();
     let hatch_sp = ctx.m(0.7).clamp(2.6, 6.0);
+    // roof data (roof_shape.sql): facets, ridge/hip/valley/parapet lines; SRK_ROOFS=0 keeps the ridge + hatch below
+    let roofs = if crate::roof_shapes::enabled(ctx.client) { Some(crate::roof_shapes::load(ctx)?) } else { None };
+    let ink_fn = |a: f32| ink(a);
     for (_, i) in order {
         let f = &buildings[i];
         let landmark = matches!(f.class.as_str(), "church" | "chapel" | "cathedral");
@@ -593,13 +596,21 @@ fn draw_buildings(ctx: &mut Ctx, pm: &mut Pixmap, lw: f32) -> Result<()> {
             let a = (f.num as f32).to_radians();
             (-(a.cos())).atan2(a.sin()).to_degrees()
         };
-        if let Some(mask) = roof_mask() {
+        let roof_data = roofs.as_ref().filter(|r| r.covers(f.id));
+        if let Some(r) = roof_data {
+            let facets: &[(geo_types::Polygon<f64>, f64)] = r.facets.get(&f.id).map_or(&[], |v| v.as_slice());
+            let a = if landmark { 0.75 } else { 0.5 };
+            crate::roof_shapes::draw_ink_facets(ctx, pm, facets, &roof_mask, (x0 - 4.0, y0 - 4.0, x1 + 4.0, y1 + 4.0), lift, hatch_sp, lw, a, &ink_fn);
+        } else if let Some(mask) = roof_mask() {
             if let Some(h) = hatch_path(ctx, hatch_sp, axis_px + 90.0, x0 - 4.0, y0 - 4.0, x1 + 4.0, y1 + 4.0) {
                 let a = if landmark { 0.75 } else { 0.5 };
                 line(pm, &h, &paint(ink(a)), &stroke(lw * 0.55), Some(&mask));
             }
         }
-        if let Some(Geometry::LineString(_) | Geometry::MultiLineString(_)) = &f.aux {
+        if let Some(lines) = roof_data.and_then(|r| r.lines.get(&f.id)) {
+            crate::roof_shapes::draw_ink_lines(ctx, pm, lines, &roof_mask, lift, lw, &ink_fn);
+        }
+        if let (true, Some(Geometry::LineString(_) | Geometry::MultiLineString(_))) = (roof_data.is_none(), &f.aux) {
             for l in geometry_lines(f.aux.clone().unwrap()) {
                 let rp: Vec<(f32, f32)> = line_pts(ctx, &l).into_iter().map(|(x, y)| (x, y - lift)).collect();
                 // shaded roof half: the side facing away from the light (NE), cross-hatched

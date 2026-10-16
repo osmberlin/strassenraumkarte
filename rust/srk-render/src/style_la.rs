@@ -259,6 +259,8 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
         "building",
         "ORDER BY COALESCE(height, 0), osm_id",
     )?;
+    // roof data (roof_shape.sql): facet tone + ridge hairlines; SRK_ROOFS=0 keeps the plain white volume
+    let roofs = if crate::roof_shapes::enabled(ctx.client) { Some(crate::roof_shapes::load(&mut ctx)?) } else { None };
     let sh = ctx.m(2.2);
     {
         let mut layer = new_layer(&ctx);
@@ -296,6 +298,16 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
             BUILDING
         };
         fill(&mut pm, &path, &paint(hex(col)), None);
+        if let Some(roofs) = roofs.as_ref().filter(|_| ctx.z >= 17) {
+            let (w, h) = (ctx.extent.width_px, ctx.extent.height_px);
+            let mask = || crate::roof_shapes::footprint_mask(&path, w, h);
+            if let Some(facets) = roofs.facets.get(&f.id) {
+                crate::roof_shapes::draw_la_facets(&ctx, &mut pm, facets, &mask, &|a| with_alpha(hex(SHADOW), a));
+            }
+            if let Some(lines) = roofs.lines.get(&f.id) {
+                crate::roof_shapes::draw_la_ridges(&ctx, &mut pm, lines, &mask, hex(BUILDING_LINE));
+            }
+        }
         line(&mut pm, &path, &paint(hex(BUILDING_LINE)), &stroke(ctx.m(0.22).clamp(0.7, 1.6)), None);
     }
     for f in buildings.iter().filter(|f| !f.sub.is_empty()) {
