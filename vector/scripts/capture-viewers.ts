@@ -3,7 +3,7 @@
  * and print console / page errors per viewer (a viewer is "clean" when none print).
  *
  * Usage: `STEP=before bun run scripts/capture-viewers.ts`  (or STEP=after)
- * Output: docs/viewers/<FOLDER>/<STEP>-<viewer>.png (FOLDER defaults to 01-catalyst-look)
+ * Output: docs/viewers/<FOLDER>/<STEP>-<viewer>.jpg (FOLDER defaults to 01-catalyst-look)
  *
  * Needs the viewers running (see docs/VIEWERS.md):
  *   vector dev        http://127.0.0.1:5177   (bun run dev in vector/)
@@ -60,8 +60,8 @@ for (const v of VIEWERS) {
   await page.goto(v.url, { waitUntil: 'load' })
   // the maps load tiles and the vector app paints after its style is ready
   await page.waitForTimeout(4000)
-  const file = path.join(OUT, `${STEP}-${v.name}.png`)
-  await page.screenshot({ path: file })
+  const file = path.join(OUT, `${STEP}-${v.name}.jpg`)
+  await page.screenshot({ path: file, type: 'jpeg', quality: 88 })
   console.log(`[${v.name}] ${file}`)
   for (const p of problems) console.log(`  ${p}`)
   if (problems.length === 0) console.log('  no console or page errors')
