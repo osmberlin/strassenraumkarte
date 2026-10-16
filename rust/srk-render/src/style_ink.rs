@@ -8,7 +8,7 @@
 use anyhow::Result;
 use geo_types::{Geometry, Polygon};
 use postgres::Client;
-use tiny_skia::{BlendMode, Color, PathBuilder, Pixmap};
+use tiny_skia::{BlendMode, Color, PathBuilder, Pixmap, PixmapPaint, Transform};
 
 use crate::paint::geometry_lines;
 use crate::sql_cache::PreparedCache;
@@ -250,15 +250,27 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
         "highway WHERE type = 'path'",
         "ORDER BY COALESCE(layer,0), osm_id",
     )?;
+    // Two passes over all paths: every casing first, then every paper fill, so a path's paper
+    // erases the casing of the paths it meets (clean junctions, no round caps over other lines).
+    // The casings go to their own layer, composited once at the ink alpha: translucent ink drawn
+    // path by path would darken where two casings overlap at a junction.
+    let mut path_lines = Vec::new();
     for f in &paths {
         if f.sub == "sidewalk" || f.sub == "crossing" {
             continue; // sidewalks are the paper between kerb and house
         }
         let w = ctx.m(if f.num > 0.0 { f.num } else { 1.6 }).max(2.5);
         if let Some(p) = line_path(&ctx, &f.geom) {
-            line(&mut pm, &p, &paint(ink(0.75)), &stroke(w + lw * 1.4), None);
-            line(&mut pm, &p, &paint(paper), &stroke(w), None);
+            path_lines.push((w, p));
         }
+    }
+    let mut casings = Pixmap::new(pm.width(), pm.height()).expect("pixmap");
+    for (w, p) in &path_lines {
+        line(&mut casings, p, &paint(ink(1.0)), &stroke(w + lw * 1.4), None);
+    }
+    pm.draw_pixmap(0, 0, casings.as_ref(), &PixmapPaint { opacity: 0.75, ..Default::default() }, Transform::identity(), None);
+    for (w, p) in &path_lines {
+        line(&mut pm, p, &paint(paper), &stroke(*w), None);
     }
 
     extra::draw_bridge_parapets(&ctx, &mut pm, &decks, lw, ink(1.0));
