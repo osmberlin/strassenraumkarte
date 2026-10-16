@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "skills": {
+    "agent-orchestration": {
+      "source": "FixMyBerlin/fixmyskills",
+      "sourceType": "github",
+      "skillPath": "skills/agent-orchestration/SKILL.md",
+      "computedHash": "4d0009a5962dc4231e7692ec3b564aca9c710f133bf20e547772b2ca98f4f2df"
+    },
+    "finish-work": {
+      "source": "FixMyBerlin/fixmyskills",
+      "sourceType": "github",
+      "skillPath": "skills/finish-work/SKILL.md",
+      "computedHash": "419f84e162143071a05c30598b18e36194e64eab790b23e2af4a497e6e2f871e"
+    },
+    "playwright-skill": {
+      "source": "FixMyBerlin/fixmyskills",
+      "sourceType": "github",
+      "skillPath": "skills/playwright-skill/SKILL.md",
+      "computedHash": "d697a30e9f1a3e5171e911eb167af9f22e176c3e39a65be260984f09b3142356"
+    },
+    "react-dev": {
+      "source": "FixMyBerlin/fixmyskills",
+      "sourceType": "github",
+      "skillPath": "skills/react-dev/SKILL.md",
+      "computedHash": "0d560e4665ee0beafc84d70be14006091fef423be5458d2dda1dcd28a41a1492"
+    },
+    "react-map-gl": {
+      "source": "FixMyBerlin/fixmyskills",
+      "sourceType": "github",
+      "skillPath": "skills/react-map-gl/SKILL.md",
+      "computedHash": "0afe143792d27388e555433ecf3d8de65aa562b9ad2087d358d3d73b3f9e25a9"
+    },
+    "rust-wasm-geo": {
+      "source": "FixMyBerlin/fixmyskills",
+      "sourceType": "github",
+      "skillPath": "skills/rust-wasm-geo/SKILL.md",
+      "computedHash": "5fac041818b953034452dfdfe77f0c627bc01168eefaa25495a814d6db12128c"
+    },
+    "tanstack-router-conventions": {
+      "source": "FixMyBerlin/fixmyskills",
+      "sourceType": "github",
+      "skillPath": "skills/tanstack-router-conventions/SKILL.md",
+      "computedHash": "22da9e27a683b4038be4ed2661a1cb4122bd3dfa3ab9489e94479680a0f67149"
+    },
+    "tech-stack": {
+      "source": "FixMyBerlin/fixmyskills",
+      "sourceType": "github",
+      "skillPath": "skills/tech-stack/SKILL.md",
+      "computedHash": "271d23af284ebe98947a47a1ba4a66f77490322de9a1fd60ee39f6637ef36a5f"
+    }
+  }
+}

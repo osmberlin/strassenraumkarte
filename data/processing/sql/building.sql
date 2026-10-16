@@ -22,26 +22,30 @@ WHERE
     AND "building:part" IS NULL
     AND building IS NOT NULL;
     
--- Step B: For building:parts: adopt heigth from their building outlines, if not explicitly specified
+-- Step B: For building:parts: adopt heigth from their building outlines, if not explicitly specified.
+-- Deterministic when multiple outlines contain a part: largest outline area, then lowest osm_id.
 UPDATE building AS part
-SET height =
-    CASE
-        WHEN part."building:levels" IS NOT NULL THEN
-            CASE
-                -- derive height from building if it has the same building:levels number, but a height attribute
-                WHEN part."building:levels" = outline."building:levels" AND outline.height IS NOT NULL THEN outline.height
-                -- else derive height from building:part building:levels...
-                ELSE part."building:levels" * 3
-            END
-        -- ...or adopt from building outline
-        ELSE outline.height
-    END
-FROM building AS outline
-WHERE
-    part.height IS NULL 
-    AND part."building:part" IS NOT NULL
-    AND outline."building" IS NOT NULL
-    AND ST_Contains(outline.geom, part.geom);
+SET height = picked.height_value
+FROM (
+    SELECT DISTINCT ON (part.osm_id)
+        part.osm_id AS part_id,
+        CASE
+            WHEN part."building:levels" IS NOT NULL THEN
+                CASE
+                    WHEN part."building:levels" = outline."building:levels" AND outline.height IS NOT NULL THEN outline.height
+                    ELSE part."building:levels" * 3
+                END
+            ELSE outline.height
+        END AS height_value
+    FROM building AS part
+    JOIN building AS outline
+      ON outline."building" IS NOT NULL
+     AND ST_Contains(outline.geom, part.geom)
+    WHERE part.height IS NULL
+      AND part."building:part" IS NOT NULL
+    ORDER BY part.osm_id, ST_Area(outline.geom) DESC, outline.osm_id
+) AS picked
+WHERE part.osm_id = picked.part_id;
 
 -- Step C: Workaround for flawed building:parts that aren't fully contained in building outlines and therefore still have no height (indicator for mapping errors)
 WITH overlap_areas AS (
@@ -70,7 +74,10 @@ best_matches AS (
         outline_building,
         outline_building_levels,
         outline_height,
-        ROW_NUMBER() OVER (PARTITION BY part_id ORDER BY intersection_area DESC) AS rank
+        ROW_NUMBER() OVER (
+            PARTITION BY part_id
+            ORDER BY intersection_area DESC, outline_id
+        ) AS rank
     FROM 
         overlap_areas
 )
@@ -134,8 +141,11 @@ WITH building_overlap AS (
         building.floating,
         (building.building IS NULL) AS is_part
     FROM temp_parts_raw part
-    -- find all overlapping parts (or parts within, as they technically aren't overlapping)
-    JOIN building ON ST_Overlaps(part.geom, building.geom) OR ST_Within(part.geom, building.geom)
+    -- Same as ST_Overlaps OR ST_Within (interior intersection); && + Intersects uses the GiST index.
+    JOIN building
+      ON part.geom && building.geom
+     AND ST_Intersects(part.geom, building.geom)
+     AND NOT ST_Touches(part.geom, building.geom)
 )
 SELECT
     geom,

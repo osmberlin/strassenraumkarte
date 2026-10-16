@@ -1,0 +1,520 @@
+{
+  "trees/broadleaved": {
+    "x": 0,
+    "y": 0,
+    "width": 170,
+    "height": 174,
+    "pixelRatio": 1.71875
+  },
+  "trees/needleleaved": {
+    "x": 170,
+    "y": 0,
+    "width": 170,
+    "height": 174,
+    "pixelRatio": 1.71875
+  },
+  "tourism/viewpoint_all_directions": {
+    "x": 340,
+    "y": 0,
+    "width": 57,
+    "height": 57,
+    "pixelRatio": 0.890625
+  },
+  "traffic_signs/arrows/left": {
+    "x": 397,
+    "y": 0,
+    "width": 16,
+    "height": 53,
+    "pixelRatio": 0.25
+  },
+  "traffic_signs/arrows/left-yellow": {
+    "x": 413,
+    "y": 0,
+    "width": 16,
+    "height": 53,
+    "pixelRatio": 0.25
+  },
+  "traffic_signs/arrows/left;right": {
+    "x": 429,
+    "y": 0,
+    "width": 16,
+    "height": 53,
+    "pixelRatio": 0.25
+  },
+  "traffic_signs/arrows/left;right-yellow": {
+    "x": 445,
+    "y": 0,
+    "width": 16,
+    "height": 53,
+    "pixelRatio": 0.25
+  },
+  "traffic_signs/arrows/left;through": {
+    "x": 461,
+    "y": 0,
+    "width": 16,
+    "height": 53,
+    "pixelRatio": 0.25
+  },
+  "traffic_signs/arrows/left;through-yellow": {
+    "x": 477,
+    "y": 0,
+    "width": 16,
+    "height": 53,
+    "pixelRatio": 0.25
+  },
+  "traffic_signs/arrows/merge_to_left": {
+    "x": 493,
+    "y": 0,
+    "width": 16,
+    "height": 53,
+    "pixelRatio": 0.25
+  },
+  "traffic_signs/arrows/merge_to_left-yellow": {
+    "x": 509,
+    "y": 0,
+    "width": 16,
+    "height": 53,
+    "pixelRatio": 0.25
+  },
+  "traffic_signs/arrows/merge_to_right": {
+    "x": 525,
+    "y": 0,
+    "width": 16,
+    "height": 53,
+    "pixelRatio": 0.25
+  },
+  "traffic_signs/arrows/merge_to_right-yellow": {
+    "x": 541,
+    "y": 0,
+    "width": 16,
+    "height": 53,
+    "pixelRatio": 0.25
+  },
+  "traffic_signs/arrows/right": {
+    "x": 557,
+    "y": 0,
+    "width": 16,
+    "height": 53,
+    "pixelRatio": 0.25
+  },
+  "traffic_signs/arrows/right-yellow": {
+    "x": 573,
+    "y": 0,
+    "width": 16,
+    "height": 53,
+    "pixelRatio": 0.25
+  },
+  "traffic_signs/arrows/slight_left": {
+    "x": 589,
+    "y": 0,
+    "width": 16,
+    "height": 53,
+    "pixelRatio": 0.25
+  },
+  "traffic_signs/arrows/slight_left-yellow": {
+    "x": 605,
+    "y": 0,
+    "width": 16,
+    "height": 53,
+    "pixelRatio": 0.25
+  },
+  "traffic_signs/arrows/slight_right": {
+    "x": 621,
+    "y": 0,
+    "width": 16,
+    "height": 53,
+    "pixelRatio": 0.25
+  },
+  "traffic_signs/arrows/slight_right-yellow": {
+    "x": 637,
+    "y": 0,
+    "width": 16,
+    "height": 53,
+    "pixelRatio": 0.25
+  },
+  "traffic_signs/arrows/through": {
+    "x": 653,
+    "y": 0,
+    "width": 16,
+    "height": 53,
+    "pixelRatio": 0.25
+  },
+  "traffic_signs/arrows/through-yellow": {
+    "x": 669,
+    "y": 0,
+    "width": 16,
+    "height": 53,
+    "pixelRatio": 0.25
+  },
+  "traffic_signs/arrows/through;right": {
+    "x": 685,
+    "y": 0,
+    "width": 16,
+    "height": 53,
+    "pixelRatio": 0.25
+  },
+  "traffic_signs/arrows/through;right-yellow": {
+    "x": 701,
+    "y": 0,
+    "width": 16,
+    "height": 53,
+    "pixelRatio": 0.25
+  },
+  "amenity/fountain": {
+    "x": 717,
+    "y": 0,
+    "width": 35,
+    "height": 35,
+    "pixelRatio": 0.546875
+  },
+  "traffic_signs/DE/605-10": {
+    "x": 752,
+    "y": 0,
+    "width": 8,
+    "height": 32,
+    "pixelRatio": 0.125
+  },
+  "traffic_signs/DE/605-11": {
+    "x": 760,
+    "y": 0,
+    "width": 8,
+    "height": 32,
+    "pixelRatio": 0.125
+  },
+  "traffic_signs/DE/605-20": {
+    "x": 768,
+    "y": 0,
+    "width": 8,
+    "height": 32,
+    "pixelRatio": 0.125
+  },
+  "traffic_signs/DE/605-21": {
+    "x": 776,
+    "y": 0,
+    "width": 8,
+    "height": 32,
+    "pixelRatio": 0.125
+  },
+  "tourism/viewpoint": {
+    "x": 784,
+    "y": 0,
+    "width": 33,
+    "height": 27,
+    "pixelRatio": 0.515625
+  },
+  "amenity/loading_ramp": {
+    "x": 817,
+    "y": 0,
+    "width": 27,
+    "height": 27,
+    "pixelRatio": 0.421875
+  },
+  "leisure/table_tennis": {
+    "x": 844,
+    "y": 0,
+    "width": 19,
+    "height": 27,
+    "pixelRatio": 0.296875
+  },
+  "leisure/table_tennis_net_no": {
+    "x": 863,
+    "y": 0,
+    "width": 19,
+    "height": 27,
+    "pixelRatio": 0.296875
+  },
+  "leisure/table_tennis_net_yes": {
+    "x": 882,
+    "y": 0,
+    "width": 19,
+    "height": 27,
+    "pixelRatio": 0.296875
+  },
+  "shapes/equilateral_triangle-landscape": {
+    "x": 901,
+    "y": 0,
+    "width": 26,
+    "height": 26,
+    "pixelRatio": 0.40625
+  },
+  "amenity/mobility_hub": {
+    "x": 927,
+    "y": 0,
+    "width": 24,
+    "height": 24,
+    "pixelRatio": 0.375
+  },
+  "amenity/mobility_hub_Jelbi": {
+    "x": 951,
+    "y": 0,
+    "width": 24,
+    "height": 24,
+    "pixelRatio": 0.375
+  },
+  "public_transport/s-train": {
+    "x": 975,
+    "y": 0,
+    "width": 24,
+    "height": 24,
+    "pixelRatio": 0.375
+  },
+  "amenity/recycling_container": {
+    "x": 999,
+    "y": 0,
+    "width": 22,
+    "height": 22,
+    "pixelRatio": 0.34375
+  },
+  "public_transport/subway": {
+    "x": 0,
+    "y": 174,
+    "width": 22,
+    "height": 22,
+    "pixelRatio": 0.34375
+  },
+  "tourism/guidepost": {
+    "x": 22,
+    "y": 174,
+    "width": 20,
+    "height": 20,
+    "pixelRatio": 0.3125
+  },
+  "amenity/bicycle_rental": {
+    "x": 42,
+    "y": 174,
+    "width": 20,
+    "height": 19,
+    "pixelRatio": 0.3125
+  },
+  "amenity/toilets": {
+    "x": 62,
+    "y": 174,
+    "width": 18,
+    "height": 18,
+    "pixelRatio": 0.28125
+  },
+  "tourism/artwork": {
+    "x": 80,
+    "y": 174,
+    "width": 18,
+    "height": 18,
+    "pixelRatio": 0.28125
+  },
+  "historic/memorial": {
+    "x": 98,
+    "y": 174,
+    "width": 13,
+    "height": 17,
+    "pixelRatio": 0.203125
+  },
+  "amenity/small_electric_vehicle": {
+    "x": 111,
+    "y": 174,
+    "width": 20,
+    "height": 16,
+    "pixelRatio": 0.3125
+  },
+  "amenity/recycling": {
+    "x": 131,
+    "y": 174,
+    "width": 15,
+    "height": 15,
+    "pixelRatio": 0.234375
+  },
+  "traffic_signs/street_name_sign": {
+    "x": 146,
+    "y": 174,
+    "width": 15,
+    "height": 15,
+    "pixelRatio": 0.234375
+  },
+  "traffic_signs/symbols/footway": {
+    "x": 161,
+    "y": 174,
+    "width": 8,
+    "height": 15,
+    "pixelRatio": 0.125
+  },
+  "traffic_signs/symbols/footway-yellow": {
+    "x": 169,
+    "y": 174,
+    "width": 8,
+    "height": 15,
+    "pixelRatio": 0.125
+  },
+  "amenity/bicycle": {
+    "x": 177,
+    "y": 174,
+    "width": 20,
+    "height": 14,
+    "pixelRatio": 0.3125
+  },
+  "rock/rock01": {
+    "x": 197,
+    "y": 174,
+    "width": 11,
+    "height": 14,
+    "pixelRatio": 0.171875
+  },
+  "amenity/post_box_green": {
+    "x": 208,
+    "y": 174,
+    "width": 13,
+    "height": 13,
+    "pixelRatio": 0.203125
+  },
+  "amenity/post_box_yellow": {
+    "x": 221,
+    "y": 174,
+    "width": 13,
+    "height": 13,
+    "pixelRatio": 0.203125
+  },
+  "amenity/telephone": {
+    "x": 234,
+    "y": 174,
+    "width": 13,
+    "height": 13,
+    "pixelRatio": 0.203125
+  },
+  "tourism/information": {
+    "x": 247,
+    "y": 174,
+    "width": 13,
+    "height": 13,
+    "pixelRatio": 0.203125
+  },
+  "amenity/cargo_bike": {
+    "x": 260,
+    "y": 174,
+    "width": 24,
+    "height": 12,
+    "pixelRatio": 0.375
+  },
+  "amenity/bench": {
+    "x": 284,
+    "y": 174,
+    "width": 19,
+    "height": 11,
+    "pixelRatio": 0.296875
+  },
+  "leisure/picnic_table": {
+    "x": 303,
+    "y": 174,
+    "width": 19,
+    "height": 11,
+    "pixelRatio": 0.296875
+  },
+  "amenity/waste_basket": {
+    "x": 322,
+    "y": 174,
+    "width": 9,
+    "height": 11,
+    "pixelRatio": 0.140625
+  },
+  "traffic_signs/DE/222": {
+    "x": 331,
+    "y": 174,
+    "width": 10,
+    "height": 10,
+    "pixelRatio": 0.15625
+  },
+  "traffic_signs/DE/222-10": {
+    "x": 341,
+    "y": 174,
+    "width": 10,
+    "height": 10,
+    "pixelRatio": 0.15625
+  },
+  "traffic_signs/symbols/wheelchair": {
+    "x": 351,
+    "y": 174,
+    "width": 8,
+    "height": 10,
+    "pixelRatio": 0.125
+  },
+  "traffic_signs/symbols/wheelchair-yellow": {
+    "x": 359,
+    "y": 174,
+    "width": 8,
+    "height": 10,
+    "pixelRatio": 0.125
+  },
+  "man_made/manhole": {
+    "x": 367,
+    "y": 174,
+    "width": 8,
+    "height": 8,
+    "pixelRatio": 0.125
+  },
+  "shapes/circle-bollard": {
+    "x": 375,
+    "y": 174,
+    "width": 8,
+    "height": 8,
+    "pixelRatio": 0.125
+  },
+  "shapes/circle-separation_bollard": {
+    "x": 383,
+    "y": 174,
+    "width": 8,
+    "height": 8,
+    "pixelRatio": 0.125
+  },
+  "shapes/circle-separation_flex_post": {
+    "x": 391,
+    "y": 174,
+    "width": 8,
+    "height": 8,
+    "pixelRatio": 0.125
+  },
+  "shapes/filled_arrowhead-guard_stone": {
+    "x": 399,
+    "y": 174,
+    "width": 8,
+    "height": 8,
+    "pixelRatio": 0.125
+  },
+  "shapes/half_square-vertical_panel": {
+    "x": 407,
+    "y": 174,
+    "width": 8,
+    "height": 8,
+    "pixelRatio": 0.125
+  },
+  "shapes/triangle-marking": {
+    "x": 415,
+    "y": 174,
+    "width": 8,
+    "height": 8,
+    "pixelRatio": 0.125
+  },
+  "shapes/triangle-marking-yellow": {
+    "x": 423,
+    "y": 174,
+    "width": 8,
+    "height": 8,
+    "pixelRatio": 0.125
+  },
+  "amenity/bench_backrest_no": {
+    "x": 431,
+    "y": 174,
+    "width": 19,
+    "height": 6,
+    "pixelRatio": 0.296875
+  },
+  "traffic_signs/symbols/bicycle": {
+    "x": 450,
+    "y": 174,
+    "width": 8,
+    "height": 5,
+    "pixelRatio": 0.125
+  },
+  "traffic_signs/symbols/bicycle-yellow": {
+    "x": 458,
+    "y": 174,
+    "width": 8,
+    "height": 5,
+    "pixelRatio": 0.125
+  }
+}

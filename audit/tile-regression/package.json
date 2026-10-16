@@ -1,0 +1,20 @@
+{
+  "name": "srk-tile-regression",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "compare-one-tile": "bun run scripts/compare-one-tile.ts",
+    "compare-run": "bun run scripts/compare-run.ts",
+    "lonlat-to-tile": "bun run scripts/lonlat-to-tile.ts",
+    "render-suite": "./scripts/render-suite.sh"
+  },
+  "dependencies": {
+    "pixelmatch": "^7.2.0",
+    "pngjs": "^7.0.0"
+  },
+  "devDependencies": {
+    "@types/pngjs": "^6.0.5",
+    "bun-types": "^1.4.3",
+    "typescript": "^5"
+  }
+}

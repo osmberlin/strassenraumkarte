@@ -6,6 +6,8 @@ The appeal of the style, which is aesthetically inspired by architectural plans,
 
 Technically, the style combines a QGIS project (with the layer styling) and an involved data pipeline based on osm2pgsql and SQL post-processing that prepares geometries and attributes for rendering.
 
+A second **vector output channel** lives in [`vector/`](vector/): PostGIS → GeoJSONSeq → tippecanoe → PMTiles, styled in MapLibre (QGIS-faithful core paints) with a raster/vector compare UI. See [`vector/README.md`](vector/README.md).
+
 Note: This repository is a new, modernised version based on an osm2pgsql / SQL / QGIS workflow; the original version (Overpass / Python / QGIS) lives at [osmberlin/strassenraumkarte-neukoelln](https://github.com/osmberlin/strassenraumkarte-neukoelln).
 
 ![Example of the Straßenraumkarte](./docs/example.png)
@@ -71,6 +73,22 @@ Tile rendering uses a custom **PyQGIS metatile loop** ([`render/xyz_tiles.py`](r
 
 `run.sh` also runs these checks before a full pipeline and can create the DB with `--setup-db` in the same invocation.
 
+## Docker (Berlin test)
+
+For a contained PostGIS + data-prep environment (Berlin PBF via configurable symlink, host QGIS for rendering), see [`docker/README.md`](docker/README.md).
+
+## Vector output (prep)
+
+Experimental MapLibre / tippecanoe channel lives in [`vector/`](vector/README.md): export PostGIS → GeoJSONSeq → `.pmtiles`, then `bun run dev` for a basic blue/purple/red geometry preview.
+
+## Performance audits
+
+To time every pipeline step (ingest / import / SQL / render), write gitignored raw data under `audit/runs/`, and generate a findings report (safe to run beside agent work), see [`audit/README.md`](audit/README.md).
+
+```bash
+PERF_AUDIT_LABEL=berlin-starter ./audit/run-with-audit.sh ./docker/run-berlin.sh
+```
+
 ## Usage
 
 ### Full pipeline (process + render)
@@ -124,6 +142,10 @@ Serve the tile directory with a small local server that also lists PBFs under `d
 ```
 
 The preview page can optionally show classic OSM tiles underneath the Straßenraumkarte and includes a metatile/gutter debug overlay. For tiles-only viewing without the run API, `cd render/tiles && python3 -m http.server 8000` still works.
+
+### Viewers and scene comparison
+
+There are four viewers (the QGIS preview above, the design-research viewer, the MapLibre vector app with its QGIS · Rust · Vector compare, and the static galleries). [docs/VIEWERS.md](docs/VIEWERS.md) says which one to use. To compare scenes between styles, see [Szenen vergleichen / Comparing scenes](docs/design-research/README.md#szenen-vergleichen--comparing-scenes).
 
 ### Data preparation only
 

@@ -13,6 +13,7 @@ Background colour defaults to #ededed (opaque); override with --background.
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import os
 import re
@@ -20,7 +21,8 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass
-from typing import List, Optional, Sequence, Tuple
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Sequence, Tuple, TextIO
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -35,11 +37,53 @@ from qgis.core import (  # noqa: E402
     QgsRectangle,
 )
 from qgis.PyQt.QtCore import QSize, qInstallMessageHandler  # noqa: E402
-from qgis.PyQt.QtGui import QColor, QImage, QPainter  # noqa: E402
+from qgis.PyQt.QtGui import QColor, QFontDatabase, QImage, QPainter  # noqa: E402
 
 ORIGIN_SHIFT = 20037508.342789244
 TILE_SIZE_PX = 256
 DEFAULT_BACKGROUND = "#ededed"
+DEFAULT_FONTS_DIR = Path(__file__).resolve().parent / "fonts"
+
+
+def _qimage_format(name: str):
+    """Qt5: QImage.Format_*; Qt6/PyQGIS 4: QImage.Format.Format_*."""
+    fmt_ns = getattr(QImage, "Format", None)
+    if fmt_ns is not None and hasattr(fmt_ns, name):
+        return getattr(fmt_ns, name)
+    return getattr(QImage, name)
+
+
+def _qpainter_hint(name: str):
+    """Qt5: QPainter.Antialiasing; Qt6: QPainter.RenderHint.Antialiasing."""
+    hint_ns = getattr(QPainter, "RenderHint", None)
+    if hint_ns is not None and hasattr(hint_ns, name):
+        return getattr(hint_ns, name)
+    return getattr(QPainter, name)
+
+
+def _map_settings_flag(name: str):
+    """Qt5: QgsMapSettings.Antialiasing; Qt6: QgsMapSettings.Flag.Antialiasing."""
+    flag_ns = getattr(QgsMapSettings, "Flag", None)
+    if flag_ns is not None and hasattr(flag_ns, name):
+        return getattr(flag_ns, name)
+    return getattr(QgsMapSettings, name)
+
+
+def register_application_fonts(fonts_dir: Optional[str | Path]) -> int:
+    """Register TTF/OTF files so project fonts (e.g. Open Sans) resolve without aliasing."""
+    if not fonts_dir:
+        return 0
+    path = Path(fonts_dir)
+    if not path.is_dir():
+        return 0
+    n = 0
+    for font_path in sorted(path.glob("*")):
+        if font_path.suffix.lower() not in {".ttf", ".otf", ".ttc"}:
+            continue
+        fid = QFontDatabase.addApplicationFont(str(font_path))
+        if fid != -1:
+            n += 1
+    return n
 
 # Qt stderr spam when painting onto a null QImage (engine == 0, type 3 = Image).
 # Empty map data does *not* cause this; QGIS may still emit it for failed internal
@@ -163,6 +207,114 @@ def parse_extent(extent: str) -> Tuple[float, float, float, float]:
     if ymin > ymax:
         ymin, ymax = ymax, ymin
     return xmin, ymin, xmax, ymax
+
+
+def parse_tile_spec(spec: str) -> Tuple[int, int, int]:
+    """Parse 'z/x/y' → (z, x, y)."""
+    parts = spec.strip().split("/")
+    if len(parts) != 3:
+        raise ValueError(f"Invalid tile spec (expected z/x/y): {spec}")
+    try:
+        z, x, y = (int(parts[0]), int(parts[1]), int(parts[2]))
+    except ValueError as exc:
+        raise ValueError(f"Invalid tile spec (expected integers z/x/y): {spec}") from exc
+    if z < 0 or x < 0 or y < 0:
+        raise ValueError(f"Invalid tile indices (must be ≥ 0): {spec}")
+    n = 2**z
+    if x >= n or y >= n:
+        raise ValueError(f"Tile out of range for z{z} (0..{n - 1}): {spec}")
+    return z, x, y
+
+
+def parse_tiles_args(tiles_args: Sequence[str]) -> List[Tuple[int, int, int]]:
+    """Parse repeated/comma-separated --tiles values into unique (z, x, y) list."""
+    out: List[Tuple[int, int, int]] = []
+    seen = set()
+    for arg in tiles_args:
+        for part in arg.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            tile = parse_tile_spec(part)
+            if tile in seen:
+                continue
+            seen.add(tile)
+            out.append(tile)
+    if not out:
+        raise ValueError("No tiles parsed from --tiles")
+    return out
+
+
+def tile_bounds_wgs84(x: int, y: int, z: int) -> Tuple[float, float, float, float]:
+    """Return (west, south, east, north) in WGS84 for XYZ tile z/x/y."""
+    n = 2**z
+    west = x / n * 360.0 - 180.0
+    east = (x + 1) / n * 360.0 - 180.0
+
+    def tile_y_to_lat(ty: int) -> float:
+        merc_n = math.pi - (2.0 * math.pi * ty) / n
+        return math.degrees(math.atan(math.sinh(merc_n)))
+
+    north = tile_y_to_lat(y)
+    south = tile_y_to_lat(y + 1)
+    return west, south, east, north
+
+
+def wgs84_extent_for_tiles(
+    tiles: Sequence[Tuple[int, int, int]],
+) -> Tuple[float, float, float, float]:
+    """Union WGS84 bbox covering the listed tiles (xmin, ymin, xmax, ymax)."""
+    xmin = ymin = float("inf")
+    xmax = ymax = float("-inf")
+    for z, x, y in tiles:
+        west, south, east, north = tile_bounds_wgs84(x, y, z)
+        xmin = min(xmin, west)
+        ymin = min(ymin, south)
+        xmax = max(xmax, east)
+        ymax = max(ymax, north)
+    return xmin, ymin, xmax, ymax
+
+
+def metatile_for_single_tile(z: int, x: int, y: int, gutter: int) -> MetaTile:
+    """One core tile with optional gutter for labels/symbols (discarded after render)."""
+    n = 2**z
+    max_xy = n - 1
+    return MetaTile(
+        z=z,
+        x0=x,
+        x1=x,
+        y0=y,
+        y1=y,
+        rx0=max(0, x - gutter),
+        rx1=min(max_xy, x + gutter),
+        ry0=max(0, y - gutter),
+        ry1=min(max_xy, y + gutter),
+    )
+
+
+def parse_layer_names(layers_arg: Optional[str]) -> Optional[List[str]]:
+    """Parse comma-separated layer names; None means all visible layers."""
+    if layers_arg is None:
+        return None
+    names = [n.strip() for n in layers_arg.split(",") if n.strip()]
+    if not names:
+        raise ValueError("--layers was empty (expected comma-separated layer names)")
+    return names
+
+
+def filter_layers_by_name(layers: Sequence, names: Sequence[str]) -> List:
+    """Keep layers whose name() is in names; preserve paint order."""
+    wanted = set(names)
+    filtered = [layer for layer in layers if layer.name() in wanted]
+    found = {layer.name() for layer in filtered}
+    missing = [n for n in names if n not in found]
+    if missing:
+        available = sorted({layer.name() for layer in layers})
+        raise RuntimeError(
+            f"Layer name(s) not found among visible layers: {', '.join(missing)}. "
+            f"Available: {', '.join(available)}"
+        )
+    return filtered
 
 
 def clamp_lat(lat: float) -> float:
@@ -390,7 +542,7 @@ def save_tile_image(
     drops alpha incorrectly and can yield flat gray tiles.
     """
     if fmt == "jpg":
-        opaque = QImage(tile.size(), QImage.Format_RGB888)
+        opaque = QImage(tile.size(), _qimage_format("Format_RGB888"))
         opaque.fill(background.rgb())
         painter = QPainter(opaque)
         painter.drawImage(0, 0, tile)
@@ -427,7 +579,7 @@ def render_metatile(
     context.appendScope(QgsExpressionContextUtils.mapSettingsScope(settings))
     settings.setExpressionContext(context)
 
-    image = QImage(QSize(width_px, height_px), QImage.Format_ARGB32_Premultiplied)
+    image = QImage(QSize(width_px, height_px), _qimage_format("Format_ARGB32_Premultiplied"))
     if image.isNull():
         raise RuntimeError(
             f"Failed to allocate render buffer {width_px}×{height_px} px for "
@@ -441,7 +593,7 @@ def render_metatile(
             f"QPainter.begin failed for {width_px}×{height_px} px "
             f"(z{mt.z} x{mt.rx0}-{mt.rx1} y{mt.ry0}-{mt.ry1})."
         )
-    painter.setRenderHint(QPainter.Antialiasing, True)
+    painter.setRenderHint(_qpainter_hint("Antialiasing"), True)
     job = QgsMapRendererCustomPainterJob(settings, painter)
     job.start()
     job.waitForFinished()
@@ -462,36 +614,52 @@ def render_metatile(
     return written
 
 
-def run(args: argparse.Namespace) -> int:
-    xmin, ymin, xmax, ymax = parse_extent(args.extent)
-    fmt = "jpg" if args.format.lower() in ("jpg", "jpeg") else "png"
-    try:
-        bg_hex, background = parse_background_color(args.background)
-    except ValueError as exc:
-        log("ERROR", str(exc))
-        return 1
-
-    QgsApplication.setPrefixPath("/usr", True)
+def _init_qgis_app(fonts_dir: Optional[str]) -> QgsApplication:
+    prefix = os.environ.get("QGIS_PREFIX_PATH", "/usr")
+    QgsApplication.setPrefixPath(prefix, True)
+    plugin_path = os.environ.get("QGIS_PLUGIN_PATH")
+    if plugin_path:
+        QgsApplication.setPluginPath(plugin_path)
+    pkg_data = os.environ.get("QGIS_PKG_DATA_PATH")
+    if pkg_data:
+        QgsApplication.setPkgDataPath(pkg_data)
     app = QgsApplication([], False)
     app.initQgis()
     install_qt_message_filter()
+    n_fonts = register_application_fonts(fonts_dir)
+    if n_fonts:
+        log("INFO", f"Registered {n_fonts} application font file(s) from {fonts_dir}")
+    return app
 
+
+def _prepare_project_and_settings(
+    args: argparse.Namespace,
+    xmin: float,
+    ymin: float,
+    xmax: float,
+    ymax: float,
+    background: QColor,
+) -> Tuple[QgsProject, list, QgsMapSettings, QgsCoordinateReferenceSystem]:
     project = QgsProject.instance()
     if not project.read(args.project):
-        log("ERROR", f"Failed to read project: {args.project}")
-        app.exitQgis()
-        return 1
+        raise RuntimeError(f"Failed to read project: {args.project}")
 
     layers = collect_visible_layers(project)
+    layer_names = getattr(args, "layer_names", None)
+    if layer_names:
+        layers = filter_layers_by_name(layers, layer_names)
+        log(
+            "INFO",
+            f"Layer filter (--layers): {len(layers)} layer(s) — "
+            + ", ".join(layer.name() for layer in layers),
+        )
     valid = sum(1 for layer in layers if layer.isValid())
     log("INFO", f"Loaded project with {valid} visible layer(s).")
     if valid == 0:
-        log("ERROR", "No valid visible layers — check PGUSER/PGPASSFILE and DB connectivity.")
-        app.exitQgis()
-        return 1
+        raise RuntimeError(
+            "No valid visible layers — check PGUSER/PGPASSFILE and DB connectivity."
+        )
 
-    # Symbols/textures use @project_folder + '/symbols/...' — MapSettings needs the
-    # project expression context or data-defined SVG/raster paths stay empty (QGIS "?").
     project_dir = project.absolutePath()
     if project_dir and not project.presetHomePath():
         project.setPresetHomePath(project_dir)
@@ -499,17 +667,12 @@ def run(args: argparse.Namespace) -> int:
     project_crs = project.crs()
     crs_3857 = QgsCoordinateReferenceSystem("EPSG:3857")
     if not project_crs.isValid():
-        log("ERROR", "Project CRS is invalid.")
-        app.exitQgis()
-        return 1
+        raise RuntimeError("Project CRS is invalid.")
     if project_crs.authid() != "EPSG:3857":
-        log(
-            "ERROR",
+        raise RuntimeError(
             f"Project CRS is {project_crs.authid()}; expected EPSG:3857 "
-            "(direct Web Mercator tile rendering + @mercator_scale).",
+            "(direct Web Mercator tile rendering + @mercator_scale)."
         )
-        app.exitQgis()
-        return 1
 
     scale, scale_desc = resolve_mercator_scale(project, xmin, ymin, xmax, ymax)
     QgsExpressionContextUtils.setProjectVariable(project, "mercator_scale", scale)
@@ -520,76 +683,331 @@ def run(args: argparse.Namespace) -> int:
     base_settings.setOutputDpi(args.dpi)
     base_settings.setEllipsoid(project.ellipsoid())
     base_settings.setBackgroundColor(background)
-    base_settings.setFlag(QgsMapSettings.Antialiasing, True)
-    base_settings.setFlag(QgsMapSettings.DrawLabeling, True)
-    # Avoid QGraphicsEffect buffers (often fail headless → QPainter engine==0 warnings)
-    # and keep alpha compositing predictable before JPEG export.
-    base_settings.setFlag(QgsMapSettings.UseAdvancedEffects, False)
-    base_settings.setFlag(QgsMapSettings.LosslessImageRendering, True)
-    base_settings.setFlag(QgsMapSettings.RenderMapTile, True)
-    # Synchronous SVG/raster load — required for one-shot metatile jobs (no canvas refresh).
-    base_settings.setFlag(QgsMapSettings.RenderBlocking, True)
+    base_settings.setFlag(_map_settings_flag("Antialiasing"), True)
+    base_settings.setFlag(_map_settings_flag("DrawLabeling"), True)
+    base_settings.setFlag(_map_settings_flag("UseAdvancedEffects"), False)
+    base_settings.setFlag(_map_settings_flag("LosslessImageRendering"), True)
+    base_settings.setFlag(_map_settings_flag("RenderMapTile"), True)
+    base_settings.setFlag(_map_settings_flag("RenderBlocking"), True)
     base_settings.setTransformContext(project.transformContext())
     base_settings.setPathResolver(project.pathResolver())
     base_settings.setExpressionContext(project.createExpressionContext())
     log("INFO", f"Project folder for symbols: {project_dir}")
     log("INFO", "Render CRS EPSG:3857 (direct, no warp); ground metres via @mercator_scale")
+    return project, layers, base_settings, crs_3857
 
-    # Precompute metatiles / totals
+
+def _metatile_from_dict(d: Dict[str, Any]) -> MetaTile:
+    return MetaTile(
+        z=int(d["z"]),
+        x0=int(d["x0"]),
+        x1=int(d["x1"]),
+        y0=int(d["y0"]),
+        y1=int(d["y1"]),
+        rx0=int(d["rx0"]),
+        rx1=int(d["rx1"]),
+        ry0=int(d["ry0"]),
+        ry1=int(d["ry1"]),
+    )
+
+
+def _worker_render_chunk(job: Dict[str, Any]) -> Dict[str, Any]:
+    """Process entrypoint: one QGIS app, render assigned metatiles, write tiles to disk."""
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    # Reconstruct a minimal args namespace for project load helpers.
+    args = argparse.Namespace(
+        project=job["project"],
+        dpi=job["dpi"],
+        layer_names=job.get("layer_names"),
+    )
+    xmin, ymin, xmax, ymax = job["bbox"]
+    background = QColor(job["background_hex"])
+    fmt = job["fmt"]
+    quality = job["quality"]
+
+    app = _init_qgis_app(job.get("fonts_dir"))
+    try:
+        _project, layers, base_settings, crs_3857 = _prepare_project_and_settings(
+            args, xmin, ymin, xmax, ymax, background
+        )
+        timings: List[dict] = []
+        written_total = 0
+        for item in job["metatiles"]:
+            mt = _metatile_from_dict(item)
+            t0 = time.time()
+            written = render_metatile(
+                base_settings,
+                layers,
+                mt,
+                job["out"],
+                fmt,
+                quality,
+                crs_3857,
+                background,
+            )
+            dt_ms = int((time.time() - t0) * 1000)
+            written_total += written
+            timings.append(
+                {
+                    "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                    "z": mt.z,
+                    "x0": mt.x0,
+                    "y0": mt.y0,
+                    "x1": mt.x1,
+                    "y1": mt.y1,
+                    "tiles": mt.tile_count,
+                    "written": written,
+                    "duration_ms": dt_ms,
+                    "worker": job["worker_id"],
+                }
+            )
+        return {
+            "worker_id": job["worker_id"],
+            "written": written_total,
+            "timings": timings,
+            "ok": True,
+        }
+    except Exception as exc:  # noqa: BLE001 — surface to parent process
+        return {
+            "worker_id": job["worker_id"],
+            "written": 0,
+            "timings": [],
+            "ok": False,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+    finally:
+        app.exitQgis()
+
+
+def run(args: argparse.Namespace) -> int:
+    tile_list: Optional[List[Tuple[int, int, int]]] = None
+    if args.tiles:
+        try:
+            tile_list = parse_tiles_args(args.tiles)
+            xmin, ymin, xmax, ymax = wgs84_extent_for_tiles(tile_list)
+        except ValueError as exc:
+            log("ERROR", str(exc))
+            return 1
+    else:
+        xmin, ymin, xmax, ymax = parse_extent(args.extent)
+
+    try:
+        args.layer_names = parse_layer_names(args.layers)
+    except ValueError as exc:
+        log("ERROR", str(exc))
+        return 1
+
+    fmt = "jpg" if args.format.lower() in ("jpg", "jpeg") else "png"
+    try:
+        bg_hex, background = parse_background_color(args.background)
+    except ValueError as exc:
+        log("ERROR", str(exc))
+        return 1
+
+    fonts_dir = args.fonts_dir
+    if fonts_dir is None and DEFAULT_FONTS_DIR.is_dir():
+        fonts_dir = str(DEFAULT_FONTS_DIR)
+    if fonts_dir == "":
+        fonts_dir = None
+
+    workers = max(1, int(args.workers))
+    if tile_list is not None and workers > 1:
+        log("INFO", f"--tiles forces workers=1 (ignoring --workers {workers})")
+        workers = 1
+
+    # Precompute metatiles / totals (no QGIS needed)
     zoom_meta: List[Tuple[int, List[MetaTile]]] = []
     total_tiles = 0
     total_metas = 0
-    for z in range(args.zmin, args.zmax + 1):
-        tr = tile_range_for_bbox(xmin, ymin, xmax, ymax, z)
-        metas = iter_metatiles(tr, z, args.metatile, args.gutter)
-        zoom_meta.append((z, metas))
-        total_tiles += sum(m.tile_count for m in metas)
-        total_metas += len(metas)
-
-    log(
-        "INFO",
-        f"Rendering XYZ tiles z{args.zmin}-{args.zmax} "
-        f"(~{total_tiles} tiles, {total_metas} metatiles, "
-        f"metatile={args.metatile}, gutter={args.gutter}, bg={bg_hex}) → {args.out}",
+    flat: List[MetaTile] = []
+    if tile_list is not None:
+        # One MetaTile per listed tile (core 1×1); metatile size is ignored.
+        by_z: Dict[int, List[MetaTile]] = {}
+        for z, x, y in tile_list:
+            mt = metatile_for_single_tile(z, x, y, args.gutter)
+            by_z.setdefault(z, []).append(mt)
+            flat.append(mt)
+        for z in sorted(by_z):
+            metas = by_z[z]
+            zoom_meta.append((z, metas))
+            total_tiles += sum(m.tile_count for m in metas)
+            total_metas += len(metas)
+        z_label = ",".join(f"{z}/{x}/{y}" for z, x, y in tile_list)
+        log(
+            "INFO",
+            f"Rendering listed tiles ({z_label}) "
+            f"({total_tiles} tiles, {total_metas} metatiles, "
+            f"gutter={args.gutter}, workers={workers}, bg={bg_hex}) → {args.out}",
+        )
+        if args.metatile != 1:
+            log(
+                "INFO",
+                f"--tiles uses one metatile per tile; --metatile {args.metatile} is ignored "
+                "(for single-tile compare prefer --metatile 1 --gutter 1).",
+            )
+    else:
+        for z in range(args.zmin, args.zmax + 1):
+            tr = tile_range_for_bbox(xmin, ymin, xmax, ymax, z)
+            metas = iter_metatiles(tr, z, args.metatile, args.gutter)
+            zoom_meta.append((z, metas))
+            total_tiles += sum(m.tile_count for m in metas)
+            total_metas += len(metas)
+            flat.extend(metas)
+        log(
+            "INFO",
+            f"Rendering XYZ tiles z{args.zmin}-{args.zmax} "
+            f"(~{total_tiles} tiles, {total_metas} metatiles, "
+            f"metatile={args.metatile}, gutter={args.gutter}, workers={workers}, "
+            f"bg={bg_hex}) → {args.out}",
+        )
+    # For progress display when --tiles lists mixed zooms.
+    progress_zmax = (
+        max(z for z, _x, _y in tile_list) if tile_list is not None else args.zmax
     )
     os.makedirs(args.out, exist_ok=True)
 
     start = time.time()
-    done_tiles = 0
-    done_metas = 0
+    meta_timings: List[dict] = []
     written_total = 0
-
     render_error: Optional[str] = None
+
+    audit_dir = os.environ.get("PERF_AUDIT_DIR", "").strip()
+    metatile_log: Optional[TextIO] = None
+    if audit_dir:
+        Path(audit_dir).mkdir(parents=True, exist_ok=True)
+        metatile_log = open(  # noqa: SIM115
+            Path(audit_dir) / "render_metatiles.jsonl",
+            "a",
+            encoding="utf-8",
+        )
+
     try:
-        for z, metas in zoom_meta:
-            for mt in metas:
-                written = render_metatile(
-                    base_settings,
-                    layers,
-                    mt,
-                    args.out,
-                    fmt,
-                    args.quality,
-                    crs_3857,
-                    background,
+        if workers == 1:
+            app = _init_qgis_app(fonts_dir)
+            try:
+                _project, layers, base_settings, crs_3857 = _prepare_project_and_settings(
+                    args, xmin, ymin, xmax, ymax, background
                 )
-                written_total += written
-                done_tiles += mt.tile_count
-                done_metas += 1
-                print_progress(
-                    zoom=z,
-                    zmax=args.zmax,
-                    meta_done=done_metas,
-                    meta_total=total_metas,
-                    done_tiles=done_tiles,
-                    total_tiles=total_tiles,
-                    elapsed=time.time() - start,
+                done_tiles = 0
+                done_metas = 0
+                for z, metas in zoom_meta:
+                    for mt in metas:
+                        t0 = time.time()
+                        written = render_metatile(
+                            base_settings,
+                            layers,
+                            mt,
+                            args.out,
+                            fmt,
+                            args.quality,
+                            crs_3857,
+                            background,
+                        )
+                        dt_ms = int((time.time() - t0) * 1000)
+                        written_total += written
+                        done_tiles += mt.tile_count
+                        done_metas += 1
+                        row = {
+                            "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                            "z": z,
+                            "x0": mt.x0,
+                            "y0": mt.y0,
+                            "x1": mt.x1,
+                            "y1": mt.y1,
+                            "tiles": mt.tile_count,
+                            "written": written,
+                            "duration_ms": dt_ms,
+                            "worker": 0,
+                        }
+                        meta_timings.append(row)
+                        if metatile_log is not None:
+                            metatile_log.write(json.dumps(row, ensure_ascii=False) + "\n")
+                            metatile_log.flush()
+                        print_progress(
+                            zoom=z,
+                            zmax=progress_zmax,
+                            meta_done=done_metas,
+                            meta_total=total_metas,
+                            done_tiles=done_tiles,
+                            total_tiles=total_tiles,
+                            elapsed=time.time() - start,
+                        )
+            finally:
+                app.exitQgis()
+        else:
+            # Multiprocess: each worker loads QGIS once (PyQGIS is not thread-safe).
+            from concurrent.futures import ProcessPoolExecutor, as_completed
+
+            chunks: List[List[MetaTile]] = [[] for _ in range(workers)]
+            for i, mt in enumerate(flat):
+                chunks[i % workers].append(mt)
+
+            jobs = []
+            for wid, chunk in enumerate(chunks):
+                if not chunk:
+                    continue
+                jobs.append(
+                    {
+                        "worker_id": wid,
+                        "project": args.project,
+                        "out": args.out,
+                        "bbox": [xmin, ymin, xmax, ymax],
+                        "dpi": args.dpi,
+                        "fmt": fmt,
+                        "quality": args.quality,
+                        "background_hex": background.name(),
+                        "fonts_dir": fonts_dir,
+                        "layer_names": args.layer_names,
+                        "metatiles": [
+                            {
+                                "z": m.z,
+                                "x0": m.x0,
+                                "x1": m.x1,
+                                "y0": m.y0,
+                                "y1": m.y1,
+                                "rx0": m.rx0,
+                                "rx1": m.rx1,
+                                "ry0": m.ry0,
+                                "ry1": m.ry1,
+                            }
+                            for m in chunk
+                        ],
+                    }
                 )
+
+            log("INFO", f"Starting {len(jobs)} parallel render worker(s)…")
+            done_metas = 0
+            done_tiles = 0
+            with ProcessPoolExecutor(max_workers=len(jobs)) as pool:
+                futures = [pool.submit(_worker_render_chunk, job) for job in jobs]
+                for fut in as_completed(futures):
+                    result = fut.result()
+                    if not result.get("ok"):
+                        render_error = result.get("error") or "worker failed"
+                        break
+                    written_total += int(result["written"])
+                    for row in result["timings"]:
+                        meta_timings.append(row)
+                        if metatile_log is not None:
+                            metatile_log.write(json.dumps(row, ensure_ascii=False) + "\n")
+                            metatile_log.flush()
+                        done_metas += 1
+                        done_tiles += int(row["tiles"])
+                        print_progress(
+                            zoom=int(row["z"]),
+                            zmax=progress_zmax,
+                            meta_done=done_metas,
+                            meta_total=total_metas,
+                            done_tiles=done_tiles,
+                            total_tiles=total_tiles,
+                            elapsed=time.time() - start,
+                        )
     except RuntimeError as exc:
         render_error = str(exc)
     finally:
         finish_progress_line()
-        app.exitQgis()
+        if metatile_log is not None:
+            metatile_log.close()
 
     if render_error:
         log("ERROR", render_error)
@@ -599,8 +1017,31 @@ def run(args: argparse.Namespace) -> int:
     log(
         "INFO",
         f"Rendering completed in {format_duration(elapsed)} "
-        f"({written_total} tiles written).",
+        f"({written_total} tiles written, workers={workers}).",
     )
+
+    if audit_dir and meta_timings:
+        durations = [r["duration_ms"] for r in meta_timings]
+        summary = {
+            "metatile_count": len(durations),
+            "duration_ms_sum": sum(durations),
+            "duration_ms_min": min(durations),
+            "duration_ms_max": max(durations),
+            "duration_ms_avg": int(sum(durations) / len(durations)),
+            "tiles_written": written_total,
+            "wall_ms": int(elapsed * 1000),
+            "workers": workers,
+            "fonts_dir": fonts_dir,
+        }
+        summary_path = Path(audit_dir) / "render_summary.json"
+        summary_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+        log(
+            "INFO",
+            f"Audit render summary: {summary['metatile_count']} metatiles, "
+            f"avg {summary['duration_ms_avg']} ms, max {summary['duration_ms_max']} ms "
+            f"→ {summary_path}",
+        )
+
     return 0
 
 
@@ -609,8 +1050,24 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--project", required=True, help="Path to .qgz / .qgs")
     p.add_argument(
         "--extent",
-        required=True,
-        help='Extent as "xmin,xmax,ymin,ymax [EPSG:4326]"',
+        default=None,
+        help='Extent as "xmin,xmax,ymin,ymax [EPSG:4326]" '
+        "(required unless --tiles is set; mutually exclusive with --tiles)",
+    )
+    p.add_argument(
+        "--tiles",
+        action="append",
+        default=None,
+        metavar="Z/X/Y",
+        help="Render exact XYZ tile(s) as out/{z}/{x}/{y}.{fmt}. "
+        "Repeatable or comma-separated. Forces --workers 1. "
+        "Mutually exclusive with --extent. For compare runs use --metatile 1 --gutter 1.",
+    )
+    p.add_argument(
+        "--layers",
+        default=None,
+        help="Comma-separated QGIS layer names to paint (default: all visible). "
+        "Useful for layer isolates (e.g. highway_area).",
     )
     p.add_argument("--out", required=True, help="Output tile directory")
     p.add_argument("--zmin", type=int, default=15)
@@ -630,11 +1087,30 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--format", default="jpg", choices=["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"])
     p.add_argument("--quality", type=int, default=90, help="JPEG quality")
+    p.add_argument(
+        "--workers",
+        type=int,
+        default=2,
+        help="Parallel metatile worker processes (default: 2). Each loads QGIS once.",
+    )
+    p.add_argument(
+        "--fonts-dir",
+        default=None,
+        help="Directory of TTF/OTF fonts to register (default: render/fonts if present)",
+    )
+    p.add_argument(
+        "--no-fonts",
+        action="store_true",
+        help="Do not auto-register render/fonts (for A/B font experiments)",
+    )
     return p
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
+    if bool(args.extent) == bool(args.tiles):
+        log("ERROR", "Provide exactly one of --extent or --tiles")
+        return 1
     if args.zmin > args.zmax:
         log("ERROR", f"Invalid zoom range: {args.zmin}-{args.zmax}")
         return 1
@@ -644,9 +1120,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.gutter < 0:
         log("ERROR", f"Invalid gutter: {args.gutter}")
         return 1
+    if args.workers < 1:
+        log("ERROR", f"Invalid workers: {args.workers}")
+        return 1
     if not os.path.isfile(args.project):
         log("ERROR", f"Project not found: {args.project}")
         return 1
+    if args.no_fonts:
+        args.fonts_dir = ""
     return run(args)
 
 

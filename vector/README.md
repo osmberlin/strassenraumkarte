@@ -1,0 +1,104 @@
+# Straßenraumkarte · vector output
+
+PostGIS → GeoJSONSeq → tippecanoe → `.pmtiles`, styled with a MapLibre port of the QGIS cartography, plus a raster/vector compare harness.
+
+## Prerequisites
+
+- Running PostGIS with processed Straßenraumkarte tables (defaults: `localhost:5433` / `strassenraumkarte` / `postgres` — same as `data/db_config.sh`)
+- `ogr2ogr` (GDAL), `tippecanoe`, `tile-join`, `bun`
+- `PGPASSWORD` (or `~/.pgpass`) for the DB user
+- Optional for compare: QGIS tiles under `render/tiles/` (Vite serves them at `/raster/…`; `./render/preview_server.py` on `:8000` is only needed for the standalone QGIS preview UI)
+- Optional for 3-pane compare: Rust **full-approx** tiles from `./audit/tile-regression/scripts/render-suite-full.sh` (Vite serves newest `runs/full-approx-*/rust` or `runs/latest-rust` at `/raster-rust/…`, or set `RUST_TILES_ROOT=… bun run dev`)
+
+## Workflow
+
+```bash
+cd vector
+bun install
+PGPASSWORD=… bun run pipeline   # export + tiles + report
+bun run sprite                  # pack style/textures + style/symbols → public/sprites/
+bun run validate-style          # validateStyleMin
+bun run dev                     # http://127.0.0.1:5177
+```
+
+Preview: http://127.0.0.1:5177/#16/52.4768/13.4222  
+Debug tile contents (blue fills / purple lines / red points): http://127.0.0.1:5177/?style=debug — or tick **Debug tile style** in the header.  
+Compare (QGIS · Rust · Vector): http://127.0.0.1:5177/?compare=1&location=intersection&mode=side-by-side&panes=qgis,rust,vector  
+
+Side-by-side lays panes in one horizontal row. Toggle QGIS / Rust / Vector in the header (synced to `?panes=`). Swipe/blend overlay one raster vs vector.
+
+```bash
+bun run screenshots   # needs dev → compare-output/index.html (QGIS vs vector; SHOT_OUT=… for a named run)
+bun run scripts/montage.ts <out-dir> qgis=<run>/raster before=<run>/vector after=<run>/vector
+bun run e2e           # console-clean Playwright across compare locations
+bun run check         # type-check + validate-style + unit tests
+```
+
+## Tippecanoe flags
+
+Groups in `layers.ts` with `-r1 --no-tiny-polygon-reduction --simplification=2 --preserve-input-order` (prep also used `--no-tile-compression` for easier debugging). Deliberately **not** `--drop-densest-as-needed`. Empty exports get a ~10 m stub feature so tippecanoe still registers the source-layer (MapLibre errors on missing layers).
+
+Measured Berlin extract (joined archive ~16 MiB with styled columns): ground ~0.9 MiB, streets ~2.4 MiB, buildings ~21 MiB, detail ~6.7 MiB, labels ~0.6 MiB.
+
+## Zoom (tippecanoe ↔ MapLibre)
+
+| Level | Value | Why |
+| --- | --- | --- |
+| PMTiles archive / vector `source` | **15–18** | Every source-layer tippecanoe `-z` is 18 so z18 tiles are complete |
+| Map camera | **15–20** | overzoom z19–20 from parent z18 tiles |
+| Style layer `minzoom` | per layer `-Z` | detail/trees often from z17; ground/streets from z15 |
+
+Do **not** set `source.maxzoom` below the tippecanoe high zoom of any layer group — MapLibre
+requests that zoom’s tiles and will show only layers present there (e.g. z18 with only
+`detail` if streets/buildings stop at z17). Do **not** set `source.maxzoom` to 20 — MapLibre
+would request missing archive tiles.
+
+## Metres → pixels
+
+QGIS MapUnit sizes use `@mercator_scale`. MapLibre paints CSS px on 512 tiles:
+
+`px = m * 2^z / (78271.51696 * cos φ)` → `metresToPixels` / `metresToPixelsFromProp` (`src/style/metres.ts`). Paper MM (highway blur stack) use `mmToPixels` (96 DPI). Never nest zoom interpolates — bake scales into stop values.
+
+## Effects vs QGIS
+
+| QGIS | MapLibre approximation | Known deviation |
+| --- | --- | --- |
+| dropShadow | buildings: `layerShadow` (blur + multiply patch); elsewhere translated fill + blurred outline | buildings close to QGIS; others softer / weaker |
+| innerShadow | `fill-layer-blur-mode: inner-edge` (patch), multiplied | close to QGIS |
+| outerGlow | two stacked blurred outlines | join artefacts if too wide |
+| Shapeburst / gradients | 2–3 inward blurred `line` bands (`shore_m`) | roof shape skipped (experimental magma/#990003); water depth green ramp omitted; shoreline banded |
+| RasterFill textures (Multiply) | `fill-pattern` from sprite + `fill-layer-blend: multiply` (patch) | rotated textures restart at tile edges |
+| pitch_markings SvgMarker | `symbol` + packed `pitches/*` | uniform `icon-size` from `dist_long`; no independent aspect-fit |
+| SvgMarker / RasterMarker (furniture, arrows, rocks) | `symbol` + packed `symbols:*` sheet (`src/style/sprite-icons.ts`), QGIS `param(fill)` colours baked in | marker offsets dropped; short arrows not widened |
+| RasterMarker tree crowns (layer opacity 0.25) | `symbol` with `symbols:trees/*`, `icon-opacity` 0.25 + soft circle shadow | overlapping crowns accumulate (no symbol layer opacity) |
+| SvgMarker road-marking signs (open set) | `setMissingStyleImageResolver` (`symbols/traffic_signs/…#stretch`) | needs `/symbols/*` served (dev + preview middleware) |
+
+## Renderer patches and gaps
+
+MapLibre is patched locally (`patches/`, applied by `bun install`) — see [docs/maplibre-patches.md](../docs/maplibre-patches.md) for the workflow and pitfalls, [docs/maplibre-style-gaps.md](../docs/maplibre-style-gaps.md) for what is still missing, and [docs/maplibre-progress/](../docs/maplibre-progress/README.md) for before/after screenshots.
+
+| Patch | Style property |
+| --- | --- |
+| layer blend modes | `fill-layer-blend`, `line-layer-blend`: `multiply` / `screen` / `plus` |
+| layer blur | `fill-layer-blur`, `line-layer-blur`: Gaussian blur radius in px (drop shadows via `layerShadow`) |
+| symbol layer opacity | `symbol-layer-opacity`: flatten, then fade (tree crowns) |
+| sub-pixel line ink | none — lines below 1 px get the ink QGIS gives them (`scripts/line-ink.ts` measures it) |
+| layer drop shadow | `fill-shadow-color` / `-opacity` / `-blur` / `-translate` (via `shadowPaint`) |
+| ground-sized, rotated patterns | `fill-pattern-reference-zoom`, `fill-pattern-rotate` (via `surfacePatternLayers`) |
+| layer blur mode | `fill-layer-blur-mode`: `inner-edge` (inner shadow) / `inner-core` |
+
+## Style modules
+
+| Module | Role |
+| --- | --- |
+| `layers.ts` | Export columns, tippecanoe zooms/groups |
+| `metres.ts` / `effects.ts` / `order.ts` | Scale, shadows/glows, OSM `layer` buckets |
+| `colors.ts` + `layers/*` | QGIS-faithful paints (w4c) |
+| `scripts/build-sprite.ts` | Sprites `@1x`/`@2x`: textures (palette PNG) + `-symbols` marker icons (RGBA) |
+| `locations.ts` + `src/compare/` | Compare viewpoints + UI |
+
+## MapLibre 6 + Vite
+
+Worker: `import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'` then `setWorkerUrl(workerUrl)`.  
+PMTiles: `addProtocol('pmtiles', …)`.  
+react-map-gl **≥ 8.1.2** for MapLibre 6 camera API.
