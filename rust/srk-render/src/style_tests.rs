@@ -469,7 +469,7 @@ fn along_spacing_offset_and_direction() {
 }
 
 #[test]
-#[ignore = "known seam bug: along()/hachures() count from the start of the *clipped* line (see TESTING.md)"]
+#[ignore = "along() itself still counts from the start of the clipped line; callers must pass unclipped lines (see TESTING.md)"]
 fn along_on_clipped_lines_is_world_anchored() {
     // The presets feed along() with lines clipped by SQL to extent + margin. A neighbouring
     // metatile clips the same street at a different place, so the first symbol lands at a
