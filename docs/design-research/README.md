@@ -61,6 +61,90 @@ DB_PORT=5433 PGPASSWORD=postgres rust/srk-render/target/release/srk-render \
 
 Code: [`style_la.rs`](../../rust/srk-render/src/style_la.rs), [`style_ink.rs`](../../rust/srk-render/src/style_ink.rs), shared helpers (queries, world noise, masks, hatching, wobble, blur, labels) in [`style_kit.rs`](../../rust/srk-render/src/style_kit.rs).
 
+## Szenen vergleichen / Comparing scenes
+
+Four questions, four tools. Which viewer is for what, and the Catalyst look they share: [docs/VIEWERS.md](../VIEWERS.md).
+
+| Question | Tool |
+| --- | --- |
+| How does one scene look in each variant? | `render_scenes.sh` → one PNG per scene |
+| What changed since the last step? | `save_step.sh … auto` → `before-after.jpg` |
+| Did an unrelated change move pixels? | `regress.sh`, `seam_check.sh` |
+| Compare variants, QGIS and the vector channel interactively | `serve_viewer.sh` → viewer, with a link to the vector compare |
+
+The scenes are `a` Herrfurthplatz, `b` Schillerpromenade, `c` Hasenheide-Rand, `d` Hofblöcke, `e` Richardplatz, `f` Körnerpark (Berlin Neukölln, default bbox).
+
+### 1. Render scenes
+
+Needs PostGIS on `localhost:5433` (see [docker/README.md](../../docker/README.md)) and a release build of `srk-render`. Options go before the layers:
+
+```bash
+docs/design-research/tools/render_scenes.sh la /tmp/la
+docs/design-research/tools/render_scenes.sh --env SRK_LA_PALETTE=vivid la /tmp/la-vivid
+docs/design-research/tools/render_scenes.sh --env SRK_INK_OBLIQUE=freestanding ink /tmp/ink-oblique
+docs/design-research/tools/render_scenes.sh --env SRK_INK_PAPER=white ink /tmp/ink-white 18
+docs/design-research/tools/render_scenes.sh --scenes a,e --png-only ink /tmp/ink-quick 17
+```
+
+- `--env KEY=VALUE` (repeatable) sets a variant switch: `SRK_LA_PALETTE=vivid`, `SRK_INK_OBLIQUE=freestanding`, `SRK_INK_PAPER=white`, `SRK_ACCENT=playground|bench|tree|none`.
+- `--scenes a,e` renders some scenes; `--png-only` deletes the tile folder after stitching. The zoom argument (19 default, 16–18) keeps the same area with fewer tiles.
+- Keep render folders in `/tmp`; they are large.
+
+### 2. Save a step with before and after
+
+```bash
+docs/design-research/tools/save_step.sh docs/design-research/02-fantasy-ink-map NN-slug /tmp/ink-oblique README-step.md auto
+python3 docs/design-research/tools/make_index.py
+```
+
+`save_step.sh` writes `steps/NN-slug/{sheet.jpg, sheet-ef.jpg, detail.jpg, README.md}`. With `auto` it also writes `before-after.jpg` against the latest earlier step that has a `detail.jpg`; pass a step slug or folder instead for another baseline. Then commit code, step folder and `index.html` together.
+
+### 3. Regressions and seams
+
+```bash
+docs/design-research/tools/regress.sh             # golden tiles for la and ink variants, then the seam check
+docs/design-research/tools/regress.sh --only la   # one preset
+docs/design-research/tools/regress.sh --update    # after an intended style change: new baseline
+docs/design-research/tools/seam_check.sh la       # metatile 1 vs 4, healthy is < 0.1 % mean
+```
+
+`regress.sh` compares every tile with `tmp/regress-baseline/<case>/`; exit 0 is ok, 1 is a regression, seam or determinism failure, 2 means no baseline yet (run `--update`). Diff images of failing tiles are in `tmp/regress-diff/`.
+
+### 4. Interactive viewer
+
+```bash
+docs/design-research/tools/serve_viewer.sh                   # render all variants for Berlin Neukölln, serve on :8017
+SKIP_RENDER=1 docs/design-research/tools/serve_viewer.sh     # serve the tiles that already exist in tmp/design-tiles
+VARIANTS="la ink" docs/design-research/tools/serve_viewer.sh "" 8019   # some variants only, another port
+```
+
+Open <http://127.0.0.1:8017/>. Layers: `la`, `la-vivid`, `ink`, `ink-bench`, `ink-tree`, `ink-oblique`, `ink-white`, `full-approx` (Rust baseline) and `qgis` (today's QGIS tiles, the reference).
+
+- **Modes:** *Eine Ebene* (`single`), *Wischen* (`swipe`, draggable divider), *Nebeneinander* (`side`, two synced maps). Keys `1` `2` `3`; `x` swaps A and B; `←` `→` jump through the scenes.
+- **URL state:** `#map=zoom/lat/lng&a=<layer A>&b=<layer B>&mode=single|swipe|side&split=0.5&frames=1`. `split` is the swipe position (swipe only), `frames=1` shows the scene frames. Example: `#map=18/52.4758/13.42985&a=la&b=qgis&mode=swipe&split=0.5`.
+- **QGIS reference:** linked automatically for the Berlin bbox (from `render/tiles` of this checkout or the main checkout). For another area set `QGIS_TILES=<dir>`.
+- **Vector channel:** **Vektor-Vergleich ↗** in the header opens the vector compare on the same view (needs `bun run dev` in `vector/`).
+
+Another area, here Langerwehe (bbox and tiles in [langerwehe/README.md](langerwehe/README.md)). The tile folder needs one link per variant folder; `INDEX_ONLY=1` writes only `index.html`, `layers.json` and `area.json` (no render, no server):
+
+```bash
+mkdir -p tmp/langerwehe/www && ln -sfn ../la tmp/langerwehe/www/la
+OUT=tmp/langerwehe/www AREA_NAME="Langerwehe" VIEW_CENTER=50.8176,6.3581 VIEW_ZOOM=17 \
+  INDEX_ONLY=1 docs/design-research/tools/serve_viewer.sh 6.335,50.805,6.381,50.827
+(cd tmp/langerwehe/www && python3 -m http.server 8018 --bind 127.0.0.1)
+```
+
+The Langerwehe view has no scene list: scenes belong to the Berlin bbox.
+
+### 5. Vector compare (MapLibre)
+
+```bash
+cd vector && bun run dev
+# http://127.0.0.1:5177/?compare=1&location=intersection&mode=side-by-side&panes=qgis,rust,vector
+```
+
+Panes: QGIS (`render/tiles`), Rust (`audit/tile-regression/runs/latest-rust`, or `RUST_TILES_ROOT=<dir>`), vector (PMTiles). Swipe and blend overlay a raster on the vector. Pointing `RUST_TILES_ROOT` at a variant folder such as `tmp/design-tiles/la` should show that variant in the Rust pane; not tried yet. The Rust pane is empty at a preset outside `latest-rust`'s tiles.
+
 ## Tooling
 
 All tools live in `tools/`, run from the repository root, and use `rust/srk-render/target/release/srk-render` — set `SRK_BIN=<path>` to use another build (e.g. one from a sibling worktree). DB defaults: `localhost:5433`, `postgres`/`postgres`.
