@@ -19,6 +19,8 @@ The two guiding questions:
 
 ![Richardplatz and Körnerpark](current-ef.jpg)
 
+Roofs with and without (`SRK_ROOFS=off` left, default right): LA [A Herrfurthplatz](../roof-shapes/compare-la-a-herrfurthplatz.jpg) · [B Schillerpromenade](../roof-shapes/compare-la-b-schillerpromenade.jpg) · [E Richardplatz](../roof-shapes/compare-la-e-richardplatz.jpg) · [F Körnerpark](../roof-shapes/compare-la-f-koernerpark.jpg); ink [A Herrfurthplatz](../roof-shapes/compare-ink-a-herrfurthplatz.jpg) · [B Schillerpromenade](../roof-shapes/compare-ink-b-schillerpromenade.jpg) · [E Richardplatz](../roof-shapes/compare-ink-e-richardplatz.jpg) · [F Körnerpark](../roof-shapes/compare-ink-f-koernerpark.jpg).
+
 More: [`showcase-z17.jpg`](showcase-z17.jpg) / [`showcase-z18.jpg`](showcase-z18.jpg) (whole Schillerkiez), [`map-sheet-schillerkiez.jpg`](map-sheet-schillerkiez.jpg) (as a book-endpaper sheet with cartouche, compass rose and scale bar), iterations in [`steps/`](steps/).
 
 **Decision on houses (2026-10-15):** no oblique view for ordinary buildings — dense rows would collide. Instead each building is a plan footprint with
