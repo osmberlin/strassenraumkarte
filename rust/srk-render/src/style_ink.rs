@@ -756,8 +756,8 @@ fn draw_buildings(ctx: &mut Ctx, pm: &mut Pixmap, lw: f32) -> Result<()> {
             let ext = poly_rings_px(ctx, &f.geom).into_iter().next().unwrap_or_default();
             let Some((x, y)) = ridge_mid.or_else(|| extra::inner_point(&ext, &f.geom, ctx)) else { continue };
             let s = match kind {
-                extra::Landmark::BellTurret => ctx.m(3.4).max(8.0),
-                extra::Landmark::ClockTower => ctx.m(4.0).max(9.0),
+                extra::Landmark::BellTurret => ctx.m(5.2).max(10.0),
+                extra::Landmark::ClockTower => ctx.m(5.6).max(11.0),
             };
             icons.push((x, y - l, Some(kind), s));
         }

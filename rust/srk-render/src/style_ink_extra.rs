@@ -23,6 +23,14 @@ pub fn bridges(ctx: &mut Ctx) -> Result<Vec<Feature<Polygon<f64>>>> {
           WHERE GeometryType(oe) = 'POLYGON'
         ) e
         WHERE b.geom && ST_MakeEnvelope($1::float8, $2::float8, $3::float8, $4::float8, 3857)
+          -- only real crossings: rails, water, or a lower road under a deck of some size
+          -- (tiny courtyard ramps and light-well covers would read as stray heavy lines)
+          AND (EXISTS (SELECT 1 FROM railway_way r WHERE ST_Intersects(r.geom, b.geom))
+               OR EXISTS (SELECT 1 FROM water_body w WHERE ST_Intersects(w.geom, b.geom))
+               OR EXISTS (SELECT 1 FROM waterway w WHERE ST_Intersects(w.geom, b.geom))
+               OR (ST_Area(b.geom) >= 100 AND EXISTS (
+                     SELECT 1 FROM highway h WHERE ST_Crosses(h.geom, b.geom)
+                       AND COALESCE(h.layer, 0) < COALESCE(b.layer, 1) AND (h.bridge IS NULL OR h.bridge = 'no'))))
       ) bb"#;
     ctx.polygons("osm_id AS id, NULL::text AS class, NULL::text AS sub, COALESCE(axis, 0)::float8 AS num", from, "")
 }
