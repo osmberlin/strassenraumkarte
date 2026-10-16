@@ -1,25 +1,44 @@
 #!/usr/bin/env bash
 #
-# Render the four design-research scenes with srk-render and stitch them.
+# Render the six design-research scenes with srk-render and stitch them.
 #
-#   docs/design-research/tools/render_scenes.sh <layers> <out-dir> [zoom]
+#   docs/design-research/tools/render_scenes.sh [options] <layers> <out-dir> [zoom]
 #
 # <layers>: srk-render preset (full-approx | la | ink …)
 # Writes <out-dir>/tiles/{z}/{x}/{y}.png and <out-dir>/<scene>.png
 # zoom: 19 (default, 4×4 tiles per scene) or lower (same area, fewer tiles: 18 → 2×2, 17 → 1×1)
 #
+# Options:
+#   --env KEY=VALUE   pass a variant switch to srk-render (repeatable), e.g.
+#                     --env SRK_LA_PALETTE=vivid  --env SRK_INK_OBLIQUE=freestanding
+#                     --env SRK_INK_PAPER=white   --env SRK_ACCENT=bench
+#                     (plain environment variables work too; --env just keeps them visible)
+#   --scenes a,c      only these scenes (letters a–f); default all
+#   --png-only        delete the tile folder after stitching (keeps only the scene PNGs)
+#
 set -euo pipefail
 
+ENVS=()
+ONLY=""
+PNG_ONLY=""
+while [[ ${1:-} == --* ]]; do
+  case $1 in
+    --env) ENVS+=("${2:?--env KEY=VALUE}"); shift 2 ;;
+    --scenes) ONLY=${2:?--scenes a,b}; shift 2 ;;
+    --png-only) PNG_ONLY=1; shift ;;
+    *) echo "unknown option $1" >&2; exit 2 ;;
+  esac
+done
 LAYERS=${1:?layers}
 OUT=${2:?out dir}
 ZOOM=${3:-19}
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
-BIN="$ROOT/rust/srk-render/target/release/srk-render"
+BIN=${SRK_BIN:-"$ROOT/rust/srk-render/target/release/srk-render"}
 export DB_HOST=${DB_HOST:-localhost} DB_PORT=${DB_PORT:-5433} DB_USER=${DB_USER:-postgres} DB_NAME=${DB_NAME:-strassenraumkarte}
 export PGPASSWORD=${PGPASSWORD:-postgres}
 
-# z19 scene ranges (keep in sync with make_scenes.py)
-SCENES=(
+# z19 scene ranges (keep in sync with make_scenes.py and viewer.html)
+ALL_SCENES=(
   "a-herrfurthplatz 281689 281692 172043 172046"
   "b-schillerpromenade 281691 281694 172049 172052"
   "c-hasenheide-edge 281682 281685 172039 172042"
@@ -27,6 +46,11 @@ SCENES=(
   "e-richardplatz 281722 281725 172051 172054"
   "f-koernerpark 281712 281715 172058 172061"
 )
+SCENES=()
+for s in "${ALL_SCENES[@]}"; do
+  [[ -z $ONLY || ",$ONLY," == *",${s:0:1},"* ]] && SCENES+=("$s")
+done
+((${#SCENES[@]})) || { echo "no scene matches --scenes $ONLY" >&2; exit 2; }
 
 TILES=()
 for s in "${SCENES[@]}"; do
@@ -43,9 +67,8 @@ for s in "${SCENES[@]}"; do
 done
 
 mkdir -p "$OUT/tiles"
-IFS=,
-"$BIN" --tiles "${TILES[*]}" --layers "$LAYERS" --out "$OUT/tiles" --format png --gutter 1 --workers 4 --quiet
-unset IFS
+TILE_LIST=$(IFS=,; echo "${TILES[*]}")
+env ${ENVS[@]+"${ENVS[@]}"} "$BIN" --tiles "$TILE_LIST" --layers "$LAYERS" --out "$OUT/tiles" --format png --gutter 1 --workers 4 --quiet
 
 python3 - "$OUT" "$ZOOM" "${SCENES[@]}" <<'EOF'
 import os, sys
@@ -65,4 +88,5 @@ for s in scenes:
                 im.paste(Image.open(p).convert("RGB"), ((x - x0) * 256, (y - y0) * 256))
     im.save(f"{out}/{name}{'' if zoom == 19 else '-z' + str(zoom)}.png")
 EOF
+[[ -n $PNG_ONLY ]] && rm -rf "${OUT:?}/tiles"
 echo "$OUT"

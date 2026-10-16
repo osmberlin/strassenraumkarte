@@ -18,7 +18,7 @@ set -euo pipefail
 BBOX=${1:-13.4132,52.4695,13.4465,52.4821}
 PORT=${2:-8017}
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
-BIN="$ROOT/rust/srk-render/target/release/srk-render"
+BIN=${SRK_BIN:-"$ROOT/rust/srk-render/target/release/srk-render"}
 OUT="$ROOT/tmp/design-tiles"
 ZMAX=${ZMAX:-19}
 export DB_PORT=${DB_PORT:-5433} PGPASSWORD=${PGPASSWORD:-postgres}

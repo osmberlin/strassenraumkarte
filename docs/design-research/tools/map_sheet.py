@@ -2,6 +2,9 @@
 """Lay out a rendered map image as a printed sheet (frame, title, north arrow/compass, scale bar).
 
     python3 map_sheet.py ink|la <map.png> <out.jpg> --zoom 17 --lat 52.477 --title "Schillerkiez"
+    python3 map_sheet.py ink <map.png> <out.jpg> --legend legend-wide.jpg   # legend band below the map
+
+The legend comes from `legend.py` (`--columns 8` gives a wide strip that fits a band).
 
 Layout only — the map itself comes from `srk-render`. Fonts: macOS system fonts.
 """
@@ -42,6 +45,21 @@ def spaced(draw, xy, text, fnt, fill, spacing, anchor="mm"):
     for c, w in zip(text, widths):
         draw.text((x, xy[1]), c, font=fnt, fill=fill, anchor="lm")
         x += w + spacing
+
+
+def with_legend(m, legend):
+    """Extend the map image by a band with the legend (scaled to at most 72 % of the map width).
+
+    The right part of the band stays free: the ink sheet puts its scale bar there."""
+    pad = 28
+    s = min(1.0, 0.72 * m.width / legend.width)
+    legend = legend.resize((round(legend.width * s), round(legend.height * s)), Image.LANCZOS)
+    band = max(legend.height + 2 * pad, 170)
+    out = Image.new("RGB", (m.width, m.height + band), legend.getpixel((2, 2)))
+    out.paste(m, (0, 0))
+    out.paste(legend, (pad, m.height + pad))
+    ImageDraw.Draw(out).line([0, m.height, m.width, m.height], fill=(120, 116, 106), width=2)
+    return out
 
 
 def ink_sheet(m, args):
@@ -146,8 +164,11 @@ if __name__ == "__main__":
     ap.add_argument("--subtitle", default="Neukölln · aus OpenStreetMap gezeichnet")
     ap.add_argument("--paces", action="store_true", help="label the ink scale bar in paces (fantasy touch)")
     ap.add_argument("--white", action="store_true", help="ink sheet on white paper (for SRK_INK_PAPER=white maps)")
+    ap.add_argument("--legend", help="legend image from legend.py, placed in a band below the map")
     a = ap.parse_args()
     m = Image.open(a.map).convert("RGB")
+    if a.legend:
+        m = with_legend(m, Image.open(a.legend).convert("RGB"))
     out = (ink_sheet if a.style == "ink" else la_sheet)(m, a)
     out.save(a.out, quality=82)
     print(a.out, out.size)

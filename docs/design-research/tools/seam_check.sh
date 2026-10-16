@@ -13,7 +13,7 @@ LAYERS=${1:?layers}
 BBOX=${2:-13.4205,52.4760,13.4240,52.4782}
 Z=${3:-19}
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
-BIN="$ROOT/rust/srk-render/target/release/srk-render"
+BIN=${SRK_BIN:-"$ROOT/rust/srk-render/target/release/srk-render"}
 export DB_PORT=${DB_PORT:-5433} PGPASSWORD=${PGPASSWORD:-postgres}
 OUT=$(mktemp -d)
 for mt in 1 4; do
