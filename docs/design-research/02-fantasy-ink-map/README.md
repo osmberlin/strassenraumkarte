@@ -38,11 +38,11 @@ Only landmarks (`church`, `chapel`, `cathedral`: one spire on their smallest pol
 | Streets | carriageway outline + sparse stipple; park paths as double lines; sidewalks are the paper between kerb and house |
 | Lawn / shrubs / sand | grass tufts / open scribbles / stipple, densities constant across zoom (`zcell`) |
 | Water (incl. pools) | heavy bank line, three shore ripples, short wave strokes |
-| Forest | one cloud silhouette: heavy outline of all crowns, paper fill on top, light inner arcs and shading |
+| Forest | individual crowns, the same symbol as the trees, densely overlapping and painted north → south with a paper fill per crown, sizes varying ±20 % ([step 25](steps/25-mockup-trees/)) |
 | Slopes | hachures on embankments and cliffs (alternating long/short strokes downhill) |
 | Fences / walls / hedges | `+-+-` ticks / heavy line / chain of loops |
 | Cemeteries | scattered small crosses |
-| Trees | upright scalloped / round / tall crowns (by OSM id), trunk, shading strokes, ground tick; conifers as stacked triangles |
+| Trees | bubbly crowns as in the first mockup ([`overview.jpg`](mockups/overview.jpg)): outline of 7–10 lobes, trunk stub, shading strokes and a darker accent arc on the side away from the NW light, ground tick, painted north → south with paper fill; conifers as stacked triangles ([step 25](steps/25-mockup-trees/)) |
 | Pitches | procedural line markings from `pitch_markings` |
 | Railways | double line with cross ties; carriageways are paper-filled so bridges occlude the tracks |
 | Bridges | `bridge` polygons that cross rails, water or a lower road: paper deck over what lies below, heavy parapets along the long sides with flared wing walls, hatched shadow under a south parapet ([step 20](steps/20-bridges-landmarks-furniture/), [21](steps/21-real-bridges-icons-water-accent/)) |

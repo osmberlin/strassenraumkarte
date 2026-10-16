@@ -422,7 +422,7 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
                 extra::draw_furniture(&mut pm, k, x, y, s, lw, if on { accent } else { ink(0.9) }, paper)
             }
             1 => draw_conifer(&ctx, &mut pm, x, y, r, id, lw, paper, if accent_cat == "tree" { accent } else { ink(1.0) }),
-            _ => draw_tree(&ctx, &mut pm, x, y, r, id, lw, paper, if accent_cat == "tree" { accent } else { ink(1.0) }),
+            _ => draw_crown(&ctx, &mut pm, (x, y, r, id), lw, paper, if accent_cat == "tree" { accent } else { ink(1.0) }),
         }
     }
 
@@ -909,52 +909,59 @@ fn draw_spire(pm: &mut Pixmap, cx: f32, base: f32, s: f32, lw: f32, paper: Color
     }
 }
 
-fn draw_tree(ctx: &Ctx, pm: &mut Pixmap, x: f32, y: f32, r: f32, id: i64, lw: f32, paper: Color, pen: Color) {
+/// One upright crown as in the ink mockup (`restyle_mockup.py`, `render_ink`): a bubbly outline
+/// around (x, y − 0.75r), a short trunk, a ground tick, shading strokes on the lower-right half
+/// (away from the NW light) and a darker accent arc inside the lower-right edge. The paper fill
+/// hides whatever lies behind, so crowns painted north → south overlap like a wood.
+fn draw_crown(ctx: &Ctx, pm: &mut Pixmap, at: (f32, f32, f32, i64), lw: f32, paper: Color, pen: Color) {
+    let (x, y, r, id) = at;
     let r = r.max(2.5);
-    let cx = x;
-    let cy = y - r * 0.85;
-    // ground shadow tick
+    let (cx, cy) = (x, y - 0.75 * r);
     let mut g = PathBuilder::new();
-    g.move_to(x - r * 0.45, y + 0.5);
-    g.line_to(x + r * 0.75, y + 0.5);
+    g.move_to(x - r * 0.5, y + 0.5);
+    g.line_to(x + r * 0.7, y + 0.5);
     if let Some(p) = g.finish() {
-        line(pm, &p, &paint(ink(0.55)), &stroke(lw * 0.8), None);
+        line(pm, &p, &paint(ink(0.6)), &stroke(lw * 0.8), None);
     }
-    // trunk
     let mut t = PathBuilder::new();
     t.move_to(x, y);
-    t.line_to(x, cy + r * 0.5);
+    t.line_to(x, cy + r * 0.4);
     if let Some(p) = t.finish() {
         line(pm, &p, &paint(ink(0.95)), &stroke(lw * 1.2), None);
     }
-    let bumps = 7 + (rand01(id, 3) * 5.0) as u32;
-    let shape = (rand01(id, 8) * 10.0) as u32; // 0–5 scalloped, 6–8 round, 9 tall
-    let pts: Vec<(f32, f32)> = match shape {
-        6..=8 => scallop_pts(cx, cy, r, 5, 0.05, rand01(id, 4) * std::f32::consts::TAU),
-        9 => scallop_pts(cx, cy - r * 0.35, r, bumps, 0.12, rand01(id, 4) * std::f32::consts::TAU)
-            .into_iter()
-            .map(|(px, py)| (cx + (px - cx) * 0.7, (cy - r * 0.35) + (py - (cy - r * 0.35)) * 1.35))
-            .collect(),
-        _ => scallop_pts(cx, cy, r, bumps, 0.16, rand01(id, 4) * std::f32::consts::TAU),
-    };
-    let pts = wobble_pts(ctx, &pts, 0.3, 4.0, id as u64);
-    if let Some(p) = pts_path(&pts, true) {
-        fill(pm, &p, &paint(paper), None);
-        // shading strokes lower right, clipped by drawing inside the crown only
-        let mut s = PathBuilder::new();
-        let n = (r * 1.1) as i32 + 3;
-        for i in 0..n {
-            let a = -0.2 + 1.9 * rand01(id, 10 + i as u64);
-            let rr = r * (0.35 + 0.5 * rand01(id, 40 + i as u64));
-            let (px, py) = (cx + rr * a.cos(), cy + rr * a.sin());
-            s.move_to(px, py);
-            s.line_to(px - r * 0.2, py + r * 0.16);
-        }
-        if let Some(sp) = s.finish() {
-            line(pm, &sp, &paint(ink(0.6)), &stroke(lw * 0.6), None);
-        }
-        line(pm, &p, &paint(pen), &stroke(lw * 1.05), None);
+    let bumps = 7 + (rand01(id, 3) * 4.0) as u32; // 7–10 lobes: bubbles, not ripples
+    let phase = rand01(id, 4) * std::f32::consts::TAU;
+    let pts: Vec<(f32, f32)> = (0..72)
+        .map(|i| {
+            let t = i as f32 / 72.0 * std::f32::consts::TAU;
+            let rr = r * (1.0 + 0.12 * (bumps as f32 * t + phase).sin().abs());
+            (cx + rr * t.cos(), cy + rr * t.sin())
+        })
+        .collect();
+    let pts = wobble_pts(ctx, &pts, 0.15, 4.0, id as u64);
+    let Some(p) = pts_path(&pts, true) else { return };
+    fill(pm, &p, &paint(paper), None);
+    let mut s = PathBuilder::new();
+    for i in 0..(r * 1.2) as u32 + 2 {
+        let a = -0.2 + 1.8 * rand01(id, 10 + i as u64);
+        let rr = r * (0.35 + 0.5 * rand01(id, 40 + i as u64));
+        let (px, py) = (cx + rr * a.cos(), cy + rr * a.sin());
+        s.move_to(px, py);
+        s.line_to(px - r * 0.18, py + r * 0.18);
     }
+    if let Some(sp) = s.finish() {
+        line(pm, &sp, &paint(ink(0.75)), &stroke(lw * 0.6), None);
+    }
+    let mut acc = PathBuilder::new();
+    for k in 0..=6 {
+        let a = 0.1 + 1.0 * k as f32 / 6.0;
+        let (px, py) = (cx + 0.74 * r * a.cos(), cy + 0.74 * r * a.sin());
+        if k == 0 { acc.move_to(px, py) } else { acc.line_to(px, py) }
+    }
+    if let Some(ap) = acc.finish() {
+        line(pm, &ap, &paint(ink(0.85)), &stroke(lw * 0.9), None);
+    }
+    line(pm, &p, &paint(pen), &stroke(lw * 1.05), None);
 }
 
 fn draw_conifer(ctx: &Ctx, pm: &mut Pixmap, x: f32, y: f32, r: f32, id: i64, lw: f32, paper: Color, pen: Color) {
@@ -1063,52 +1070,13 @@ fn draw_bench(pm: &mut Pixmap, x: f32, y: f32, s: f32, lw: f32, pen: Color, pape
     }
 }
 
+/// Woodland: the same individual crowns as solitary trees, densely packed, painted north → south
+/// so every crown's paper fill hides the crowns behind it (no merged silhouette).
 fn draw_forest(ctx: &Ctx, pm: &mut Pixmap, crowns: &mut [(f32, f32, f32, i64)], lw: f32, paper: Color) {
-    if crowns.is_empty() {
-        return;
-    }
     crowns.sort_by(|a, b| a.1.total_cmp(&b.1));
-    let shape = |&(x, y, r, id): &(f32, f32, f32, i64)| {
-        let pts = scallop_pts(x, y - r * 0.7, r, 7 + (rand01(id, 3) * 4.0) as u32, 0.16, rand01(id, 4) * std::f32::consts::TAU);
-        pts_path(&wobble_pts(ctx, &pts, 0.3, 4.0, id as u64), true)
-    };
-    let mut all = PathBuilder::new();
-    for c in crowns.iter() {
-        if let Some(p) = shape(c) {
-            all.push_path(&p);
-        }
-    }
-    let Some(all) = all.finish() else { return };
-    // 1) heavy outline of every crown, 2) paper fill of every crown on top → only the silhouette stays
-    line(pm, &all, &paint(ink(1.0)), &stroke(lw * 2.6), None);
-    // Winding, not EvenOdd: overlaps must stay filled or the inner outlines shine through
-    pm.fill_path(&all, &paint(paper), tiny_skia::FillRule::Winding, tiny_skia::Transform::identity(), None);
-    // 3) inside: an arc across the lower half of each crown (its side away from the NW light),
-    // plus a few shading strokes on the lower right
-    let mut arcs = PathBuilder::new();
-    let mut shading = PathBuilder::new();
     for &(x, y, r, id) in crowns.iter() {
-        let cy = y - r * 0.7;
-        let a0 = -0.3 + rand01(id, 5) * 0.4;
-        let steps = 10;
-        for k in 0..=steps {
-            let a = a0 + (k as f32 / steps as f32) * 2.4;
-            let (px, py) = (x + r * a.cos(), cy + r * a.sin());
-            if k == 0 { arcs.move_to(px, py) } else { arcs.line_to(px, py) }
-        }
-        for k in 0..3 {
-            let a = 0.3 + 1.2 * rand01(id, 20 + k);
-            let rr = r * (0.45 + 0.35 * rand01(id, 30 + k));
-            let (px, py) = (x + rr * a.cos(), cy + rr * a.sin());
-            shading.move_to(px, py);
-            shading.line_to(px - r * 0.22, py + r * 0.15);
-        }
-    }
-    if let Some(p) = arcs.finish() {
-        line(pm, &p, &paint(ink(0.55)), &stroke(lw * 0.7), None);
-    }
-    if let Some(p) = shading.finish() {
-        line(pm, &p, &paint(ink(0.45)), &stroke(lw * 0.6), None);
+        // crowns differ in size, as the mockup's packing gives them
+        draw_crown(ctx, pm, (x, y, r * (0.8 + 0.4 * rand01(id, 61)), id), lw, paper, ink(1.0));
     }
 }
 
