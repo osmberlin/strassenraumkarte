@@ -1,0 +1,1962 @@
+{
+  "trees/needleleaved01": {
+    "x": 0,
+    "y": 0,
+    "width": 440,
+    "height": 446,
+    "pixelRatio": 3.4375
+  },
+  "trees/needleleaved02": {
+    "x": 440,
+    "y": 0,
+    "width": 440,
+    "height": 446,
+    "pixelRatio": 3.4375
+  },
+  "trees/needleleaved03": {
+    "x": 880,
+    "y": 0,
+    "width": 440,
+    "height": 446,
+    "pixelRatio": 3.4375
+  },
+  "trees/needleleaved04": {
+    "x": 1320,
+    "y": 0,
+    "width": 440,
+    "height": 446,
+    "pixelRatio": 3.4375
+  },
+  "trees/needleleaved05": {
+    "x": 0,
+    "y": 446,
+    "width": 440,
+    "height": 446,
+    "pixelRatio": 3.4375
+  },
+  "trees/needleleaved06": {
+    "x": 440,
+    "y": 446,
+    "width": 440,
+    "height": 446,
+    "pixelRatio": 3.4375
+  },
+  "trees/broadleaved01": {
+    "x": 880,
+    "y": 446,
+    "width": 440,
+    "height": 440,
+    "pixelRatio": 3.4375
+  },
+  "trees/broadleaved02": {
+    "x": 1320,
+    "y": 446,
+    "width": 440,
+    "height": 440,
+    "pixelRatio": 3.4375
+  },
+  "trees/broadleaved03": {
+    "x": 0,
+    "y": 892,
+    "width": 440,
+    "height": 440,
+    "pixelRatio": 3.4375
+  },
+  "trees/broadleaved04": {
+    "x": 440,
+    "y": 892,
+    "width": 440,
+    "height": 440,
+    "pixelRatio": 3.4375
+  },
+  "trees/broadleaved05": {
+    "x": 880,
+    "y": 892,
+    "width": 440,
+    "height": 440,
+    "pixelRatio": 3.4375
+  },
+  "trees/broadleaved06": {
+    "x": 1320,
+    "y": 892,
+    "width": 440,
+    "height": 440,
+    "pixelRatio": 3.4375
+  },
+  "trees/broadleaved07": {
+    "x": 0,
+    "y": 1332,
+    "width": 440,
+    "height": 440,
+    "pixelRatio": 3.4375
+  },
+  "trees/broadleaved08": {
+    "x": 440,
+    "y": 1332,
+    "width": 440,
+    "height": 440,
+    "pixelRatio": 3.4375
+  },
+  "trees/broadleaved09": {
+    "x": 880,
+    "y": 1332,
+    "width": 440,
+    "height": 440,
+    "pixelRatio": 3.4375
+  },
+  "trees/broadleaved10": {
+    "x": 1320,
+    "y": 1332,
+    "width": 440,
+    "height": 440,
+    "pixelRatio": 3.4375
+  },
+  "trees/broadleaved11": {
+    "x": 0,
+    "y": 1772,
+    "width": 440,
+    "height": 440,
+    "pixelRatio": 3.4375
+  },
+  "trees/broadleaved12": {
+    "x": 440,
+    "y": 1772,
+    "width": 440,
+    "height": 440,
+    "pixelRatio": 3.4375
+  },
+  "trees/broadleaved13": {
+    "x": 880,
+    "y": 1772,
+    "width": 440,
+    "height": 440,
+    "pixelRatio": 3.4375
+  },
+  "trees/broadleaved14": {
+    "x": 1320,
+    "y": 1772,
+    "width": 440,
+    "height": 440,
+    "pixelRatio": 3.4375
+  },
+  "trees/broadleaved15": {
+    "x": 0,
+    "y": 2212,
+    "width": 440,
+    "height": 440,
+    "pixelRatio": 3.4375
+  },
+  "trees/broadleaved16": {
+    "x": 440,
+    "y": 2212,
+    "width": 440,
+    "height": 440,
+    "pixelRatio": 3.4375
+  },
+  "trees/broadleaved17": {
+    "x": 880,
+    "y": 2212,
+    "width": 440,
+    "height": 440,
+    "pixelRatio": 3.4375
+  },
+  "trees/broadleaved18": {
+    "x": 1320,
+    "y": 2212,
+    "width": 440,
+    "height": 440,
+    "pixelRatio": 3.4375
+  },
+  "trees/broadleaved19": {
+    "x": 0,
+    "y": 2652,
+    "width": 440,
+    "height": 440,
+    "pixelRatio": 3.4375
+  },
+  "trees/shrub01": {
+    "x": 440,
+    "y": 2652,
+    "width": 440,
+    "height": 440,
+    "pixelRatio": 3.4375
+  },
+  "trees/shrub02": {
+    "x": 880,
+    "y": 2652,
+    "width": 440,
+    "height": 440,
+    "pixelRatio": 3.4375
+  },
+  "trees/shrub03": {
+    "x": 1320,
+    "y": 2652,
+    "width": 440,
+    "height": 440,
+    "pixelRatio": 3.4375
+  },
+  "trees/shrub04": {
+    "x": 0,
+    "y": 3092,
+    "width": 440,
+    "height": 440,
+    "pixelRatio": 3.4375
+  },
+  "trees/shrub05": {
+    "x": 440,
+    "y": 3092,
+    "width": 440,
+    "height": 440,
+    "pixelRatio": 3.4375
+  },
+  "trees/shrub06": {
+    "x": 880,
+    "y": 3092,
+    "width": 440,
+    "height": 440,
+    "pixelRatio": 3.4375
+  },
+  "cars/bus-60605f-shadow": {
+    "x": 1320,
+    "y": 3092,
+    "width": 104,
+    "height": 280,
+    "pixelRatio": 0.8125
+  },
+  "cars/bus-66798d-shadow": {
+    "x": 1424,
+    "y": 3092,
+    "width": 104,
+    "height": 280,
+    "pixelRatio": 0.8125
+  },
+  "cars/bus-6f8a75-shadow": {
+    "x": 1528,
+    "y": 3092,
+    "width": 104,
+    "height": 280,
+    "pixelRatio": 0.8125
+  },
+  "cars/bus-77a3c6-shadow": {
+    "x": 1632,
+    "y": 3092,
+    "width": 104,
+    "height": 280,
+    "pixelRatio": 0.8125
+  },
+  "cars/bus-808080-shadow": {
+    "x": 1736,
+    "y": 3092,
+    "width": 104,
+    "height": 280,
+    "pixelRatio": 0.8125
+  },
+  "cars/bus-947c94-shadow": {
+    "x": 1840,
+    "y": 3092,
+    "width": 104,
+    "height": 280,
+    "pixelRatio": 0.8125
+  },
+  "cars/bus-949494-shadow": {
+    "x": 1944,
+    "y": 3092,
+    "width": 104,
+    "height": 280,
+    "pixelRatio": 0.8125
+  },
+  "cars/bus-9a8e7e-shadow": {
+    "x": 0,
+    "y": 3532,
+    "width": 104,
+    "height": 280,
+    "pixelRatio": 0.8125
+  },
+  "cars/bus-af6a6d-shadow": {
+    "x": 104,
+    "y": 3532,
+    "width": 104,
+    "height": 280,
+    "pixelRatio": 0.8125
+  },
+  "cars/bus-b4b4b4-shadow": {
+    "x": 208,
+    "y": 3532,
+    "width": 104,
+    "height": 280,
+    "pixelRatio": 0.8125
+  },
+  "cars/bus-beac6f-shadow": {
+    "x": 312,
+    "y": 3532,
+    "width": 104,
+    "height": 280,
+    "pixelRatio": 0.8125
+  },
+  "cars/bus-c88f66-shadow": {
+    "x": 416,
+    "y": 3532,
+    "width": 104,
+    "height": 280,
+    "pixelRatio": 0.8125
+  },
+  "cars/bus-ccc6ad-shadow": {
+    "x": 520,
+    "y": 3532,
+    "width": 104,
+    "height": 280,
+    "pixelRatio": 0.8125
+  },
+  "cars/bus-d4d4d3-shadow": {
+    "x": 624,
+    "y": 3532,
+    "width": 104,
+    "height": 280,
+    "pixelRatio": 0.8125
+  },
+  "cars/bus-60605f": {
+    "x": 728,
+    "y": 3532,
+    "width": 52,
+    "height": 228,
+    "pixelRatio": 0.8125
+  },
+  "cars/bus-66798d": {
+    "x": 780,
+    "y": 3532,
+    "width": 52,
+    "height": 228,
+    "pixelRatio": 0.8125
+  },
+  "cars/bus-6f8a75": {
+    "x": 832,
+    "y": 3532,
+    "width": 52,
+    "height": 228,
+    "pixelRatio": 0.8125
+  },
+  "cars/bus-77a3c6": {
+    "x": 884,
+    "y": 3532,
+    "width": 52,
+    "height": 228,
+    "pixelRatio": 0.8125
+  },
+  "cars/bus-808080": {
+    "x": 936,
+    "y": 3532,
+    "width": 52,
+    "height": 228,
+    "pixelRatio": 0.8125
+  },
+  "cars/bus-947c94": {
+    "x": 988,
+    "y": 3532,
+    "width": 52,
+    "height": 228,
+    "pixelRatio": 0.8125
+  },
+  "cars/bus-949494": {
+    "x": 1040,
+    "y": 3532,
+    "width": 52,
+    "height": 228,
+    "pixelRatio": 0.8125
+  },
+  "cars/bus-9a8e7e": {
+    "x": 1092,
+    "y": 3532,
+    "width": 52,
+    "height": 228,
+    "pixelRatio": 0.8125
+  },
+  "cars/bus-af6a6d": {
+    "x": 1144,
+    "y": 3532,
+    "width": 52,
+    "height": 228,
+    "pixelRatio": 0.8125
+  },
+  "cars/bus-b4b4b4": {
+    "x": 1196,
+    "y": 3532,
+    "width": 52,
+    "height": 228,
+    "pixelRatio": 0.8125
+  },
+  "cars/bus-beac6f": {
+    "x": 1248,
+    "y": 3532,
+    "width": 52,
+    "height": 228,
+    "pixelRatio": 0.8125
+  },
+  "cars/bus-c88f66": {
+    "x": 1300,
+    "y": 3532,
+    "width": 52,
+    "height": 228,
+    "pixelRatio": 0.8125
+  },
+  "cars/bus-ccc6ad": {
+    "x": 1352,
+    "y": 3532,
+    "width": 52,
+    "height": 228,
+    "pixelRatio": 0.8125
+  },
+  "cars/bus-d4d4d3": {
+    "x": 1404,
+    "y": 3532,
+    "width": 52,
+    "height": 228,
+    "pixelRatio": 0.8125
+  },
+  "cars/emergency-60605f-shadow": {
+    "x": 1456,
+    "y": 3532,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/emergency-66798d-shadow": {
+    "x": 1560,
+    "y": 3532,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/emergency-6f8a75-shadow": {
+    "x": 1664,
+    "y": 3532,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/emergency-77a3c6-shadow": {
+    "x": 1768,
+    "y": 3532,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/emergency-808080-shadow": {
+    "x": 1872,
+    "y": 3532,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/emergency-947c94-shadow": {
+    "x": 0,
+    "y": 3812,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/emergency-949494-shadow": {
+    "x": 104,
+    "y": 3812,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/emergency-9a8e7e-shadow": {
+    "x": 208,
+    "y": 3812,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/emergency-af6a6d-shadow": {
+    "x": 312,
+    "y": 3812,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/emergency-b4b4b4-shadow": {
+    "x": 416,
+    "y": 3812,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/emergency-beac6f-shadow": {
+    "x": 520,
+    "y": 3812,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/emergency-c88f66-shadow": {
+    "x": 624,
+    "y": 3812,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/emergency-ccc6ad-shadow": {
+    "x": 728,
+    "y": 3812,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/emergency-d4d4d3-shadow": {
+    "x": 832,
+    "y": 3812,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/hgv-60605f-shadow": {
+    "x": 936,
+    "y": 3812,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/hgv-66798d-shadow": {
+    "x": 1040,
+    "y": 3812,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/hgv-6f8a75-shadow": {
+    "x": 1144,
+    "y": 3812,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/hgv-77a3c6-shadow": {
+    "x": 1248,
+    "y": 3812,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/hgv-808080-shadow": {
+    "x": 1352,
+    "y": 3812,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/hgv-947c94-shadow": {
+    "x": 1456,
+    "y": 3812,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/hgv-949494-shadow": {
+    "x": 1560,
+    "y": 3812,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/hgv-9a8e7e-shadow": {
+    "x": 1664,
+    "y": 3812,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/hgv-af6a6d-shadow": {
+    "x": 1768,
+    "y": 3812,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/hgv-b4b4b4-shadow": {
+    "x": 1872,
+    "y": 3812,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/hgv-beac6f-shadow": {
+    "x": 0,
+    "y": 3956,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/hgv-c88f66-shadow": {
+    "x": 104,
+    "y": 3956,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/hgv-ccc6ad-shadow": {
+    "x": 208,
+    "y": 3956,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/hgv-d4d4d3-shadow": {
+    "x": 312,
+    "y": 3956,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle01-60605f-shadow": {
+    "x": 416,
+    "y": 3956,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle01-66798d-shadow": {
+    "x": 520,
+    "y": 3956,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle01-6f8a75-shadow": {
+    "x": 624,
+    "y": 3956,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle01-77a3c6-shadow": {
+    "x": 728,
+    "y": 3956,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle01-808080-shadow": {
+    "x": 832,
+    "y": 3956,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle01-947c94-shadow": {
+    "x": 936,
+    "y": 3956,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle01-949494-shadow": {
+    "x": 1040,
+    "y": 3956,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle01-9a8e7e-shadow": {
+    "x": 1144,
+    "y": 3956,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle01-af6a6d-shadow": {
+    "x": 1248,
+    "y": 3956,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle01-b4b4b4-shadow": {
+    "x": 1352,
+    "y": 3956,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle01-beac6f-shadow": {
+    "x": 1456,
+    "y": 3956,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle01-c88f66-shadow": {
+    "x": 1560,
+    "y": 3956,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle01-ccc6ad-shadow": {
+    "x": 1664,
+    "y": 3956,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle01-d4d4d3-shadow": {
+    "x": 1768,
+    "y": 3956,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle02-60605f-shadow": {
+    "x": 1872,
+    "y": 3956,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle02-66798d-shadow": {
+    "x": 0,
+    "y": 4100,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle02-6f8a75-shadow": {
+    "x": 104,
+    "y": 4100,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle02-77a3c6-shadow": {
+    "x": 208,
+    "y": 4100,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle02-808080-shadow": {
+    "x": 312,
+    "y": 4100,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle02-947c94-shadow": {
+    "x": 416,
+    "y": 4100,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle02-949494-shadow": {
+    "x": 520,
+    "y": 4100,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle02-9a8e7e-shadow": {
+    "x": 624,
+    "y": 4100,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle02-af6a6d-shadow": {
+    "x": 728,
+    "y": 4100,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle02-b4b4b4-shadow": {
+    "x": 832,
+    "y": 4100,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle02-beac6f-shadow": {
+    "x": 936,
+    "y": 4100,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle02-c88f66-shadow": {
+    "x": 1040,
+    "y": 4100,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle02-ccc6ad-shadow": {
+    "x": 1144,
+    "y": 4100,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle02-d4d4d3-shadow": {
+    "x": 1248,
+    "y": 4100,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/taxi-60605f-shadow": {
+    "x": 1352,
+    "y": 4100,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/taxi-66798d-shadow": {
+    "x": 1456,
+    "y": 4100,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/taxi-6f8a75-shadow": {
+    "x": 1560,
+    "y": 4100,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/taxi-77a3c6-shadow": {
+    "x": 1664,
+    "y": 4100,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/taxi-808080-shadow": {
+    "x": 1768,
+    "y": 4100,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/taxi-947c94-shadow": {
+    "x": 1872,
+    "y": 4100,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/taxi-949494-shadow": {
+    "x": 0,
+    "y": 4244,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/taxi-9a8e7e-shadow": {
+    "x": 104,
+    "y": 4244,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/taxi-af6a6d-shadow": {
+    "x": 208,
+    "y": 4244,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/taxi-b4b4b4-shadow": {
+    "x": 312,
+    "y": 4244,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/taxi-beac6f-shadow": {
+    "x": 416,
+    "y": 4244,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/taxi-c88f66-shadow": {
+    "x": 520,
+    "y": 4244,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/taxi-ccc6ad-shadow": {
+    "x": 624,
+    "y": 4244,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "cars/taxi-d4d4d3-shadow": {
+    "x": 728,
+    "y": 4244,
+    "width": 104,
+    "height": 144,
+    "pixelRatio": 0.8125
+  },
+  "tourism/viewpoint_all_directions": {
+    "x": 832,
+    "y": 4244,
+    "width": 114,
+    "height": 114,
+    "pixelRatio": 1.78125
+  },
+  "traffic_signs/arrows/left": {
+    "x": 946,
+    "y": 4244,
+    "width": 32,
+    "height": 106,
+    "pixelRatio": 0.5
+  },
+  "traffic_signs/arrows/left-yellow": {
+    "x": 978,
+    "y": 4244,
+    "width": 32,
+    "height": 106,
+    "pixelRatio": 0.5
+  },
+  "traffic_signs/arrows/left;right": {
+    "x": 1010,
+    "y": 4244,
+    "width": 32,
+    "height": 106,
+    "pixelRatio": 0.5
+  },
+  "traffic_signs/arrows/left;right-yellow": {
+    "x": 1042,
+    "y": 4244,
+    "width": 32,
+    "height": 106,
+    "pixelRatio": 0.5
+  },
+  "traffic_signs/arrows/left;through": {
+    "x": 1074,
+    "y": 4244,
+    "width": 32,
+    "height": 106,
+    "pixelRatio": 0.5
+  },
+  "traffic_signs/arrows/left;through-yellow": {
+    "x": 1106,
+    "y": 4244,
+    "width": 32,
+    "height": 106,
+    "pixelRatio": 0.5
+  },
+  "traffic_signs/arrows/merge_to_left": {
+    "x": 1138,
+    "y": 4244,
+    "width": 32,
+    "height": 106,
+    "pixelRatio": 0.5
+  },
+  "traffic_signs/arrows/merge_to_left-yellow": {
+    "x": 1170,
+    "y": 4244,
+    "width": 32,
+    "height": 106,
+    "pixelRatio": 0.5
+  },
+  "traffic_signs/arrows/merge_to_right": {
+    "x": 1202,
+    "y": 4244,
+    "width": 32,
+    "height": 106,
+    "pixelRatio": 0.5
+  },
+  "traffic_signs/arrows/merge_to_right-yellow": {
+    "x": 1234,
+    "y": 4244,
+    "width": 32,
+    "height": 106,
+    "pixelRatio": 0.5
+  },
+  "traffic_signs/arrows/right": {
+    "x": 1266,
+    "y": 4244,
+    "width": 32,
+    "height": 106,
+    "pixelRatio": 0.5
+  },
+  "traffic_signs/arrows/right-yellow": {
+    "x": 1298,
+    "y": 4244,
+    "width": 32,
+    "height": 106,
+    "pixelRatio": 0.5
+  },
+  "traffic_signs/arrows/slight_left": {
+    "x": 1330,
+    "y": 4244,
+    "width": 32,
+    "height": 106,
+    "pixelRatio": 0.5
+  },
+  "traffic_signs/arrows/slight_left-yellow": {
+    "x": 1362,
+    "y": 4244,
+    "width": 32,
+    "height": 106,
+    "pixelRatio": 0.5
+  },
+  "traffic_signs/arrows/slight_right": {
+    "x": 1394,
+    "y": 4244,
+    "width": 32,
+    "height": 106,
+    "pixelRatio": 0.5
+  },
+  "traffic_signs/arrows/slight_right-yellow": {
+    "x": 1426,
+    "y": 4244,
+    "width": 32,
+    "height": 106,
+    "pixelRatio": 0.5
+  },
+  "traffic_signs/arrows/through": {
+    "x": 1458,
+    "y": 4244,
+    "width": 32,
+    "height": 106,
+    "pixelRatio": 0.5
+  },
+  "traffic_signs/arrows/through-yellow": {
+    "x": 1490,
+    "y": 4244,
+    "width": 32,
+    "height": 106,
+    "pixelRatio": 0.5
+  },
+  "traffic_signs/arrows/through;right": {
+    "x": 1522,
+    "y": 4244,
+    "width": 32,
+    "height": 106,
+    "pixelRatio": 0.5
+  },
+  "traffic_signs/arrows/through;right-yellow": {
+    "x": 1554,
+    "y": 4244,
+    "width": 32,
+    "height": 106,
+    "pixelRatio": 0.5
+  },
+  "cars/emergency-60605f": {
+    "x": 1586,
+    "y": 4244,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/emergency-66798d": {
+    "x": 1638,
+    "y": 4244,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/emergency-6f8a75": {
+    "x": 1690,
+    "y": 4244,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/emergency-77a3c6": {
+    "x": 1742,
+    "y": 4244,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/emergency-808080": {
+    "x": 1794,
+    "y": 4244,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/emergency-947c94": {
+    "x": 1846,
+    "y": 4244,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/emergency-949494": {
+    "x": 1898,
+    "y": 4244,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/emergency-9a8e7e": {
+    "x": 1950,
+    "y": 4244,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/emergency-af6a6d": {
+    "x": 0,
+    "y": 4388,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/emergency-b4b4b4": {
+    "x": 52,
+    "y": 4388,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/emergency-beac6f": {
+    "x": 104,
+    "y": 4388,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/emergency-c88f66": {
+    "x": 156,
+    "y": 4388,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/emergency-ccc6ad": {
+    "x": 208,
+    "y": 4388,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/emergency-d4d4d3": {
+    "x": 260,
+    "y": 4388,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/hgv-60605f": {
+    "x": 312,
+    "y": 4388,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/hgv-66798d": {
+    "x": 364,
+    "y": 4388,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/hgv-6f8a75": {
+    "x": 416,
+    "y": 4388,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/hgv-77a3c6": {
+    "x": 468,
+    "y": 4388,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/hgv-808080": {
+    "x": 520,
+    "y": 4388,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/hgv-947c94": {
+    "x": 572,
+    "y": 4388,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/hgv-949494": {
+    "x": 624,
+    "y": 4388,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/hgv-9a8e7e": {
+    "x": 676,
+    "y": 4388,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/hgv-af6a6d": {
+    "x": 728,
+    "y": 4388,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/hgv-b4b4b4": {
+    "x": 780,
+    "y": 4388,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/hgv-beac6f": {
+    "x": 832,
+    "y": 4388,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/hgv-c88f66": {
+    "x": 884,
+    "y": 4388,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/hgv-ccc6ad": {
+    "x": 936,
+    "y": 4388,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/hgv-d4d4d3": {
+    "x": 988,
+    "y": 4388,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle01-60605f": {
+    "x": 1040,
+    "y": 4388,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle01-66798d": {
+    "x": 1092,
+    "y": 4388,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle01-6f8a75": {
+    "x": 1144,
+    "y": 4388,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle01-77a3c6": {
+    "x": 1196,
+    "y": 4388,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle01-808080": {
+    "x": 1248,
+    "y": 4388,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle01-947c94": {
+    "x": 1300,
+    "y": 4388,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle01-949494": {
+    "x": 1352,
+    "y": 4388,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle01-9a8e7e": {
+    "x": 1404,
+    "y": 4388,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle01-af6a6d": {
+    "x": 1456,
+    "y": 4388,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle01-b4b4b4": {
+    "x": 1508,
+    "y": 4388,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle01-beac6f": {
+    "x": 1560,
+    "y": 4388,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle01-c88f66": {
+    "x": 1612,
+    "y": 4388,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle01-ccc6ad": {
+    "x": 1664,
+    "y": 4388,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle01-d4d4d3": {
+    "x": 1716,
+    "y": 4388,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle02-60605f": {
+    "x": 1768,
+    "y": 4388,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle02-66798d": {
+    "x": 1820,
+    "y": 4388,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle02-6f8a75": {
+    "x": 1872,
+    "y": 4388,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle02-77a3c6": {
+    "x": 1924,
+    "y": 4388,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle02-808080": {
+    "x": 1976,
+    "y": 4388,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle02-947c94": {
+    "x": 0,
+    "y": 4480,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle02-949494": {
+    "x": 52,
+    "y": 4480,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle02-9a8e7e": {
+    "x": 104,
+    "y": 4480,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle02-af6a6d": {
+    "x": 156,
+    "y": 4480,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle02-b4b4b4": {
+    "x": 208,
+    "y": 4480,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle02-beac6f": {
+    "x": 260,
+    "y": 4480,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle02-c88f66": {
+    "x": 312,
+    "y": 4480,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle02-ccc6ad": {
+    "x": 364,
+    "y": 4480,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/motor_vehicle02-d4d4d3": {
+    "x": 416,
+    "y": 4480,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/taxi-60605f": {
+    "x": 468,
+    "y": 4480,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/taxi-66798d": {
+    "x": 520,
+    "y": 4480,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/taxi-6f8a75": {
+    "x": 572,
+    "y": 4480,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/taxi-77a3c6": {
+    "x": 624,
+    "y": 4480,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/taxi-808080": {
+    "x": 676,
+    "y": 4480,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/taxi-947c94": {
+    "x": 728,
+    "y": 4480,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/taxi-949494": {
+    "x": 780,
+    "y": 4480,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/taxi-9a8e7e": {
+    "x": 832,
+    "y": 4480,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/taxi-af6a6d": {
+    "x": 884,
+    "y": 4480,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/taxi-b4b4b4": {
+    "x": 936,
+    "y": 4480,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/taxi-beac6f": {
+    "x": 988,
+    "y": 4480,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/taxi-c88f66": {
+    "x": 1040,
+    "y": 4480,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/taxi-ccc6ad": {
+    "x": 1092,
+    "y": 4480,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "cars/taxi-d4d4d3": {
+    "x": 1144,
+    "y": 4480,
+    "width": 52,
+    "height": 92,
+    "pixelRatio": 0.8125
+  },
+  "shapes/arrowhead-oneway": {
+    "x": 1196,
+    "y": 4480,
+    "width": 82,
+    "height": 82,
+    "pixelRatio": 1.28125
+  },
+  "amenity/fountain": {
+    "x": 1278,
+    "y": 4480,
+    "width": 70,
+    "height": 70,
+    "pixelRatio": 1.09375
+  },
+  "traffic_calming/hump": {
+    "x": 1348,
+    "y": 4480,
+    "width": 66,
+    "height": 66,
+    "pixelRatio": 1.03125
+  },
+  "traffic_signs/DE/605-10": {
+    "x": 1414,
+    "y": 4480,
+    "width": 16,
+    "height": 64,
+    "pixelRatio": 0.25
+  },
+  "traffic_signs/DE/605-11": {
+    "x": 1430,
+    "y": 4480,
+    "width": 16,
+    "height": 64,
+    "pixelRatio": 0.25
+  },
+  "traffic_signs/DE/605-20": {
+    "x": 1446,
+    "y": 4480,
+    "width": 16,
+    "height": 64,
+    "pixelRatio": 0.25
+  },
+  "traffic_signs/DE/605-21": {
+    "x": 1462,
+    "y": 4480,
+    "width": 16,
+    "height": 64,
+    "pixelRatio": 0.25
+  },
+  "tourism/viewpoint": {
+    "x": 1478,
+    "y": 4480,
+    "width": 66,
+    "height": 54,
+    "pixelRatio": 1.03125
+  },
+  "amenity/loading_ramp": {
+    "x": 1544,
+    "y": 4480,
+    "width": 54,
+    "height": 54,
+    "pixelRatio": 0.84375
+  },
+  "leisure/table_tennis": {
+    "x": 1598,
+    "y": 4480,
+    "width": 38,
+    "height": 54,
+    "pixelRatio": 0.59375
+  },
+  "leisure/table_tennis_net_no": {
+    "x": 1636,
+    "y": 4480,
+    "width": 38,
+    "height": 54,
+    "pixelRatio": 0.59375
+  },
+  "leisure/table_tennis_net_yes": {
+    "x": 1674,
+    "y": 4480,
+    "width": 38,
+    "height": 54,
+    "pixelRatio": 0.59375
+  },
+  "shapes/equilateral_triangle-landscape": {
+    "x": 1712,
+    "y": 4480,
+    "width": 52,
+    "height": 52,
+    "pixelRatio": 0.8125
+  },
+  "amenity/mobility_hub": {
+    "x": 1764,
+    "y": 4480,
+    "width": 48,
+    "height": 48,
+    "pixelRatio": 0.75
+  },
+  "amenity/mobility_hub_Jelbi": {
+    "x": 1812,
+    "y": 4480,
+    "width": 48,
+    "height": 48,
+    "pixelRatio": 0.75
+  },
+  "public_transport/s-train": {
+    "x": 1860,
+    "y": 4480,
+    "width": 48,
+    "height": 48,
+    "pixelRatio": 0.75
+  },
+  "amenity/recycling_container": {
+    "x": 1908,
+    "y": 4480,
+    "width": 44,
+    "height": 44,
+    "pixelRatio": 0.6875
+  },
+  "public_transport/subway": {
+    "x": 1952,
+    "y": 4480,
+    "width": 44,
+    "height": 44,
+    "pixelRatio": 0.6875
+  },
+  "tourism/guidepost": {
+    "x": 1996,
+    "y": 4480,
+    "width": 40,
+    "height": 40,
+    "pixelRatio": 0.625
+  },
+  "amenity/bicycle_rental": {
+    "x": 0,
+    "y": 4572,
+    "width": 40,
+    "height": 38,
+    "pixelRatio": 0.625
+  },
+  "amenity/toilets": {
+    "x": 40,
+    "y": 4572,
+    "width": 36,
+    "height": 36,
+    "pixelRatio": 0.5625
+  },
+  "tourism/artwork": {
+    "x": 76,
+    "y": 4572,
+    "width": 36,
+    "height": 36,
+    "pixelRatio": 0.5625
+  },
+  "historic/memorial": {
+    "x": 112,
+    "y": 4572,
+    "width": 26,
+    "height": 34,
+    "pixelRatio": 0.40625
+  },
+  "amenity/small_electric_vehicle": {
+    "x": 138,
+    "y": 4572,
+    "width": 40,
+    "height": 32,
+    "pixelRatio": 0.625
+  },
+  "shapes/half_square-grit_bin": {
+    "x": 178,
+    "y": 4572,
+    "width": 32,
+    "height": 32,
+    "pixelRatio": 0.5
+  },
+  "amenity/recycling": {
+    "x": 210,
+    "y": 4572,
+    "width": 30,
+    "height": 30,
+    "pixelRatio": 0.46875
+  },
+  "traffic_signs/street_name_sign": {
+    "x": 240,
+    "y": 4572,
+    "width": 30,
+    "height": 30,
+    "pixelRatio": 0.46875
+  },
+  "traffic_signs/symbols/footway": {
+    "x": 270,
+    "y": 4572,
+    "width": 16,
+    "height": 30,
+    "pixelRatio": 0.25
+  },
+  "traffic_signs/symbols/footway-yellow": {
+    "x": 286,
+    "y": 4572,
+    "width": 16,
+    "height": 30,
+    "pixelRatio": 0.25
+  },
+  "amenity/bicycle": {
+    "x": 302,
+    "y": 4572,
+    "width": 40,
+    "height": 28,
+    "pixelRatio": 0.625
+  },
+  "rock/rock01": {
+    "x": 342,
+    "y": 4572,
+    "width": 22,
+    "height": 28,
+    "pixelRatio": 0.34375
+  },
+  "amenity/post_box_green": {
+    "x": 364,
+    "y": 4572,
+    "width": 26,
+    "height": 26,
+    "pixelRatio": 0.40625
+  },
+  "amenity/post_box_yellow": {
+    "x": 390,
+    "y": 4572,
+    "width": 26,
+    "height": 26,
+    "pixelRatio": 0.40625
+  },
+  "amenity/telephone": {
+    "x": 416,
+    "y": 4572,
+    "width": 26,
+    "height": 26,
+    "pixelRatio": 0.40625
+  },
+  "shapes/half_square-street_cabinet": {
+    "x": 442,
+    "y": 4572,
+    "width": 26,
+    "height": 26,
+    "pixelRatio": 0.40625
+  },
+  "tourism/information": {
+    "x": 468,
+    "y": 4572,
+    "width": 26,
+    "height": 26,
+    "pixelRatio": 0.40625
+  },
+  "amenity/cargo_bike": {
+    "x": 494,
+    "y": 4572,
+    "width": 48,
+    "height": 24,
+    "pixelRatio": 0.75
+  },
+  "amenity/bench": {
+    "x": 542,
+    "y": 4572,
+    "width": 38,
+    "height": 22,
+    "pixelRatio": 0.59375
+  },
+  "leisure/picnic_table": {
+    "x": 580,
+    "y": 4572,
+    "width": 38,
+    "height": 22,
+    "pixelRatio": 0.59375
+  },
+  "shapes/street_lamp": {
+    "x": 618,
+    "y": 4572,
+    "width": 22,
+    "height": 22,
+    "pixelRatio": 0.34375
+  },
+  "amenity/waste_basket": {
+    "x": 640,
+    "y": 4572,
+    "width": 18,
+    "height": 22,
+    "pixelRatio": 0.28125
+  },
+  "shapes/square-clock": {
+    "x": 658,
+    "y": 4572,
+    "width": 20,
+    "height": 20,
+    "pixelRatio": 0.3125
+  },
+  "traffic_signs/DE/222": {
+    "x": 678,
+    "y": 4572,
+    "width": 20,
+    "height": 20,
+    "pixelRatio": 0.3125
+  },
+  "traffic_signs/DE/222-10": {
+    "x": 698,
+    "y": 4572,
+    "width": 20,
+    "height": 20,
+    "pixelRatio": 0.3125
+  },
+  "traffic_signs/symbols/wheelchair": {
+    "x": 718,
+    "y": 4572,
+    "width": 16,
+    "height": 20,
+    "pixelRatio": 0.25
+  },
+  "traffic_signs/symbols/wheelchair-yellow": {
+    "x": 734,
+    "y": 4572,
+    "width": 16,
+    "height": 20,
+    "pixelRatio": 0.25
+  },
+  "man_made/manhole": {
+    "x": 750,
+    "y": 4572,
+    "width": 16,
+    "height": 16,
+    "pixelRatio": 0.25
+  },
+  "shapes/circle-bollard": {
+    "x": 766,
+    "y": 4572,
+    "width": 16,
+    "height": 16,
+    "pixelRatio": 0.25
+  },
+  "shapes/circle-separation_bollard": {
+    "x": 782,
+    "y": 4572,
+    "width": 16,
+    "height": 16,
+    "pixelRatio": 0.25
+  },
+  "shapes/circle-separation_flex_post": {
+    "x": 798,
+    "y": 4572,
+    "width": 16,
+    "height": 16,
+    "pixelRatio": 0.25
+  },
+  "shapes/filled_arrowhead-guard_stone": {
+    "x": 814,
+    "y": 4572,
+    "width": 16,
+    "height": 16,
+    "pixelRatio": 0.25
+  },
+  "shapes/half_square-vertical_panel": {
+    "x": 830,
+    "y": 4572,
+    "width": 16,
+    "height": 16,
+    "pixelRatio": 0.25
+  },
+  "shapes/square-charging_station": {
+    "x": 846,
+    "y": 4572,
+    "width": 16,
+    "height": 16,
+    "pixelRatio": 0.25
+  },
+  "shapes/square-parking_tickets": {
+    "x": 862,
+    "y": 4572,
+    "width": 16,
+    "height": 16,
+    "pixelRatio": 0.25
+  },
+  "shapes/triangle-marking": {
+    "x": 878,
+    "y": 4572,
+    "width": 16,
+    "height": 16,
+    "pixelRatio": 0.25
+  },
+  "shapes/triangle-marking-yellow": {
+    "x": 894,
+    "y": 4572,
+    "width": 16,
+    "height": 16,
+    "pixelRatio": 0.25
+  },
+  "traffic_calming/bump": {
+    "x": 910,
+    "y": 4572,
+    "width": 66,
+    "height": 12,
+    "pixelRatio": 1.03125
+  },
+  "amenity/bench_backrest_no": {
+    "x": 976,
+    "y": 4572,
+    "width": 38,
+    "height": 12,
+    "pixelRatio": 0.59375
+  },
+  "traffic_signs/symbols/bicycle": {
+    "x": 1014,
+    "y": 4572,
+    "width": 16,
+    "height": 10,
+    "pixelRatio": 0.25
+  },
+  "traffic_signs/symbols/bicycle-yellow": {
+    "x": 1030,
+    "y": 4572,
+    "width": 16,
+    "height": 10,
+    "pixelRatio": 0.25
+  }
+}
