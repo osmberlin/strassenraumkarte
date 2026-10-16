@@ -338,7 +338,7 @@ export function App() {
           </label>
           <button
             type="button"
-            className="legend-btn"
+            className="btn"
             onClick={() => setRoute((r) => ({ ...r, compare: true }))}
           >
             Compare QGIS · Rust · Vector

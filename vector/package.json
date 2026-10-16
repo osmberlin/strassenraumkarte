@@ -13,6 +13,7 @@
     "validate-style": "bun run scripts/validate-style.ts",
     "sprite": "bun run scripts/build-sprite.ts",
     "screenshots": "bun run scripts/screenshots.ts",
+    "capture-viewers": "bun run scripts/capture-viewers.ts",
     "e2e": "playwright test",
     "test": "bun test src/style",
     "type-check": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.scripts.json",
