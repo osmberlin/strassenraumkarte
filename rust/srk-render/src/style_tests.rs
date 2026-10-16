@@ -190,13 +190,9 @@ fn ctx_world_matches_across_layouts() {
     for z in [17, 18, 19] {
         for (z, x, y) in scene_tiles(z) {
             let (a, b) = layouts(z, x, y);
-            let (wa, wb) = {
-                let ca = h.ctx(a, z);
-                let w = [(0.0, 0.0), (128.5, 17.25), (255.0, 255.0)].map(|(px, py)| ca.world(a.core_ox as f32 + px, a.core_oy as f32 + py));
-                drop(ca);
-                let cb = h.ctx(b, z);
-                (w, [(0.0, 0.0), (128.5, 17.25), (255.0, 255.0)].map(|(px, py)| cb.world(b.core_ox as f32 + px, b.core_oy as f32 + py)))
-            };
+            let probe = [(0.0, 0.0), (128.5, 17.25), (255.0, 255.0)];
+            let wa = probe.map(|(px, py)| h.ctx(a, z).world(a.core_ox as f32 + px, a.core_oy as f32 + py));
+            let wb = probe.map(|(px, py)| h.ctx(b, z).world(b.core_ox as f32 + px, b.core_oy as f32 + py));
             for (p, q) in wa.iter().zip(wb.iter()) {
                 assert!((p.0 - q.0).abs() < 1e-6 && (p.1 - q.1).abs() < 1e-6, "{z}/{x}/{y}: {p:?} vs {q:?}");
             }
