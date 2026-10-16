@@ -22,6 +22,8 @@ What this means in one sentence per element:
 
 ![Richardplatz and Körnerpark](current-ef.jpg)
 
+Roofs with and without (`SRK_ROOFS=off` left, default right): LA [A Herrfurthplatz](../roof-shapes/compare-la-a-herrfurthplatz.jpg) · [B Schillerpromenade](../roof-shapes/compare-la-b-schillerpromenade.jpg) · [E Richardplatz](../roof-shapes/compare-la-e-richardplatz.jpg) · [F Körnerpark](../roof-shapes/compare-la-f-koernerpark.jpg); ink [A Herrfurthplatz](../roof-shapes/compare-ink-a-herrfurthplatz.jpg) · [B Schillerpromenade](../roof-shapes/compare-ink-b-schillerpromenade.jpg) · [E Richardplatz](../roof-shapes/compare-ink-e-richardplatz.jpg) · [F Körnerpark](../roof-shapes/compare-ink-f-koernerpark.jpg).
+
 Tree legend: [`steps/20-legend-water-names/legend.jpg`](steps/20-legend-water-names/legend.jpg) (regenerate with `docs/design-research/tools/la_tree_legend.sh out.png`). More: [`showcase-z17.jpg`](showcase-z17.jpg) / [`showcase-z18.jpg`](showcase-z18.jpg) (whole Schillerkiez), [`map-sheet-schillerkiez.jpg`](map-sheet-schillerkiez.jpg) (as a plan sheet with title block, north arrow and scale bar), iterations in [`steps/`](steps/).
 
 | Element | Implementation |

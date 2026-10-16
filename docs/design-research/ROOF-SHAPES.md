@@ -118,6 +118,11 @@ Switches:
 - `valley`: both facets drain towards the other's centroid (a concave crease, e.g. the inner corners of a courtyard block).
 - `hip`: everything else.
 
+**Roofs with and without** (same scene, same build; left `SRK_ROOFS=off`, right default), side-by-side images in [`roof-shapes/`](roof-shapes/):
+
+- LA: [A Herrfurthplatz](roof-shapes/compare-la-a-herrfurthplatz.jpg) · [B Schillerpromenade](roof-shapes/compare-la-b-schillerpromenade.jpg) · [E Richardplatz](roof-shapes/compare-la-e-richardplatz.jpg) · [F Körnerpark](roof-shapes/compare-la-f-koernerpark.jpg)
+- Ink: [A Herrfurthplatz](roof-shapes/compare-ink-a-herrfurthplatz.jpg) · [B Schillerpromenade](roof-shapes/compare-ink-b-schillerpromenade.jpg) · [E Richardplatz](roof-shapes/compare-ink-e-richardplatz.jpg) · [F Körnerpark](roof-shapes/compare-ink-f-koernerpark.jpg)
+
 ## 9. Reproduce
 
 ```bash
