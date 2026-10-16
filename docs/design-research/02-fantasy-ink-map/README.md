@@ -48,6 +48,7 @@ Only landmarks (`church`, `chapel`, `cathedral`: one spire on their smallest pol
 | Street furniture (z19+) | upright glyphs from `feature_node`/`feature_polygon`: street lamps, street pumps (`water_well`), drinking water, fountains, advertising columns, memorials/artworks (obelisk), clocks, flagpoles |
 | Accent | `SRK_ACCENT=playground` (default), `bench`, `tree`, `water` (fountains, pumps, drinking water — from z17), `none` — vermilion `#C8452C` for outline, 45° hatch, light wash and glyphs (swing, slide, spring rider, climbing frame) |
 | Labels | street names (Hoefler Text Italic, paper halo, z16+), area names (Hoefler Text spaced capitals) |
+| Roofs | from `roof_shape.sql` (z17+): connected roof masses, facet hatch along the ridge, cross-hatch on the shaded side, ridge and hip lines (`SRK_ROOFS=off` to disable) |
 
 Variants:
 - `SRK_INK_OBLIQUE=freestanding` — free-standing buildings and landmarks are lifted into an oblique view (roof shifted north, south walls with windows); rows stay plan. Lifted buildings cast a hatched shadow towards the east-north-east ([step 20](steps/20-bridges-landmarks-furniture/)). See [step 11](steps/11-oblique-freestanding/). **Candidate for the default.**

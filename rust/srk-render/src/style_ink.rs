@@ -531,6 +531,13 @@ fn draw_buildings(ctx: &mut Ctx, pm: &mut Pixmap, lw: f32) -> Result<()> {
         })
         .collect();
     order.sort_by(|a, b| a.0.total_cmp(&b.0));
+    // roof planes from roof_shape.sql (z17+, SRK_ROOFS=off disables). Pass 0 draws plan-view
+    // buildings, then the roof facets of their masses, pass 1 the lifted (oblique) buildings on top.
+    let roofs = if ctx.z >= 17 && std::env::var("SRK_ROOFS").map(|v| v != "off").unwrap_or(true) {
+        load_roofs(ctx)?
+    } else {
+        RoofData { facets: Vec::new(), lines: Vec::new(), sloped: Default::default() }
+    };
     let fh = ctx.m(1.7).clamp(3.0, 14.0); // facade band height
     // Variant: SRK_INK_OBLIQUE=freestanding lifts free-standing buildings into an oblique view
     // (roof shifted north by a stylised height, south walls visible); rows and blocks stay plan.
@@ -574,13 +581,27 @@ fn draw_buildings(ctx: &mut Ctx, pm: &mut Pixmap, lw: f32) -> Result<()> {
             }
         }
     }
-    for (_, i) in order {
+    let roofs_on = !roofs.facets.is_empty();
+    for pass in 0..2 {
+    if pass == 1 {
+        if !roofs_on {
+            break;
+        }
+        draw_roof_facets(ctx, pm, &roofs, &lifts, hatch_sp, lw);
+    }
+    for &(_, i) in &order {
         let f = &buildings[i];
         let landmark = matches!(f.class.as_str(), "church" | "chapel" | "cathedral");
         let lift = lift_of(f);
         if lift > 0.0 {
             lifts.insert(f.id, lift);
         }
+        // without roof data everything is drawn in pass 0; with it, lifted buildings wait for pass 1
+        if (pass == 1) != (roofs_on && lift > 0.0) {
+            continue;
+        }
+        // plan-view buildings that belong to a sloped roof mass get their slope from the facets
+        let roofed = roofs_on && lift == 0.0 && !landmark && roofs.sloped.contains(&f.id);
         let Some(roof) = poly_path(ctx, &f.geom).and_then(|p| p.transform(tiny_skia::Transform::from_translate(0.0, -lift))) else { continue };
         let rings = poly_rings_px(ctx, &f.geom);
         let ext = rings.first().cloned().unwrap_or_default();
@@ -649,13 +670,13 @@ fn draw_buildings(ctx: &mut Ctx, pm: &mut Pixmap, lw: f32) -> Result<()> {
             let a = (f.num as f32).to_radians();
             (-(a.cos())).atan2(a.sin()).to_degrees()
         };
-        if let Some(mask) = roof_mask() {
+        if let Some(mask) = roof_mask().filter(|_| !roofed) {
             if let Some(h) = hatch_path(ctx, hatch_sp, axis_px + 90.0, x0 - 4.0, y0 - 4.0, x1 + 4.0, y1 + 4.0) {
                 let a = if landmark { 0.75 } else { 0.5 };
                 line(pm, &h, &paint(ink(a)), &stroke(lw * 0.55), Some(&mask));
             }
         }
-        if let Some(Geometry::LineString(_) | Geometry::MultiLineString(_)) = &f.aux {
+        if let (false, Some(Geometry::LineString(_) | Geometry::MultiLineString(_))) = (roofed, &f.aux) {
             for l in geometry_lines(f.aux.clone().unwrap()) {
                 let rp: Vec<(f32, f32)> = line_pts(ctx, &l).into_iter().map(|(x, y)| (x, y - lift)).collect();
                 // shaded roof half: the side facing away from the light (NE), cross-hatched
@@ -700,6 +721,7 @@ fn draw_buildings(ctx: &mut Ctx, pm: &mut Pixmap, lw: f32) -> Result<()> {
         if let Some(p) = pb.finish() {
             line(pm, &p, &paint(ink(1.0)), &stroke(lw * 1.25), None);
         }
+    }
     }
     // building parts: thin lines on the roofs
     for f in buildings.iter().filter(|f| f.sub == "part") {
@@ -1028,5 +1050,55 @@ fn draw_forest(ctx: &Ctx, pm: &mut Pixmap, crowns: &mut [(f32, f32, f32, i64)], 
     }
     if let Some(p) = shading.finish() {
         line(pm, &p, &paint(ink(0.45)), &stroke(lw * 0.6), None);
+    }
+}
+
+/// Roof facets of plan-view masses: hatch along the ridge (perpendicular to the downslope
+/// bearing), a second hatch on facets facing away from the NW light, then hips and ridges.
+fn draw_roof_facets(
+    ctx: &Ctx,
+    pm: &mut Pixmap,
+    roofs: &RoofData,
+    lifts: &std::collections::HashMap<i64, f32>,
+    hatch_sp: f32,
+    lw: f32,
+) {
+    let mut lit_h = PathBuilder::new();
+    let mut shade_h = PathBuilder::new();
+    for (rings, aspect, ids) in &roofs.facets {
+        if ids.iter().any(|id| lifts.contains_key(id)) {
+            continue;
+        }
+        let ridge = bearing_to_screen_deg(*aspect) + 90.0;
+        if let Some(p) = hatch_in_polygon(ctx, rings, hatch_sp, ridge) {
+            lit_h.push_path(&p);
+        }
+        if crate::roof_shapes::lit_factor(*aspect) < 0.5 {
+            if let Some(p) = hatch_in_polygon(ctx, rings, hatch_sp * 1.3, ridge + 60.0) {
+                shade_h.push_path(&p);
+            }
+        }
+    }
+    if let Some(p) = lit_h.finish() {
+        line(pm, &p, &paint(ink(0.48)), &stroke(lw * 0.55), None);
+    }
+    if let Some(p) = shade_h.finish() {
+        line(pm, &p, &paint(ink(0.38)), &stroke(lw * 0.5), None);
+    }
+    let mut hips = PathBuilder::new();
+    let mut ridges = PathBuilder::new();
+    for (pts, class) in &roofs.lines {
+        let Some(p) = pts_path(pts, false) else { continue };
+        match class.as_str() {
+            "ridge" => ridges.push_path(&p),
+            "hip" => hips.push_path(&p),
+            _ => {}
+        }
+    }
+    if let Some(p) = hips.finish() {
+        line(pm, &p, &paint(ink(0.7)), &stroke(lw * 0.6), None);
+    }
+    if let Some(p) = ridges.finish() {
+        line(pm, &p, &paint(ink(0.95)), &stroke(lw * 1.05), None);
     }
 }

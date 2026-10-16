@@ -327,7 +327,42 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
         fill(&mut pm, &path, &paint(hex(col)), None);
         line(&mut pm, &path, &paint(hex(BUILDING_LINE)), &stroke(ctx.m(0.22).clamp(0.7, 1.6)), None);
     }
+    // roof planes from roof_shape.sql (z17+, SRK_ROOFS=off disables): a faint tone per facet,
+    // darker on the side facing away from the NW light, and a ridge hairline. Building parts
+    // are skipped where a roof mass already shows the planes.
+    let roofs = if z >= 17 && std::env::var("SRK_ROOFS").map(|v| v != "off").unwrap_or(true) {
+        load_roofs(&mut ctx)?
+    } else {
+        RoofData { facets: Vec::new(), lines: Vec::new(), sloped: Default::default() }
+    };
+    let roof_ink = hex(BUILDING_LINE);
+    for (rings, aspect, _) in &roofs.facets {
+        let shade = 1.0 - crate::roof_shapes::lit_factor(*aspect);
+        let mut pb = PathBuilder::new();
+        for r in rings {
+            if let Some(p) = pts_path(r, true) {
+                pb.push_path(&p);
+            }
+        }
+        if let Some(p) = pb.finish() {
+            fill(&mut pm, &p, &paint(with_alpha(roof_ink, 0.03 + 0.11 * shade)), None);
+        }
+    }
+    let mut ridges = PathBuilder::new();
+    for (pts, class) in &roofs.lines {
+        if class == "ridge" {
+            if let Some(p) = pts_path(pts, false) {
+                ridges.push_path(&p);
+            }
+        }
+    }
+    if let Some(p) = ridges.finish() {
+        line(&mut pm, &p, &paint(with_alpha(roof_ink, 0.45)), &stroke(ctx.m(0.07).clamp(0.4, 0.7)), None);
+    }
     for f in buildings.iter().filter(|f| is_part(f)) {
+        if roofs.sloped.contains(&f.id) {
+            continue;
+        }
         if let Some(path) = poly_path(&ctx, &f.geom) {
             line(&mut pm, &path, &paint(with_alpha(hex(BUILDING_LINE), 0.35)), &stroke(ctx.m(0.08).clamp(0.4, 0.8)), None);
         }

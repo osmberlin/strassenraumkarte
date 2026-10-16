@@ -1,6 +1,6 @@
 # Roof shapes for the design-research styles
 
-Branch `claude/design-roof-shapes-5961f4`. Scope: research, a data probe, and a working prototype of roof geometry (ridges, hips, gables, facets) built in SQL from OSM footprints and rendered by a preview preset. The `ink` and `la` styles are **not** edited here (other sessions own `style_ink.rs`, `style_la.rs`, `style_kit.rs`); section 8 says how each should use the new tables after merging.
+Branch `claude/design-roof-shapes-5961f4`. Scope: research, a data probe, and a working prototype of roof geometry (ridges, hips, gables, facets) built in SQL from OSM footprints and rendered by a preview preset. Section 8: integration into the `ink` and `la` styles (done after merging).
 
 ## 1. Summary
 
@@ -96,7 +96,11 @@ Rendered with `docs/design-research/tools/render_scenes.sh roofs /tmp/roofs`; sc
 - **Courtyard blocks (d) are flat, and that is correct for the data:** the six-storey apartment blocks there are tagged `roof:shape=flat`.
 - **Does not work well:** small bowtie facets where narrow courtyard wings meet (b, centre); L-shaped gables are approximate; at z19 the ridge lines are only slightly heavier than the outlines, so a style needs a clearly heavier ridge stroke than the base line width.
 
-## 8. How each style should use the data (not yet integrated)
+## 8. How each style uses the data (integrated 2026-10-16)
+
+**Status:** integrated in both styles on `claude/design-styles-rust` — ink step 22 (`02-fantasy-ink-map/steps/22-roof-shapes`), LA step 22 (`01-landscape-architecture/steps/22-roof-planes`). Implementation: `load_roofs`, `hatch_in_polygon`, `bearing_to_screen_deg` in `style_kit.rs`; `draw_roof_facets` in `style_ink.rs`; facet tones + ridge hairlines in `style_la.rs`. From z17, `SRK_ROOFS=off` disables, automatic fallback when the tables are missing. Seam checks stay < 0.1 %. Preview of the result: `roof-shapes/integrated-ink-la-schillerpromenade.jpg` (ink without roofs · ink with roofs · LA with roofs).
+
+The original integration notes follow.
 
 Both snippets assume `roof_shapes::lit_factor(aspect_deg)` is available. It is in `roof_shapes.rs` and returns 1 for facets facing the NW light and 0 for facets facing away.
 

@@ -926,3 +926,102 @@ pub fn railway_lines(ctx: &mut Ctx) -> Result<Vec<(Vec<(f32, f32)>, bool)>> {
         .map(|f| (line_pts(ctx, &f.geom), f.sub.is_empty() && f.class != "disused"))
         .collect())
 }
+
+/// Screen angle (degrees, pixel space, y down) of a map bearing (0 = north, clockwise).
+pub fn bearing_to_screen_deg(bearing_deg: f64) -> f32 {
+    let a = bearing_deg.to_radians();
+    (-(a.cos())).atan2(a.sin()).to_degrees() as f32
+}
+
+/// Hatch lines clipped analytically to a polygon (pixel rings): no mask needed, so it is cheap
+/// for hundreds of small roof facets. Line positions are world-anchored like `hatch_path`.
+pub fn hatch_in_polygon(ctx: &Ctx, rings: &[Vec<(f32, f32)>], spacing_px: f32, angle_deg: f32) -> Option<Path> {
+    let a = f64::from(angle_deg).to_radians();
+    let (dx, dy) = (a.cos(), a.sin());
+    let (nx, ny) = (-dy, dx);
+    let sp = f64::from(spacing_px);
+    let mpp = ctx.extent.metres_per_px();
+    let offset = (-(ctx.extent.bounds.minx * nx - ctx.extent.bounds.maxy * ny) / mpp).rem_euclid(sp);
+    let mut smin = f64::MAX;
+    let mut smax = f64::MIN;
+    for r in rings {
+        for &(x, y) in r {
+            let s = f64::from(x) * nx + f64::from(y) * ny;
+            smin = smin.min(s);
+            smax = smax.max(s);
+        }
+    }
+    if smin > smax {
+        return None;
+    }
+    let k0 = ((smin - offset) / sp).ceil() as i64;
+    let k1 = ((smax - offset) / sp).floor() as i64;
+    let mut pb = PathBuilder::new();
+    let mut us: Vec<f64> = Vec::new();
+    for k in k0..=k1 {
+        let t = offset + k as f64 * sp;
+        us.clear();
+        for r in rings {
+            let n = r.len();
+            for i in 0..n {
+                let (x0, y0) = (f64::from(r[i].0), f64::from(r[i].1));
+                let (x1, y1) = (f64::from(r[(i + 1) % n].0), f64::from(r[(i + 1) % n].1));
+                let s0 = x0 * nx + y0 * ny;
+                let s1 = x1 * nx + y1 * ny;
+                if (s0 <= t && t < s1) || (s1 <= t && t < s0) {
+                    let u0 = x0 * dx + y0 * dy;
+                    let u1 = x1 * dx + y1 * dy;
+                    us.push(u0 + (t - s0) / (s1 - s0) * (u1 - u0));
+                }
+            }
+        }
+        us.sort_by(|a, b| a.total_cmp(b));
+        for pair in us.chunks_exact(2) {
+            let (ua, ub) = (pair[0], pair[1]);
+            pb.move_to((t * nx + ua * dx) as f32, (t * ny + ua * dy) as f32);
+            pb.line_to((t * nx + ub * dx) as f32, (t * ny + ub * dy) as f32);
+        }
+    }
+    pb.finish()
+}
+
+/// Roof data from `roof_shape.sql` for the current extent (empty when the tables don't exist).
+pub struct RoofData {
+    /// (rings in px, aspect bearing, member osm ids)
+    pub facets: Vec<(Vec<Vec<(f32, f32)>>, f64, Vec<i64>)>,
+    /// (polyline px, class: ridge | hip | parapet)
+    pub lines: Vec<(Vec<(f32, f32)>, String)>,
+    /// osm ids of buildings that belong to a sloped (hipped/gabled) roof mass in view
+    pub sloped: std::collections::HashSet<i64>,
+}
+
+pub fn load_roofs(ctx: &mut Ctx) -> Result<RoofData> {
+    let mut out = RoofData { facets: Vec::new(), lines: Vec::new(), sloped: std::collections::HashSet::new() };
+    let exists: bool = ctx
+        .client
+        .query_one("SELECT to_regclass('public.roof_facet') IS NOT NULL AND to_regclass('public.roof_mass') IS NOT NULL", &[])
+        .map(|r| r.get(0))
+        .unwrap_or(false);
+    if !exists {
+        return Ok(out);
+    }
+    let facets = ctx.polygons(
+        "mass_id::bigint AS id, kind AS class, ids AS sub, aspect_deg::float8 AS num",
+        r#"(SELECT f.mass_id, f.kind, f.aspect_deg, f.geom, array_to_string(m.osm_ids, ',') AS ids
+            FROM roof_facet f JOIN roof_mass m USING (mass_id)
+            WHERE f.geom && ST_MakeEnvelope($1::float8, $2::float8, $3::float8, $4::float8, 3857)) q"#,
+        "ORDER BY mass_id",
+    )?;
+    for f in &facets {
+        let ids: Vec<i64> = f.sub.split(',').filter_map(|s| s.parse().ok()).collect();
+        if f.class == "hipped" || f.class == "gabled" {
+            out.sloped.extend(ids.iter().copied());
+        }
+        out.facets.push((poly_rings_px(ctx, &f.geom), f.num, ids));
+    }
+    let lines = ctx.lines("mass_id::bigint AS id, class, '' AS sub, 0::float8 AS num", "roof_shape_line", "")?;
+    for l in &lines {
+        out.lines.push((line_pts(ctx, &l.geom), l.class.clone()));
+    }
+    Ok(out)
+}

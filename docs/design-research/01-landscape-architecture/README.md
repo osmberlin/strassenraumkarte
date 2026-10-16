@@ -41,6 +41,7 @@ Tree legend: [`steps/20-legend-water-names/legend.jpg`](steps/20-legend-water-na
 | Play | sandpits with timber edge, water basins/channels, slides (white chute, ladder rungs), swing frames with seats, seesaws, springers, rotators, white structures with outline (plan cross on playhouses/platforms) |
 | Labels | street names (Avenir Next Medium, spaced caps, z17+), area names (Avenir Next Demi Bold, spaced caps), water names (Avenir Next italic, bank colour, z17+) |
 | Not available | parked cars: the QGIS layer reads `data/parking/street_parking_points_processed.geojson`, which is not generated in this checkout and has no table in PostGIS — skipped |
+| Roofs | from `roof_shape.sql` (z17+): faint facet tones by NW light, ridge hairlines (`SRK_ROOFS=off` to disable) |
 
 Variant: `SRK_LA_PALETTE=vivid` — saturated greens of modern competition plans for lawns, beds and crowns (see [step 11](steps/11-vivid-palette-variant/)).
 
