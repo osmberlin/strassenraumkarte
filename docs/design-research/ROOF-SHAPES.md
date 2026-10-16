@@ -102,32 +102,15 @@ Rendered with `docs/design-research/tools/render_scenes.sh roofs /tmp/roofs`; sc
 
 **Status:** integrated in both styles — ink step 22 (`02-fantasy-ink-map/steps/22-roof-shapes`), LA step 22 (`01-landscape-architecture/steps/22-roof-planes`). Implementation: `load_roofs`, `hatch_in_polygon`, `bearing_to_screen_deg` in `style_kit.rs`; `draw_roof_facets` in `style_ink.rs`; facet tones + ridge hairlines in `style_la.rs`. From z17, `SRK_ROOFS=off` disables, automatic fallback when the tables are missing. Seam checks stay < 0.1 %. Preview of the result: `roof-shapes/integrated-ink-la-schillerpromenade.jpg` (ink without roofs · ink with roofs · LA with roofs).
 
-**Merge note (PR #2):** the roofs branch built a second, parallel integration of the same data (`roof_shapes::load`, `draw_ink_facets`, `draw_ink_lines`, `draw_la_facets`, `draw_la_ridges`). When it was merged, the styles kept the integration above, so roofs are drawn once. The newer SQL (sliver merge, L-gable fallback, `valley` class) and the pipeline switch `ROOF_SHAPES` come from the roofs branch. The alternative drawing functions stay in `roof_shapes.rs`, used by the `--layers roofs` preview only, and are described below as an option. In the styles, the switch is `SRK_ROOFS=off`. The preview preset also accepts `0` and `false`.
-
-The roofs branch's integration notes follow.
+**Merge note (PR #2):** the roofs branch had built a second, parallel integration of the same data in `roof_shapes.rs`. The merge kept the integration above, so roofs are drawn once, and the unused parallel functions were removed afterwards (they are in git history, commit `f6a8ae6`). From the roofs branch come the newer SQL (sliver merge, L-gable fallback, `valley` class), the pipeline switch `ROOF_SHAPES` and the `--layers roofs` preview. `roof_shapes.rs` now holds only the shared light term `lit_factor`, the switch `switched_off` and the preview.
 
 Switches:
 
 | Where | Switch | Effect |
 | --- | --- | --- |
-| Render (`srk-render`, both styles) | `SRK_ROOFS=0` | Off: the styles draw exactly as before (ink: per-building hatch and ridge; LA: plain white volume). |
-| Render | (automatic) | Off when `roof_mass` / `roof_facet` / `roof_shape_line` are missing. |
+| Render (`srk-render`, both styles and the preview) | `SRK_ROOFS=off` (or `0`, `false`) | Off: the styles draw exactly as before (ink: per-building hatch and ridge; LA: plain white volume). |
+| Render | (automatic) | Off when the roof tables are missing. |
 | Pipeline (`data/data_preparation.sh`) | `ROOF_SHAPES=false` | Skips `roof_shape.sql`. Default `true`. |
-
-Shared code: `rust/srk-render/src/roof_shapes.rs`. `load()` reads facets, lines and flat masses for the tile, indexed by building `osm_id` (a building belongs to the mass that lists its id in `roof_mass.osm_ids`). Buildings with no roof data keep the old drawing.
-
-### Ink (`style_ink.rs`, `draw_buildings`)
-
-- **Light and shade:** ink's light comes from the south-west, so the north-east half is the shaded one (`roof_shapes::ink_shaded`: `cos(aspect − 45°) > 0`). This binary rule avoids flicker between neighbouring hip facets.
-- **Hatch:** every facet gets the main hatch **along the downslope direction** (screen angle `aspect − 90°`, the same convention as `axis_px`), clipped to the building footprint. Shaded facets get a second hatch along the ridge (screen angle `aspect`, spacing ×1.3, alpha 0.38).
-- **Lines:** ridge (weight `lw × 1.1`, alpha 0.9) always; hip, valley (`lw × 0.6`, 0.7) and parapet (`lw × 0.5`, 0.5) from z18.
-- **Oblique mode:** facets and lines are shifted by the same lift as the roof.
-- Flat masses get no slope hatch; they show a parapet line at z18+.
-
-### Landscape architecture (`style_la.rs`)
-
-- **Facet tone:** `SHADOW` at alpha `0.03 + 0.10 × shade`, where `shade = 1 − lit_factor` (NW light, the same light as the SE shadow). Clipped to the footprint, from z17. Peak 0.13 stays below the 0.34 shadow layer, so buildings still read white.
-- **Ridge hairline:** only the `ridge` class, 0.35 px, alpha 0.5, from z18. No hips, no valleys, no parapets.
 
 ### Edge classes (`roof_shape.sql`, `roof_edge_class`)
 

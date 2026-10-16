@@ -558,7 +558,7 @@ fn draw_buildings(ctx: &mut Ctx, pm: &mut Pixmap, lw: f32) -> Result<()> {
     order.sort_by(|a, b| a.0.total_cmp(&b.0));
     // roof planes from roof_shape.sql (z17+, SRK_ROOFS=off disables). Pass 0 draws plan-view
     // buildings, then the roof facets of their masses, pass 1 the lifted (oblique) buildings on top.
-    let roofs = if ctx.z >= 17 && std::env::var("SRK_ROOFS").map(|v| v != "off").unwrap_or(true) {
+    let roofs = if ctx.z >= 17 && !crate::roof_shapes::switched_off() {
         load_roofs(ctx)?
     } else {
         RoofData { facets: Vec::new(), lines: Vec::new(), sloped: Default::default() }

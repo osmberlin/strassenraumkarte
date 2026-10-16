@@ -336,7 +336,7 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
     // roof planes from roof_shape.sql (z17+, SRK_ROOFS=off disables): a faint tone per facet,
     // darker on the side facing away from the NW light, and a ridge hairline. Building parts
     // are skipped where a roof mass already shows the planes.
-    let roofs = if z >= 17 && std::env::var("SRK_ROOFS").map(|v| v != "off").unwrap_or(true) {
+    let roofs = if z >= 17 && !crate::roof_shapes::switched_off() {
         load_roofs(&mut ctx)?
     } else {
         RoofData { facets: Vec::new(), lines: Vec::new(), sloped: Default::default() }

@@ -279,7 +279,7 @@ else
   run_sql "processing/sql/building.sql" "Process building outlines"
 
   # + | 01:00 | Dependency: building outlines and roof:shape from building.sql (roof_line is dropped there)
-  # ROOF_SHAPES=false skips the roof tables; the styles then draw their own roof hatch (SRK_ROOFS=0 at render time)
+  # ROOF_SHAPES=false skips the roof tables; the styles then draw their own roof hatch (SRK_ROOFS=off at render time)
   if [[ "${ROOF_SHAPES:-true}" == "true" ]]; then
     run_sql "processing/sql/roof_shape.sql" "Roof masses, facets and ridge lines"
   else
