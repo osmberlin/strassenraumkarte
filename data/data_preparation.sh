@@ -278,6 +278,9 @@ else
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Process building outlines..."
   run_sql "processing/sql/building.sql" "Process building outlines"
 
+  # + | 01:00 | Dependency: building outlines and roof:shape from building.sql (roof_line is dropped there)
+  run_sql "processing/sql/roof_shape.sql" "Roof masses, facets and ridge lines"
+
   # * | 00:05 | Dependency: building_parts from building.sql
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Uniform housenumbers..."
   run_sql "processing/sql/housenumber.sql" "Uniform housenumbers"
