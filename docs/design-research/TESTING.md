@@ -14,7 +14,7 @@ Three checks cover this, in increasing cost:
 | Check | Where | Needs DB | Time |
 | --- | --- | --- | --- |
 | Unit tests (`style_tests.rs`) | `cargo test --release` | no | ~2 s |
-| Golden regression + seam check (`regress.sh`) | `docs/design-research/tools/regress.sh` | yes (PostGIS on `localhost:5433`, read-only) | ~5 min |
+| Golden regression + seam check (`regress.sh`) | `docs/design-research/tools/regress.sh` | yes (PostGIS on `localhost:5433`, read-only) | 5–12 min |
 | Single-preset seam check (`seam_check.sh`) | `docs/design-research/tools/seam_check.sh la` | yes | ~30 s per preset |
 
 ## 1. Unit tests
@@ -126,7 +126,8 @@ cargo clippy --release --all-targets
 ```
 
 `cargo clippy` currently **fails** (exit 1) because of five deny-by-default errors in the style
-files. These belong to the style sessions and were not edited by the test work:
+files. These are in the style sessions' files and were left unchanged by the test work
+(checked 2026-10-16, rust 1.96):
 
 | Lint | Where | Fix |
 | --- | --- | --- |
@@ -138,9 +139,8 @@ Warnings in the same files (not blocking):
 - `style_kit.rs` 51 `Ctx::query` and 792 `railway_lines`: type complexity; a `type` alias would do.
 - `style_kit.rs` 503, 650, 708: field assignment after `Default::default()`; use struct update syntax.
 
-`style_tests.rs` is clippy-clean. Until the errors are fixed, run the lint on the test file only
-by reading its output (`cargo clippy --release --all-targets 2>&1 | grep style_tests`); the
-output is empty for it.
+`style_tests.rs` is clippy-clean: `cargo clippy --release --all-targets 2>&1 | grep style_tests`
+prints nothing.
 
 ## Checklist before merging a style change
 
