@@ -226,57 +226,83 @@ pub fn draw_genus_crown(pm: &mut Pixmap, c: &Crown, k: f32) {
 // ---------------------------------------------------------------------------------------------
 // roof colours
 
-/// SQL expression for the mapped roof colour (`roof:colour`, else `building:colour`), or NULL
-/// when the import predates these columns (they were added to `osm_import.lua` on 2026-10-16;
-/// older databases need a re-import to use them).
+/// SQL expression for the mapped `roof:colour`, or `''` when the import predates the column (it
+/// was added to `osm_import.lua` on 2026-10-16). `building:colour` is imported too but not used:
+/// it is the facade colour, which a plan view does not show.
 pub fn roof_colour_sql(client: &mut postgres::Client) -> &'static str {
     static HAS: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     let has = *HAS.get_or_init(|| {
         client
-            .query_one(
-                "SELECT count(*) FROM information_schema.columns WHERE table_name = 'building' AND column_name IN ('roof:colour', 'building:colour')",
-                &[],
-            )
-            .map(|r| r.get::<_, i64>(0) == 2)
+            .query_one("SELECT count(*) FROM information_schema.columns WHERE table_name = 'building' AND column_name = 'roof:colour'", &[])
+            .map(|r| r.get::<_, i64>(0) == 1)
             .unwrap_or(false)
     });
-    if has { r#"COALESCE("roof:colour", "building:colour", '')"# } else { "''::text" }
+    if has { r#"COALESCE("roof:colour", '')"# } else { "''::text" }
 }
 
-/// Mapped roof colour → muted plan tone. Reds/browns become the terracotta accent, greys stay
-/// light, green roofs become a pale sage; anything else (or unparsable) → `None` (default rules).
-pub fn roof_tone(tag: &str) -> Option<&'static str> {
+/// What a mapped roof colour means for the plan. The mission keeps buildings white with the odd
+/// red roof, so the data only decides *where* the accents go, not a palette of its own.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum RoofTone {
+    /// saturated red/orange/brown: terracotta accent (small buildings only, see style_la)
+    Red,
+    /// saturated green: green roof, a very pale sage tint
+    Green,
+    /// anything else that parses (greys, whites, muted tones, blues): plain white volume, and
+    /// never the random red accent
+    Plain,
+}
+
+pub fn roof_tone(tag: &str) -> Option<RoofTone> {
     let t = tag.trim().to_ascii_lowercase();
-    let named = match t.as_str() {
-        "red" | "darkred" | "brown" | "maroon" | "orange" | "terracotta" | "brick" | "sienna" | "firebrick" | "chocolate" => Some("#C98C7A"),
-        "darkbrown" | "saddlebrown" => Some("#B98270"),
-        "grey" | "gray" | "silver" | "lightgrey" | "lightgray" | "gainsboro" => Some("#E2DFD8"),
-        "darkgrey" | "darkgray" | "dimgray" | "dimgrey" | "slategray" | "black" | "anthracite" => Some("#CFCCC5"),
-        "green" | "darkgreen" | "olive" | "olivedrab" => Some("#C3CBB0"),
-        "white" | "beige" | "ivory" => Some("#FBFAF7"),
-        _ => None,
-    };
-    if named.is_some() {
-        return named;
-    }
-    // #rrggbb: classify by hue and lightness
-    let h = t.strip_prefix('#')?;
-    if h.len() != 6 {
+    if t.is_empty() {
         return None;
     }
+    match t.as_str() {
+        "red" | "darkred" | "brown" | "maroon" | "orange" | "terracotta" | "brick" | "sienna" | "firebrick" | "chocolate"
+        | "darkbrown" | "saddlebrown" | "indianred" | "tomato" => return Some(RoofTone::Red),
+        "green" | "darkgreen" | "olive" | "olivedrab" | "forestgreen" => return Some(RoofTone::Green),
+        _ => {}
+    }
+    let Some(h) = t.strip_prefix('#').filter(|h| h.len() == 6) else {
+        // other colour names (grey, white, black, silver …)
+        return t.chars().all(|c| c.is_ascii_alphabetic()).then_some(RoofTone::Plain);
+    };
     let v = u32::from_str_radix(h, 16).ok()?;
     let (r, g, b) = (((v >> 16) & 255) as f32, ((v >> 8) & 255) as f32, (v & 255) as f32);
     let (mx, mn) = (r.max(g).max(b), r.min(g).min(b));
-    let l = (mx + mn) / 510.0;
-    Some(if mx - mn < 30.0 {
-        if l > 0.75 { "#FBFAF7" } else if l > 0.45 { "#E2DFD8" } else { "#CFCCC5" }
+    // saturation relative to the brightest channel: khaki and taupe (#948975, #A29893) stay plain
+    let sat = if mx > 0.0 { (mx - mn) / mx } else { 0.0 };
+    Some(if sat < 0.3 {
+        RoofTone::Plain
     } else if r >= g && r >= b {
-        if l > 0.45 { "#C98C7A" } else { "#B98270" }
+        RoofTone::Red
     } else if g >= r && g >= b {
-        "#C3CBB0"
+        RoofTone::Green
     } else {
-        "#E2DFD8"
+        RoofTone::Plain
     })
+}
+
+#[cfg(test)]
+#[test]
+fn roof_tone_classes() {
+    use RoofTone::*;
+    for (tag, want) in [
+        ("#CD8A73", Some(Red)),
+        ("#c56b60", Some(Red)),
+        ("red", Some(Red)),
+        ("#4A5624", Some(Green)),
+        ("#948975", Some(Plain)),
+        ("#A29893", Some(Plain)),
+        ("#7382AD", Some(Plain)),
+        ("gray", Some(Plain)),
+        ("white", Some(Plain)),
+        ("", None),
+        ("#12", None),
+    ] {
+        assert_eq!(roof_tone(tag), want, "{tag}");
+    }
 }
 
 // ---------------------------------------------------------------------------------------------
