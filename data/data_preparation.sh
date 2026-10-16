@@ -279,7 +279,12 @@ else
   run_sql "processing/sql/building.sql" "Process building outlines"
 
   # + | 01:00 | Dependency: building outlines and roof:shape from building.sql (roof_line is dropped there)
-  run_sql "processing/sql/roof_shape.sql" "Roof masses, facets and ridge lines"
+  # ROOF_SHAPES=false skips the roof tables; the styles then draw their own roof hatch (SRK_ROOFS=0 at render time)
+  if [[ "${ROOF_SHAPES:-true}" == "true" ]]; then
+    run_sql "processing/sql/roof_shape.sql" "Roof masses, facets and ridge lines"
+  else
+    echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Roof shapes skipped (ROOF_SHAPES=${ROOF_SHAPES})"
+  fi
 
   # * | 00:05 | Dependency: building_parts from building.sql
   echo "$(date +'%Y-%m-%d %H:%M:%S')  [INFO]    - Uniform housenumbers..."
