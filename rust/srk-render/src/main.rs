@@ -17,6 +17,7 @@ mod pitch_markings;
 mod profile;
 mod sql_cache;
 mod style_ink;
+mod style_ink_extra;
 mod style_kit;
 mod style_la;
 mod svg_stamps;
