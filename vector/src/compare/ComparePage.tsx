@@ -21,7 +21,6 @@ import {
   COMPARE_PANES,
   findLocation,
   isNearCompareLocation,
-  modeById,
   type CompareMode,
   type ComparePaneId,
   type ComparePanes,
@@ -206,7 +205,7 @@ export function ComparePage({
   return (
     <div className="compare">
       <header className="bar">
-        <button type="button" className="legend-btn" onClick={onBack}>
+        <button type="button" className="btn" onClick={onBack}>
           ← Preview
         </button>
         <div
@@ -235,6 +234,7 @@ export function ComparePage({
         <label className="compare-field">
           Location
           <select
+            className="select"
             value={location?.id ?? ''}
             onChange={(e) => jump(e.target.value)}
           >
@@ -246,22 +246,24 @@ export function ComparePage({
             ))}
           </select>
         </label>
-        <label className="compare-field">
-          Mode
-          <select
-            value={mode}
-            onChange={(e) => onMode(modeById(e.target.value))}
-          >
+        <div className="compare-field">
+          <span>Mode</span>
+          <div className="seg" role="group" aria-label="Mode">
             {COMPARE_MODES.map((m) => (
-              <option key={m.id} value={m.id}>
+              <button
+                key={m.id}
+                type="button"
+                aria-pressed={mode === m.id}
+                onClick={() => onMode(m.id)}
+              >
                 {m.label}
-              </option>
+              </button>
             ))}
-          </select>
-        </label>
+          </div>
+        </div>
         <button
           type="button"
-          className="legend-btn"
+          className="btn"
           aria-pressed={showTileIds}
           onClick={toggleTileIds}
           title="MapLibre tile outlines + z/x/y labels"

@@ -105,6 +105,8 @@
       <input type="checkbox" id="frames" class="size-4 rounded border-zinc-300 accent-zinc-900 dark:accent-white" />
       Szenen-Rahmen
     </label>
+    <!-- same view in the MapLibre vector compare (QGIS · Rust · Vector panes); href follows the map, see writeHash -->
+    <a id="vectorLink" class="btn" href="#" target="_blank" rel="noopener" title="Gleicher Ausschnitt im Vektor-Vergleich (vector/, bun run dev)">Vektor-Vergleich ↗</a>
 
     <p id="status" class="hidden text-sm/6 text-amber-700 dark:text-amber-400"></p>
     <p class="ml-auto hidden items-center gap-1.5 text-xs/5 text-zinc-500 xl:flex dark:text-zinc-400">
@@ -153,6 +155,7 @@
       qgis: 'QGIS heute',
     };
     const DEFAULT_VIEW = { z: 18, lat: 52.4771, lng: 13.4222 };
+    const VECTOR_URL = 'http://127.0.0.1:5177/';  // vector/ dev server (bun run dev)
 
     const $ = id => document.getElementById(id);
     document.body.className = 'single';
@@ -176,10 +179,13 @@
 
     const writeHash = () => {
       const c = mapA.getCenter();
-      let h = `#map=${mapA.getZoom()}/${c.lat.toFixed(5)}/${c.lng.toFixed(5)}&a=${state.a}&b=${state.b}&mode=${state.mode}`;
+      const at = `${mapA.getZoom()}/${c.lat.toFixed(5)}/${c.lng.toFixed(5)}`;
+      let h = `#map=${at}&a=${state.a}&b=${state.b}&mode=${state.mode}`;
       if (state.mode === 'swipe') h += `&split=${state.split.toFixed(3)}`;
       if (state.frames) h += '&frames=1';
       history.replaceState(null, '', h);
+      // the vector compare (vector/, bun run dev) takes the same view as ?map=zoom/lat/lng
+      $('vectorLink').href = `${VECTOR_URL}?compare=1&panes=qgis,rust,vector&map=${at}`;
     };
 
     // ---- two synced maps (B is hidden in single mode, sized in setMode)

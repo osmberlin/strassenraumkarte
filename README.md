@@ -143,6 +143,10 @@ Serve the tile directory with a small local server that also lists PBFs under `d
 
 The preview page can optionally show classic OSM tiles underneath the Straßenraumkarte and includes a metatile/gutter debug overlay. For tiles-only viewing without the run API, `cd render/tiles && python3 -m http.server 8000` still works.
 
+### Viewers and scene comparison
+
+There are four viewers (the QGIS preview above, the design-research viewer, the MapLibre vector app with its QGIS · Rust · Vector compare, and the static galleries). [docs/VIEWERS.md](docs/VIEWERS.md) says which one to use. To compare scenes between styles, see [Szenen vergleichen / Comparing scenes](docs/design-research/README.md#szenen-vergleichen--comparing-scenes).
+
 ### Data preparation only
 
 ```bash
