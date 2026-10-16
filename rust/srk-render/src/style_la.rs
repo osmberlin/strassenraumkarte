@@ -312,14 +312,20 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
         let home = matches!(f.class.as_str(), "house" | "detached" | "semidetached_house" | "terrace" | "residential" | "chalet" | "allotment_house" | "bungalow");
         // red roofs: an accent on small homes only (unknown `building=yes` only when tiny)
         let red = !landmark && ((home && area < 250.0) || (f.class == "yes" && area < 120.0)) && r < 0.25;
+        // mapped roof:colour decides where the accent goes, within the plan's vocabulary: red
+        // only on small non-landmark buildings, pale tint for green roofs, otherwise white (and
+        // a mapped non-red roof is never picked as a random red one)
         let mapped = f.sub.split_once('|').and_then(|(_, c)| extra::roof_tone(c));
-        let col = if let Some(m) = mapped {
-            m
+        let small = !landmark && area < 600.0;
+        let col = if mapped == Some(extra::RoofTone::Red) && small {
+            if r < 0.5 { "#C98C7A" } else { "#B98270" }
+        } else if mapped == Some(extra::RoofTone::Green) {
+            "#E6E9DD"
         } else if landmark {
             "#F5F4EF"
         } else if outbuilding {
             "#DEDBD3"
-        } else if red {
+        } else if red && mapped.is_none() {
             if r < 0.15 { "#C98C7A" } else { "#B98270" }
         } else {
             BUILDING
