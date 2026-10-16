@@ -9,6 +9,12 @@ render/tiles/**
 logs/*
 !logs/.gitkeep
 
+# Local caches (osmium bbox extracts, etc.)
+tmp/**
+!tmp/.gitkeep
+!tmp/osm-extracts/
+!tmp/osm-extracts/.gitkeep
+
 # Python
 __pycache__/
 *.py[cod]
@@ -22,13 +28,88 @@ style/.*_work/
 
 # Local backups / editor
 backup/
-.cursor/
+# Ignore Cursor local state, but keep committed plans + orchestration pins
+.cursor/*
+!.cursor/plans/
+!.cursor/plans/**
+!.cursor/agents/
+!.cursor/agents/**
+!.cursor/rules/
+!.cursor/rules/**
 
 # Local / env
 data/.venv/
 .pgpass
+docker/.env
+
+# Performance audit run artefacts (raw timings + reports)
+audit/runs/**
+!audit/runs/.gitkeep
+
+# Render exploration case outputs (keep scripts + committed RESULTS)
+audit/render-explore/**
+!audit/render-explore/run-explore.sh
+!audit/render-explore/run-large-workers.sh
+!audit/render-explore/run-metatile-explore.sh
+!audit/render-explore/README.md
+!audit/render-explore/RESULTS.md
+!audit/render-explore/LARGE_WORKERS.md
+!audit/render-explore/METATILE.md
+!audit/render-explore/.gitkeep
+
+# SQL before/after fingerprints (reference freeze + candidates)
+audit/sql-compare/reference/**
+!audit/sql-compare/reference/.gitkeep
+audit/sql-compare/candidates/**
+!audit/sql-compare/candidates/.gitkeep
+
+# Tile visual compare artefacts
+audit/tile-compare/reference/**
+!audit/tile-compare/reference/.gitkeep
+audit/tile-compare/candidates/**
+!audit/tile-compare/candidates/.gitkeep
+audit/tile-compare/.venv/
+
+# Tile regression harness runs (keep README, fixture lock, scripts when present)
+audit/tile-regression/runs/**
+!audit/tile-regression/runs/.gitkeep
+audit/tile-regression/node_modules/
+
+# Rust crate build artefacts
+rust/**/target/
+
+# Style IR / oracle dumps (generated; keep dir when scripts land)
+style/generated/**
+!style/generated/.gitkeep
+!style/generated/style-inventory.md
+!style/generated/expression-surface.json
+!style/generated/style-ir.json
 
 # Local notes / legacy
 TODO.txt
 todo_from_post_processing.py
 style/lanes.qgz
+
+# Vector output channel (GeoJSONSeq / PMTiles / build)
+vector/out/**
+!vector/out/.gitkeep
+vector/public/tiles/**
+!vector/public/tiles/.gitkeep
+vector/public/sprites/**
+!vector/public/sprites/.gitkeep
+!vector/public/sprites/strassenraumkarte*.json
+!vector/public/sprites/strassenraumkarte*.png
+vector/dist/
+vector/node_modules/
+vector/.tsbuildinfo-*
+vector/test-results/
+vector/compare-output/**
+!vector/compare-output/.gitkeep
+
+# macOS
+.DS_Store
+
+# Design research: downloaded and collected reference images stay local (copyright)
+docs/design-research/*/references/web/
+docs/design-research/*/references/user/
+.venv-design/
