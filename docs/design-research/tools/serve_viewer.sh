@@ -7,6 +7,8 @@
 # Tiles go to tmp/design-tiles/<variant>/{z}/{x}/{y}.webp (gitignored); then
 # http://127.0.0.1:<port>/ shows viewer.html: one or two layers (swipe / side by side),
 # scene jump list, state in the URL. The default bbox covers all six scenes.
+# The "Vektor-Vergleich" button opens the same view in the MapLibre compare (vector/, port 5177).
+# Which viewer is for what, and how to compare scenes: docs/VIEWERS.md, docs/design-research/README.md.
 #
 #   SKIP_RENDER=1        only serve existing tiles
 #   VARIANTS="la ink"    render only these variants (default: all, see render calls below)
@@ -133,4 +135,5 @@ PY
 write_index "$OUT"
 [[ -n ${INDEX_ONLY:-} ]] && { echo "→ $OUT written (no server)"; exit 0; }
 echo "→ http://127.0.0.1:$PORT/   (compare: #mode=swipe&a=la&b=qgis)"
+echo "  vector compare (QGIS · Rust · Vector, needs bun run dev in vector/): http://127.0.0.1:5177/?compare=1&panes=qgis,rust,vector"
 cd "$OUT" && exec python3 -m http.server "$PORT" --bind 127.0.0.1
