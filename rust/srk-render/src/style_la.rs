@@ -13,6 +13,9 @@ use crate::sql_cache::PreparedCache;
 use crate::style_kit::*;
 use crate::tile::RenderExtent;
 
+#[path = "style_la_extra.rs"]
+mod extra;
+
 // Palette from the user's Pinterest board (swatch pin) + measured historic plans.
 const PAPER: &str = "#EAE9E3";
 const LAWN: &str = "#CBD4BC";
@@ -182,11 +185,17 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
 
     // ---- streets
     let areas = ctx.polygons(
-        r#"osm_id AS id, "area:highway" AS class, class AS sub, 0::float8 AS num"#,
+        r#"osm_id AS id, "area:highway" AS class, class AS sub, COALESCE(layer, 0)::float8 AS num"#,
         "highway_area",
         "ORDER BY COALESCE(layer,0)",
     )?;
+    // ground-level street areas, then bridge decks (shadow onto rails/water/roads), then raised areas
+    let mut bridges_done = false;
     for f in &areas {
+        if !bridges_done && f.num >= 1.0 {
+            extra::draw_bridges(&mut ctx, &mut pm)?;
+            bridges_done = true;
+        }
         let Some(col) = area_highway_colour(&f.class) else { continue };
         if let Some(path) = poly_path(&ctx, &f.geom) {
             fill(&mut pm, &path, &paint(hex(col)), None);
@@ -196,6 +205,9 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
                 line(&mut pm, &path, &paint(with_alpha(Color::WHITE, 0.9)), &stroke(ctx.m(0.1).max(0.5)), None);
             }
         }
+    }
+    if !bridges_done {
+        extra::draw_bridges(&mut ctx, &mut pm)?;
     }
     let paths = ctx.lines(
         "osm_id AS id, highway AS class, class AS sub, COALESCE(width, 0)::float8 AS num",
@@ -224,6 +236,9 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
             line(&mut pm, &path, &paint(hex(col)), &stroke(ctx.m(w).max(0.8)), None);
         }
     }
+
+    // bridge decks: crisp parapet edge over the street surfaces
+    extra::draw_bridge_edges(&mut ctx, &mut pm)?;
 
     // ---- paving joints (z19+): ticks across sidewalks, fine grid on pedestrian areas
     if z >= 19 {
@@ -380,7 +395,7 @@ struct Crown {
 
 fn draw_trees(ctx: &mut Ctx, pm: &mut Pixmap, woods: &[&Polygon<f64>]) -> Result<()> {
     let trees = ctx.points(
-        "osm_id AS id, COALESCE(genus, leaf_type, '') AS class, COALESCE(leaf_type, '') AS sub, COALESCE(diameter_crown, 6)::float8 AS num",
+        "osm_id AS id, COALESCE(genus, leaf_type, '') AS class, COALESCE(leaf_type, '') AS sub, COALESCE(diameter_crown, 0)::float8 AS num",
         "tree",
         "",
     )?;
@@ -389,10 +404,18 @@ fn draw_trees(ctx: &mut Ctx, pm: &mut Pixmap, woods: &[&Polygon<f64>]) -> Result
     for t in &trees {
         let (x, y) = ctx.px(t.geom.0);
         let in_wood = woods.iter().any(|p| point_in_polygon(t.geom.0, p));
-        let key = if t.class.is_empty() { t.id } else { t.class.bytes().fold(7i64, |h, b| h.wrapping_mul(31).wrapping_add(i64::from(b))) };
-        let variant = if t.sub == "needleleaved" { 3 } else { (rand01(key, 5) * 3.0) as u8 };
-        let colour = hex(crown_palette()[(rand01(key, 9) * 6.0) as usize % 6]);
-        let c = Crown { x, y, r: ctx.m(t.num.clamp(2.0, 18.0) / 2.0), variant, colour, seed: t.id };
+        // known genus → its own plan symbol, colour and default crown size; otherwise the generic
+        // symbols picked by id (conifers by leaf_type)
+        let spec = extra::genus_spec(&t.class);
+        let (variant, colour, default_d) = match &spec {
+            Some(g) => (g.variant, crown_palette()[g.colour], g.default_d),
+            None => {
+                let v = if t.sub == "needleleaved" { 3 } else { (rand01(t.id, 5) * 3.0) as u8 };
+                (v, crown_palette()[(rand01(t.id, 9) * 6.0) as usize % 6], 6.0)
+            }
+        };
+        let d = if t.num > 0.0 { t.num } else { default_d };
+        let c = Crown { x, y, r: ctx.m(d.clamp(2.0, 18.0) / 2.0), variant, colour: hex(colour), seed: t.id };
         if in_wood { forest.push(c) } else { crowns.push(c) }
     }
     // woodland: world-anchored scatter of crowns inside forest polygons
@@ -480,6 +503,7 @@ fn draw_crown(pm: &mut Pixmap, c: &Crown, k: f32) {
                 line(pm, &p, &paint(with_alpha(dark, 0.8)), &stroke(w), None);
             }
         }
+        4.. => extra::draw_genus_crown(pm, c, k),
         // conifer: star
         _ => {
             let n = 12;
@@ -562,71 +586,8 @@ fn draw_details(ctx: &mut Ctx, pm: &mut Pixmap) -> Result<()> {
             _ => {}
         }
     }
-    // play equipment: structures white with outline, lines (slides, beams) as dark strokes
-    let pg = ctx.polygons("osm_id AS id, playground AS class, NULL::text AS sub, 0::float8 AS num", "playground_polygon", "")?;
-    for f in &pg {
-        if let Some(p) = poly_path(ctx, &f.geom) {
-            let col = if f.class == "sandpit" { "#E8E2D0" } else { "#FFFFFF" };
-            fill(pm, &p, &paint(hex(col)), None);
-            line(pm, &p, &paint(hex("#7C7A70")), &stroke(0.7), None);
-        }
-    }
-    let pgw = ctx.lines("osm_id AS id, playground AS class, NULL::text AS sub, 0::float8 AS num", "playground_way", "")?;
-    for f in &pgw {
-        if let Some(p) = line_path(ctx, &f.geom) {
-            line(pm, &p, &paint(hex("#6C6B5A")), &stroke(ctx.m(0.25).max(0.9)), None);
-        }
-    }
-    if ctx.z < 18 {
-        return Ok(());
-    }
-    let pgn = ctx.points("osm_id AS id, playground AS class, NULL::text AS sub, 0::float8 AS num", "playground_node", "")?;
-    for f in &pgn {
-        let (x, y) = ctx.px(f.geom.0);
-        if let Some(p) = PathBuilder::from_circle(x, y, ctx.m(0.5).max(1.5)) {
-            fill(pm, &p, &paint(hex("#FFFFFF")), None);
-            line(pm, &p, &paint(hex("#6C6B5A")), &stroke(0.7), None);
-        }
-    }
-    let furniture = ctx.points(
-        "osm_id AS id, class, subclass AS sub, COALESCE(direction, -1)::float8 AS num",
-        "feature_node WHERE class IN ('bench', 'waste_basket', 'bicycle_parking', 'street_lamp', 'table_tennis', 'drinking_water')",
-        "",
-    )?;
-    let dark = hex("#5F5E57");
-    for f in &furniture {
-        let (x, y) = ctx.px(f.geom.0);
-        let ang = if f.num >= 0.0 { (f.num as f32).to_radians() } else { 0.0 };
-        match f.class.as_str() {
-            "bench" => {
-                if let Some(p) = rect_rot(x, y, ctx.m(1.8).max(3.0), ctx.m(0.55).max(1.2), ang) {
-                    fill(pm, &p, &paint(hex("#FFFFFF")), None);
-                    line(pm, &p, &paint(dark), &stroke(0.7), None);
-                }
-            }
-            "table_tennis" => {
-                if let Some(p) = rect_rot(x, y, ctx.m(2.7), ctx.m(1.5), ang) {
-                    fill(pm, &p, &paint(hex("#FFFFFF")), None);
-                    line(pm, &p, &paint(dark), &stroke(0.7), None);
-                }
-            }
-            "waste_basket" | "drinking_water" => {
-                if let Some(p) = PathBuilder::from_circle(x, y, ctx.m(0.3).max(1.0)) {
-                    fill(pm, &p, &paint(dark), None);
-                }
-            }
-            "street_lamp" => {
-                if let Some(p) = PathBuilder::from_circle(x, y, ctx.m(0.25).max(0.9)) {
-                    line(pm, &p, &paint(with_alpha(dark, 0.8)), &stroke(0.6), None);
-                }
-            }
-            _ => {
-                if let Some(p) = rect_rot(x, y, ctx.m(1.6).max(2.5), ctx.m(0.12).max(0.6), ang) {
-                    fill(pm, &p, &paint(with_alpha(dark, 0.8)), None);
-                }
-            }
-        }
-    }
+    extra::draw_play(ctx, pm)?;
+    extra::draw_furniture(ctx, pm)?;
     Ok(())
 }
 
