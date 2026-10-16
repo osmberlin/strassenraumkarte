@@ -126,7 +126,7 @@ Tiles are written as XYZ files under `render/tiles/{z}/{x}/{y}.{webp|png|jpg}`.
 
 Parked vehicles come from street-parking **lines** supplied separately (not from the OSM import). Two sources are supported:
 
-1. **TILDA Parkraum** — export as `data/parking/street_parking.gpkg`. Currently available for Berlin ([TILDA Parkraum Berlin](https://tilda-geo.de/regionen/parkraum-berlin-euvm)); in most other cities this data is not publicly available.
+1. **TILDA Parkraum** — export the dataset `parkings` ([docs](https://tilda-geo.de/docs/parkings?r=parkraum-berlin-euvm)) as GeoPackage from [TILDA Parkraum Berlin](https://tilda-geo.de/regionen/parkraum-berlin-euvm) and save it as `data/parking/street_parking.gpkg`. The export is password protected, so only people with access to the region can provide this file. Currently available for Berlin only.
 2. [street_parking.py](https://github.com/SupaplexOSM/street_parking.py) — the predecessor script that generates parking lines from OSM; place the line output as `data/parking/street_parking_lines.geojson` or `data/parking/street_parking.geojson`.
 
 Processing looks for these files in that order (GPKG first). If none exist, street-parking tables are dropped and the map is built without parked cars. Do **not** use the point export (`street_parking_points.geojson`); vehicle points are generated in SQL.
