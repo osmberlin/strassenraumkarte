@@ -118,8 +118,11 @@ if os.environ.get("VIEW_CENTER"):
 else:
     w, s, e, n = (float(v) for v in os.environ["BBOX"].split(","))  # west,south,east,north
     center = [(s + n) / 2, (w + e) / 2]
+w, s, e, n = (float(v) for v in os.environ["BBOX"].split(","))  # west,south,east,north
 area = {"title": os.environ.get("AREA_NAME", ""), "center": center,
-        "zoom": int(os.environ["VIEW_ZOOM"]), "scenes": scenes}
+        "zoom": int(os.environ["VIEW_ZOOM"]),
+        "bounds": [[s, w], [n, e]],  # the map cannot be panned out of this box (maxBounds)
+        "scenes": scenes}
 json.dump(area, open(os.path.join(out, "area.json"), "w"), indent=1, ensure_ascii=False)
 print("area: centre", center, "zoom", area["zoom"], "scenes", len(scenes))
 PY

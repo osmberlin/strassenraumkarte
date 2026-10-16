@@ -186,7 +186,7 @@
     // Zoom: fixed levels from the zoom bar; the wheel steps one level per gesture (debounced, so a
     // trackpad does not skip several levels). No +/- buttons.
     const mapOpts = { minZoom: 15, maxZoom: 21, zoomSnap: 1, zoomDelta: 1, wheelPxPerZoomLevel: 200,
-      wheelDebounceTime: 200, zoomControl: false, zoomAnimation: false };
+      wheelDebounceTime: 200, zoomControl: false, zoomAnimation: false, maxBoundsViscosity: 1 };
     const mapA = L.map('mapA', { ...mapOpts, attributionControl: false }).setView([view.lat, view.lng], view.z);
     const mapB = L.map('mapB', { ...mapOpts, attributionControl: false }).setView([view.lat, view.lng], view.z);
     let syncing = false;
@@ -324,6 +324,8 @@
       // nested: an area has its own start view, title and scene list (area.json in its folder)
       if (area) {
         if (area.title) { $('areaTitle').textContent = area.title; document.title = `${area.title} · Design-Explorationen`; }
+        // like MapLibre's maxBounds: the view stays inside the area's box, also for a #map= link outside it
+        if (area.bounds) { const b = L.latLngBounds(area.bounds); mapA.setMaxBounds(b); mapB.setMaxBounds(b); }
         if (!hasHashView) mapA.setView(area.center, area.zoom, { animate: false });
         SCENES = area.scenes || [];
       }
