@@ -50,7 +50,7 @@ Only landmarks (`church`, `chapel`, `cathedral`: one spire on their smallest pol
 | Labels | street names (Hoefler Text Italic, paper halo, z16+), area names (Hoefler Text spaced capitals) |
 
 Variants:
-- `SRK_INK_OBLIQUE=freestanding` — free-standing buildings and landmarks are lifted into an oblique view (roof shifted north, south walls with windows); rows stay plan. Lifted buildings cast a hatched shadow towards the east-north-east ([step 20](steps/20-bridges-landmarks-furniture/)). See [step 11](steps/11-oblique-freestanding/). **Candidate for the default.**
+- `SRK_INK_OBLIQUE=freestanding` — free-standing buildings and landmarks are lifted into an oblique view (roof shifted north, south walls with windows); rows stay plan. Small connected groups (up to 6 buildings, 1800 m², such as semi-detached houses or rows of huts) are lifted together with one shared roof line ([step 22](steps/22-oblique-groups/)). Lifted buildings cast a hatched shadow towards the east-north-east ([step 20](steps/20-bridges-landmarks-furniture/)). See [step 11](steps/11-oblique-freestanding/). **Candidate for the default.**
 - `SRK_INK_PAPER=white` — black ink on white for print / two-colour printing. See [step 15](steps/15-paper-variant/).
 
 ## Plan vs. pseudo-3D

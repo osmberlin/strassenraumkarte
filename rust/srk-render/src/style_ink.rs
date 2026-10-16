@@ -489,13 +489,38 @@ fn stipple(ctx: &Ctx, pm: &mut Pixmap, polys: &[&Polygon<f64>], cell_m: f64, den
     }
 }
 
+/// Key of a lifted small group from a building's kind ("group;<h>;<key>"); None for other kinds.
+fn group_key(sub: &str) -> Option<&str> {
+    let mut parts = sub.split(';');
+    if parts.next()? != "group" {
+        return None;
+    }
+    parts.next()?;
+    parts.next()
+}
+
 fn draw_buildings(ctx: &mut Ctx, pm: &mut Pixmap, lw: f32) -> Result<()> {
+    // kind = 'part' | 'free;<h>;<key>' | 'group;<h>;<key>' | 'block;<h>;<key>': connected clusters
+    // (eps 0.8 m, as the old NOT EXISTS test) are counted over a window 300 m wider than the tile,
+    // so the stats do not depend on the tile drawn. Areas are 3857 m² × 0.371 ≈ m² at Berlin latitude.
+    // h = cluster maximum for free/group (one shared lift), own height for blocks (landmarks).
     let sql_from = r#"(
+        WITH env AS (SELECT ST_MakeEnvelope($1::float8, $2::float8, $3::float8, $4::float8, 3857) AS win),
+        near AS (
+          SELECT o.osm_id, o.geom, COALESCE(o.height, o."building:levels" * 3.0, 9) AS h,
+                 ST_ClusterDBSCAN(o.geom, eps := 0.8, minpoints := 1) OVER () AS cid
+          FROM building o, env
+          WHERE o."building:part" IS NULL AND o.geom && ST_Expand(env.win, 300)
+        ),
+        cl AS (SELECT cid, count(*) AS n, sum(ST_Area(geom)) * 0.371 AS a, max(h) AS h, min(osm_id) AS key
+               FROM near GROUP BY cid),
+        grp AS (SELECT near.osm_id, cl.n, cl.a, cl.h, cl.key FROM near JOIN cl USING (cid))
         SELECT b.osm_id, b.building, b.geom,
           CASE WHEN b."building:part" IS NOT NULL THEN 'part'
-               ELSE (NOT EXISTS (SELECT 1 FROM building o WHERE o.osm_id <> b.osm_id AND o."building:part" IS NULL
-                                 AND ST_DWithin(o.geom, b.geom, 0.8)))::text
-                    || ';' || COALESCE(b.height, b."building:levels" * 3.0, 9)::text
+               ELSE (CASE WHEN g.n = 1 THEN 'free' WHEN g.n <= 6 AND g.a <= 1800 THEN 'group' ELSE 'block' END)
+                    || ';' || (CASE WHEN g.n <= 6 AND g.a <= 1800 THEN g.h
+                                    ELSE COALESCE(b.height, b."building:levels" * 3.0, 9) END)::text
+                    || ';' || g.key::text
           END AS kind,
           CASE WHEN ST_Distance(e.p1, e.p2) >= ST_Distance(e.p2, e.p3)
                THEN degrees(ST_Azimuth(e.p1, e.p2)) ELSE degrees(ST_Azimuth(e.p2, e.p3)) END AS axis,
@@ -505,14 +530,14 @@ fn draw_buildings(ctx: &mut Ctx, pm: &mut Pixmap, lw: f32) -> Result<()> {
                    THEN ST_MakeLine(ST_Centroid(ST_MakeLine(e.p2, e.p3)), ST_Centroid(ST_MakeLine(e.p4, e.p1)))
                    ELSE ST_MakeLine(ST_Centroid(ST_MakeLine(e.p1, e.p2)), ST_Centroid(ST_MakeLine(e.p3, e.p4))) END)
           END AS ridge
-        FROM building b,
+        FROM building b LEFT JOIN grp g ON g.osm_id = b.osm_id,
         LATERAL (
           SELECT oe, ST_PointN(ST_ExteriorRing(oe), 1) p1, ST_PointN(ST_ExteriorRing(oe), 2) p2,
                  ST_PointN(ST_ExteriorRing(oe), 3) p3, ST_PointN(ST_ExteriorRing(oe), 4) p4
           FROM (SELECT ST_OrientedEnvelope(b.geom) AS oe) q
           WHERE GeometryType(oe) = 'POLYGON'
         ) e
-        WHERE b.geom && ST_MakeEnvelope($1::float8, $2::float8, $3::float8, $4::float8, 3857)
+        WHERE b.geom && (SELECT win FROM env)
       ) bb"#;
     let buildings = ctx.polygons(
         r#"osm_id AS id, COALESCE(building, 'yes') AS class, kind AS sub, COALESCE(axis, 0)::float8 AS num,
@@ -532,22 +557,32 @@ fn draw_buildings(ctx: &mut Ctx, pm: &mut Pixmap, lw: f32) -> Result<()> {
         .collect();
     order.sort_by(|a, b| a.0.total_cmp(&b.0));
     let fh = ctx.m(1.7).clamp(3.0, 14.0); // facade band height
-    // Variant: SRK_INK_OBLIQUE=freestanding lifts free-standing buildings into an oblique view
-    // (roof shifted north by a stylised height, south walls visible); rows and blocks stay plan.
+    // Variant: SRK_INK_OBLIQUE=freestanding lifts free-standing buildings and small connected groups
+    // (<= 6 buildings, <= 1800 m²; one shared lift per group) into an oblique view (roof shifted north
+    // by a stylised height, south walls visible); larger blocks and rows stay plan.
     let oblique = std::env::var("SRK_INK_OBLIQUE").map(|v| v == "freestanding").unwrap_or(false) && ctx.z >= 17;
     let mut lifts: std::collections::HashMap<i64, f32> = std::collections::HashMap::new();
     let hatch_sp = ctx.m(0.7).clamp(2.6, 6.0);
     let lift_of = |f: &Feature<Polygon<f64>>| -> f32 {
         let landmark = matches!(f.class.as_str(), "church" | "chapel" | "cathedral");
         let mut kind = f.sub.split(';');
-        let free = kind.next() == Some("true");
+        let mode = kind.next().unwrap_or("");
         let height_m: f64 = kind.next().and_then(|h| h.parse().ok()).unwrap_or(9.0);
-        if oblique && (free || landmark) {
+        if oblique && (matches!(mode, "free" | "group") || landmark) {
             ctx.m((height_m * if landmark { 0.6 } else { 0.5 }).clamp(3.0, 18.0)).clamp(4.0, 60.0)
         } else {
             0.0
         }
     };
+    // members of each lifted small group (by group key), to skip the walls between them
+    let mut by_group: std::collections::HashMap<&str, Vec<usize>> = std::collections::HashMap::new();
+    if oblique {
+        for (i, f) in buildings.iter().enumerate() {
+            if let Some(k) = group_key(&f.sub) {
+                by_group.entry(k).or_default().push(i);
+            }
+        }
+    }
     // lifted buildings cast a hatched shadow on the ground towards the east (light from the
     // south-west, as for the shaded roof half); drawn first so every building covers it
     if oblique {
@@ -613,13 +648,22 @@ fn draw_buildings(ctx: &mut Ctx, pm: &mut Pixmap, lw: f32) -> Result<()> {
                 if oy < 0.3 || band <= 0.0 {
                     continue;
                 }
+                // lifted group: no wall where the outward side is another member of the same group
+                if lift > 0.0 {
+                    if let Some(members) = group_key(&f.sub).and_then(|k| by_group.get(k)) {
+                        let (px, py) = ctx.world(mx + ox * 1.5, my + oy * 1.5);
+                        let pt = geo_types::Coord { x: px, y: py };
+                        if members.iter().any(|&j| j != i && point_in_polygon(pt, &buildings[j].geom)) {
+                            continue;
+                        }
+                    }
+                }
                 let k = if lift > 0.0 { 1.0 } else { oy.min(1.0) };
                 facade.move_to(ax, ay);
                 facade.line_to(bx, by);
                 facade.line_to(bx, by + dir * band * k);
                 facade.line_to(ax, ay + dir * band * k);
                 facade.close();
-                let _ = ox;
                 // windows: short vertical ticks along the edge, one row per storey when lifted
                 let step = ctx.m(3.2).max(6.0);
                 let n = if ctx.z >= 19 || lift > 0.0 { (len / step).floor() as i32 } else { 0 };
