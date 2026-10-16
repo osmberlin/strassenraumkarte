@@ -13,6 +13,9 @@ use crate::sql_cache::PreparedCache;
 use crate::style_kit::*;
 use crate::tile::RenderExtent;
 
+#[path = "style_la_extra.rs"]
+mod extra;
+
 // Palette from the user's Pinterest board (swatch pin) + measured historic plans.
 const PAPER: &str = "#EAE9E3";
 const LAWN: &str = "#CBD4BC";
@@ -182,11 +185,17 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
 
     // ---- streets
     let areas = ctx.polygons(
-        r#"osm_id AS id, "area:highway" AS class, class AS sub, 0::float8 AS num"#,
+        r#"osm_id AS id, "area:highway" AS class, class AS sub, COALESCE(layer, 0)::float8 AS num"#,
         "highway_area",
         "ORDER BY COALESCE(layer,0)",
     )?;
+    // ground-level street areas, then bridge decks (shadow onto rails/water/roads), then raised areas
+    let mut bridges_done = false;
     for f in &areas {
+        if !bridges_done && f.num >= 1.0 {
+            extra::draw_bridges(&mut ctx, &mut pm)?;
+            bridges_done = true;
+        }
         let Some(col) = area_highway_colour(&f.class) else { continue };
         if let Some(path) = poly_path(&ctx, &f.geom) {
             fill(&mut pm, &path, &paint(hex(col)), None);
@@ -196,6 +205,9 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
                 line(&mut pm, &path, &paint(with_alpha(Color::WHITE, 0.9)), &stroke(ctx.m(0.1).max(0.5)), None);
             }
         }
+    }
+    if !bridges_done {
+        extra::draw_bridges(&mut ctx, &mut pm)?;
     }
     let paths = ctx.lines(
         "osm_id AS id, highway AS class, class AS sub, COALESCE(width, 0)::float8 AS num",
@@ -225,11 +237,20 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
         }
     }
 
+    // bridge decks: crisp parapet edge over the street surfaces
+    extra::draw_bridge_edges(&mut ctx, &mut pm)?;
+
     // ---- paving joints (z19+): ticks across sidewalks, fine grid on pedestrian areas
     if z >= 19 {
         let joint = paint(with_alpha(hex("#B9B5AA"), 0.55));
         let mut pb = PathBuilder::new();
-        for f in paths.iter().filter(|f| f.sub == "sidewalk") {
+        // unclipped sidewalks, so the tick phase does not depend on the metatile layout
+        let sidewalks = ctx.lines_full(
+            "osm_id AS id, highway AS class, class AS sub, COALESCE(width, 0)::float8 AS num",
+            "highway WHERE type = 'path' AND class = 'sidewalk'",
+            "",
+        )?;
+        for f in &sidewalks {
             let w = ctx.m(if f.num > 0.0 { f.num } else { 1.8 }) * 0.5;
             let pts = line_pts(&ctx, &f.geom);
             for (x, y, a) in along(&pts, ctx.m(1.5).max(4.0), 0.0) {
@@ -253,17 +274,22 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
     }
 
     // ---- buildings: hard SE shadow, white volume, crisp outline, rare red roof
+    // `sub` = building:part | mapped roof colour (empty when not tagged or not imported)
+    let roof_sql = extra::roof_colour_sql(ctx.client);
     let buildings = ctx.polygons(
-        r#"osm_id AS id, COALESCE(building, 'yes') AS class, "building:part" AS sub,
-           COALESCE(height, "building:levels" * 3.0, 9)::float8 AS num"#,
+        &format!(
+            r#"osm_id AS id, COALESCE(building, 'yes') AS class, COALESCE("building:part", '') || '|' || {roof_sql} AS sub,
+               COALESCE(height, "building:levels" * 3.0, 9)::float8 AS num"#
+        ),
         "building",
         "ORDER BY COALESCE(height, 0), osm_id",
     )?;
+    let is_part = |f: &Feature<Polygon<f64>>| !f.sub.starts_with('|');
     let sh = ctx.m(2.2);
     {
         let mut layer = new_layer(&ctx);
         let mut pb = PathBuilder::new();
-        for f in buildings.iter().filter(|f| f.sub.is_empty()) {
+        for f in buildings.iter().filter(|f| !is_part(f)) {
             let off = sh * (f.num as f32 / 15.0).clamp(0.4, 1.6);
             for k in [0.33f32, 0.66, 1.0] {
                 if let Some(p) = poly_path_shifted(&ctx, &f.geom, off * k, off * k * 0.75) {
@@ -277,7 +303,7 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
         blur_layer(&mut layer, (ctx.m(0.35).max(1.0)) as usize);
         draw_layer(&mut pm, &layer, 0.34, BlendMode::Multiply);
     }
-    for f in buildings.iter().filter(|f| f.sub.is_empty()) {
+    for f in buildings.iter().filter(|f| !is_part(f)) {
         let Some(path) = poly_path(&ctx, &f.geom) else { continue };
         let r = rand01(f.id, 3);
         let landmark = matches!(f.class.as_str(), "church" | "chapel" | "cathedral" | "public" | "civic" | "school");
@@ -286,7 +312,10 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
         let home = matches!(f.class.as_str(), "house" | "detached" | "semidetached_house" | "terrace" | "residential" | "chalet" | "allotment_house" | "bungalow");
         // red roofs: an accent on small homes only (unknown `building=yes` only when tiny)
         let red = !landmark && ((home && area < 250.0) || (f.class == "yes" && area < 120.0)) && r < 0.25;
-        let col = if landmark {
+        let mapped = f.sub.split_once('|').and_then(|(_, c)| extra::roof_tone(c));
+        let col = if let Some(m) = mapped {
+            m
+        } else if landmark {
             "#F5F4EF"
         } else if outbuilding {
             "#DEDBD3"
@@ -298,7 +327,7 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
         fill(&mut pm, &path, &paint(hex(col)), None);
         line(&mut pm, &path, &paint(hex(BUILDING_LINE)), &stroke(ctx.m(0.22).clamp(0.7, 1.6)), None);
     }
-    for f in buildings.iter().filter(|f| !f.sub.is_empty()) {
+    for f in buildings.iter().filter(|f| is_part(f)) {
         if let Some(path) = poly_path(&ctx, &f.geom) {
             line(&mut pm, &path, &paint(with_alpha(hex(BUILDING_LINE), 0.35)), &stroke(ctx.m(0.08).clamp(0.4, 0.8)), None);
         }
@@ -317,7 +346,7 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
     draw_details(&mut ctx, &mut pm)?;
 
     // ---- trees
-    draw_trees(&mut ctx, &mut pm, &woods)?;
+    draw_trees(&mut ctx, &mut pm, &woods, &green)?;
 
     draw_area_labels(
         &mut ctx,
@@ -337,6 +366,7 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
         40_000.0,
         16.0,
     )?;
+    extra::draw_water_labels(&mut ctx, &mut pm)?;
     if z >= 17 {
         draw_street_labels(
             &mut ctx,
@@ -378,10 +408,16 @@ struct Crown {
     seed: i64,
 }
 
-fn draw_trees(ctx: &mut Ctx, pm: &mut Pixmap, woods: &[&Polygon<f64>]) -> Result<()> {
+fn draw_trees(ctx: &mut Ctx, pm: &mut Pixmap, woods: &[&Polygon<f64>], green: &[&Polygon<f64>]) -> Result<()> {
+    // `sub` = leaf_type | name of the street the tree stands on (nearest named road within ~12 m)
     let trees = ctx.points(
-        "osm_id AS id, COALESCE(genus, leaf_type, '') AS class, COALESCE(leaf_type, '') AS sub, COALESCE(diameter_crown, 6)::float8 AS num",
-        "tree",
+        "id, class, sub, num",
+        r#"(SELECT t.osm_id AS id, COALESCE(t.genus, t.leaf_type, '') AS class,
+                   COALESCE(t.leaf_type, '') || '|' || COALESCE((SELECT h.name FROM highway h
+                       WHERE h.type = 'road' AND h.name IS NOT NULL AND ST_DWithin(h.geom, t.geom, 20)
+                       ORDER BY h.geom <-> t.geom LIMIT 1), '') AS sub,
+                   COALESCE(t.diameter_crown, 0)::float8 AS num, t.geom
+            FROM tree t WHERE t.geom && ST_MakeEnvelope($1::float8, $2::float8, $3::float8, $4::float8, 3857)) q"#,
         "",
     )?;
     let mut crowns: Vec<Crown> = Vec::new();
@@ -389,10 +425,26 @@ fn draw_trees(ctx: &mut Ctx, pm: &mut Pixmap, woods: &[&Polygon<f64>]) -> Result
     for t in &trees {
         let (x, y) = ctx.px(t.geom.0);
         let in_wood = woods.iter().any(|p| point_in_polygon(t.geom.0, p));
-        let key = if t.class.is_empty() { t.id } else { t.class.bytes().fold(7i64, |h, b| h.wrapping_mul(31).wrapping_add(i64::from(b))) };
-        let variant = if t.sub == "needleleaved" { 3 } else { (rand01(key, 5) * 3.0) as u8 };
-        let colour = hex(crown_palette()[(rand01(key, 9) * 6.0) as usize % 6]);
-        let c = Crown { x, y, r: ctx.m(t.num.clamp(2.0, 18.0) / 2.0), variant, colour, seed: t.id };
+        let (leaf, street) = t.sub.split_once('|').unwrap_or((t.sub.as_str(), ""));
+        let street_tree = !street.is_empty() && !in_wood && !green.iter().any(|p| point_in_polygon(t.geom.0, p));
+        // known genus → its own plan symbol, colour and default crown size; street trees without
+        // genus → one symbol and tone per street (rows read as rows); otherwise generic by id
+        let spec = extra::genus_spec(&t.class);
+        let (variant, colour, default_d) = match &spec {
+            Some(g) => (g.variant, hex(crown_palette()[g.colour]), g.default_d),
+            None if street_tree && leaf != "needleleaved" => {
+                let key = street.bytes().fold(7i64, |h, b| h.wrapping_mul(31).wrapping_add(i64::from(b)));
+                let base = hex(crown_palette()[(rand01(key, 9) * 6.0) as usize % 6]);
+                // small per-tree tone jitter, so the row is uniform but not stamped
+                (((rand01(key, 5) * 3.0) as u8), mix(base, Color::WHITE, 0.08 * rand01(t.id, 13)), 5.5)
+            }
+            None => {
+                let v = if leaf == "needleleaved" { 3 } else { (rand01(t.id, 5) * 3.0) as u8 };
+                (v, hex(crown_palette()[(rand01(t.id, 9) * 6.0) as usize % 6]), 6.0)
+            }
+        };
+        let d = if t.num > 0.0 { t.num } else { default_d };
+        let c = Crown { x, y, r: ctx.m(d.clamp(2.0, 18.0) / 2.0), variant, colour, seed: t.id };
         if in_wood { forest.push(c) } else { crowns.push(c) }
     }
     // woodland: world-anchored scatter of crowns inside forest polygons
@@ -446,7 +498,7 @@ fn draw_trees(ctx: &mut Ctx, pm: &mut Pixmap, woods: &[&Polygon<f64>]) -> Result
 fn draw_crown(pm: &mut Pixmap, c: &Crown, k: f32) {
     let dark = shade(c.colour, 0.72);
     let w = (c.r * 0.06).clamp(0.5, 1.2);
-    let phase = rand01(c.seed, 1) * 6.28;
+    let phase = rand01(c.seed, 1) * std::f32::consts::TAU;
     match c.variant {
         // board canonical: translucent disc, thin ring, centre dot
         0 => {
@@ -480,6 +532,7 @@ fn draw_crown(pm: &mut Pixmap, c: &Crown, k: f32) {
                 line(pm, &p, &paint(with_alpha(dark, 0.8)), &stroke(w), None);
             }
         }
+        4.. => extra::draw_genus_crown(pm, c, k),
         // conifer: star
         _ => {
             let n = 12;
@@ -522,7 +575,9 @@ pub fn point_in_polygon(pt: geo_types::Coord<f64>, poly: &Polygon<f64>) -> bool 
 
 fn draw_details(ctx: &mut Ctx, pm: &mut Pixmap) -> Result<()> {
     // embankments: soft shaded band on the downhill side + fine comb
-    let slopes = ctx.lines("osm_id AS id, class, NULL::text AS sub, 0::float8 AS num", "landscape_way WHERE class IN ('cliff', 'embankment', 'earth_bank')", "")?;
+    // marks placed along lines (combs, dabs, ticks, sleepers) need the *unclipped* line: `along`
+    // counts from the line start, and a clipped start differs between metatile layouts
+    let slopes = ctx.lines_full("osm_id AS id, class, NULL::text AS sub, 0::float8 AS num", "landscape_way WHERE class IN ('cliff', 'embankment', 'earth_bank')", "")?;
     for f in &slopes {
         let pts = line_pts(ctx, &f.geom);
         let l = ctx.m(1.8).max(4.0);
@@ -533,7 +588,7 @@ fn draw_details(ctx: &mut Ctx, pm: &mut Pixmap) -> Result<()> {
             line(pm, &p, &paint(with_alpha(hex("#6C6B5A"), 0.7)), &stroke(0.8), None);
         }
     }
-    let barriers = ctx.lines("osm_id AS id, barrier AS class, NULL::text AS sub, 0::float8 AS num", "barrier_way", "")?;
+    let barriers = ctx.lines_full("osm_id AS id, barrier AS class, NULL::text AS sub, 0::float8 AS num", "barrier_way", "")?;
     let hedge = hex("#8E8F70");
     for f in &barriers {
         let pts = line_pts(ctx, &f.geom);
@@ -562,71 +617,8 @@ fn draw_details(ctx: &mut Ctx, pm: &mut Pixmap) -> Result<()> {
             _ => {}
         }
     }
-    // play equipment: structures white with outline, lines (slides, beams) as dark strokes
-    let pg = ctx.polygons("osm_id AS id, playground AS class, NULL::text AS sub, 0::float8 AS num", "playground_polygon", "")?;
-    for f in &pg {
-        if let Some(p) = poly_path(ctx, &f.geom) {
-            let col = if f.class == "sandpit" { "#E8E2D0" } else { "#FFFFFF" };
-            fill(pm, &p, &paint(hex(col)), None);
-            line(pm, &p, &paint(hex("#7C7A70")), &stroke(0.7), None);
-        }
-    }
-    let pgw = ctx.lines("osm_id AS id, playground AS class, NULL::text AS sub, 0::float8 AS num", "playground_way", "")?;
-    for f in &pgw {
-        if let Some(p) = line_path(ctx, &f.geom) {
-            line(pm, &p, &paint(hex("#6C6B5A")), &stroke(ctx.m(0.25).max(0.9)), None);
-        }
-    }
-    if ctx.z < 18 {
-        return Ok(());
-    }
-    let pgn = ctx.points("osm_id AS id, playground AS class, NULL::text AS sub, 0::float8 AS num", "playground_node", "")?;
-    for f in &pgn {
-        let (x, y) = ctx.px(f.geom.0);
-        if let Some(p) = PathBuilder::from_circle(x, y, ctx.m(0.5).max(1.5)) {
-            fill(pm, &p, &paint(hex("#FFFFFF")), None);
-            line(pm, &p, &paint(hex("#6C6B5A")), &stroke(0.7), None);
-        }
-    }
-    let furniture = ctx.points(
-        "osm_id AS id, class, subclass AS sub, COALESCE(direction, -1)::float8 AS num",
-        "feature_node WHERE class IN ('bench', 'waste_basket', 'bicycle_parking', 'street_lamp', 'table_tennis', 'drinking_water')",
-        "",
-    )?;
-    let dark = hex("#5F5E57");
-    for f in &furniture {
-        let (x, y) = ctx.px(f.geom.0);
-        let ang = if f.num >= 0.0 { (f.num as f32).to_radians() } else { 0.0 };
-        match f.class.as_str() {
-            "bench" => {
-                if let Some(p) = rect_rot(x, y, ctx.m(1.8).max(3.0), ctx.m(0.55).max(1.2), ang) {
-                    fill(pm, &p, &paint(hex("#FFFFFF")), None);
-                    line(pm, &p, &paint(dark), &stroke(0.7), None);
-                }
-            }
-            "table_tennis" => {
-                if let Some(p) = rect_rot(x, y, ctx.m(2.7), ctx.m(1.5), ang) {
-                    fill(pm, &p, &paint(hex("#FFFFFF")), None);
-                    line(pm, &p, &paint(dark), &stroke(0.7), None);
-                }
-            }
-            "waste_basket" | "drinking_water" => {
-                if let Some(p) = PathBuilder::from_circle(x, y, ctx.m(0.3).max(1.0)) {
-                    fill(pm, &p, &paint(dark), None);
-                }
-            }
-            "street_lamp" => {
-                if let Some(p) = PathBuilder::from_circle(x, y, ctx.m(0.25).max(0.9)) {
-                    line(pm, &p, &paint(with_alpha(dark, 0.8)), &stroke(0.6), None);
-                }
-            }
-            _ => {
-                if let Some(p) = rect_rot(x, y, ctx.m(1.6).max(2.5), ctx.m(0.12).max(0.6), ang) {
-                    fill(pm, &p, &paint(with_alpha(dark, 0.8)), None);
-                }
-            }
-        }
-    }
+    extra::draw_play(ctx, pm)?;
+    extra::draw_furniture(ctx, pm)?;
     Ok(())
 }
 
@@ -657,7 +649,14 @@ fn sphere_paint(c: &Crown, alpha: f32) -> tiny_skia::Paint<'static> {
 /// Railways sit below streets and bridges, so they are drawn before the street layer.
 fn draw_railways(ctx: &mut Ctx, pm: &mut Pixmap) -> Result<()> {
     // railways: gravel bed, two rails, sleepers from z18
-    for (pts, main) in railway_lines(ctx)? {
+    // unclipped (sleepers are spaced from the line start; see draw_details)
+    let rails = ctx.lines_full(
+        "osm_id AS id, railway AS class, COALESCE(service, '') AS sub, 0::float8 AS num",
+        "railway_way WHERE railway IN ('rail', 'light_rail', 'subway', 'disused', 'tram', 'narrow_gauge') AND COALESCE(tunnel, 'no') = 'no'",
+        "ORDER BY COALESCE(layer, 0)",
+    )?;
+    let rails: Vec<(Vec<(f32, f32)>, bool)> = rails.iter().map(|f| (line_pts(ctx, &f.geom), f.sub.is_empty() && f.class != "disused")).collect();
+    for (pts, main) in rails {
         let Some(p) = pts_path(&pts, false) else { continue };
         let bed = ctx.m(if main { 3.4 } else { 2.6 }).max(2.0);
         line(pm, &p, &paint(hex("#D3CDBF")), &stroke(bed), None);

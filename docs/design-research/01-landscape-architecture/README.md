@@ -22,7 +22,7 @@ What this means in one sentence per element:
 
 ![Richardplatz and Körnerpark](current-ef.jpg)
 
-More: [`showcase-z17.jpg`](showcase-z17.jpg) / [`showcase-z18.jpg`](showcase-z18.jpg) (whole Schillerkiez), [`map-sheet-schillerkiez.jpg`](map-sheet-schillerkiez.jpg) (as a plan sheet with title block, north arrow and scale bar), iterations in [`steps/`](steps/).
+Tree legend: [`steps/20-legend-water-names/legend.jpg`](steps/20-legend-water-names/legend.jpg) (regenerate with `docs/design-research/tools/la_tree_legend.sh out.png`). More: [`showcase-z17.jpg`](showcase-z17.jpg) / [`showcase-z18.jpg`](showcase-z18.jpg) (whole Schillerkiez), [`map-sheet-schillerkiez.jpg`](map-sheet-schillerkiez.jpg) (as a plan sheet with title block, north arrow and scale bar), iterations in [`steps/`](steps/).
 
 | Element | Implementation |
 | --- | --- |
@@ -32,12 +32,15 @@ More: [`showcase-z17.jpg`](showcase-z17.jpg) / [`showcase-z18.jpg`](showcase-z18
 | Water | `#A9BEBD`, blurred darker band along the banks (watercolour depth), crisp bank line |
 | Woodland | crowns on a world grid + mapped trees inside woods, drawn opaque into one layer and composited at 80 % → even canopy |
 | Streets | carriageway `#C9C5BA` with kerb line, sidewalks `#F1F0EB` with joint ticks (z19+), pedestrian areas with a joint grid (z19+), cycleways `#D3A796`, parking bays with white lines, road markings pulled towards grey |
-| Buildings | white `#FBFAF7`, crisp `#4E4D46` outline, blurred SE shadow scaled by height, `building:part` as faint lines; outbuildings light grey; red (`#C98C7A`/`#B98270`) only on ~¼ of small homes |
-| Trees | one symbol per genus: shaded disc + ring + centre dot, radial branches, scalloped; star for conifers. Translucent, NW-lit radial gradient, blurred SE shadow, size from `diameter_crown` |
+| Buildings | white `#FBFAF7`, crisp `#4E4D46` outline, blurred SE shadow scaled by height, `building:part` as faint lines; outbuildings light grey; red (`#C98C7A`/`#B98270`) only on ~¼ of small homes. Mapped `roof:colour` / `building:colour` (named or `#rrggbb`) → muted plan tone (terracotta, light/mid grey, sage for green roofs) — **needs a re-import**: both keys were added to `data/lua/osm_import.lua` on 2026-10-16; on older databases the renderer detects the missing columns and keeps the rules above |
+| Trees | **per genus** (step 19/20, [legend](steps/20-legend-water-names/legend.jpg)): Tilia fine-scalloped dome, Acer lobes + veins, Betula airy stipple, Quercus cloud of sub-crowns, Platanus large disc + ring, blossom trees ring of white dots, Salix fringe, Carpinus/Fagus double scallop, Robinia/Fraxinus radial, conifers star; fixed tone and default crown size per genus when `diameter_crown` is missing. Only ~500 of 11 500 trees carry `genus`. **Street trees** without genus: one symbol and tone per street (nearest named road), so rows read as rows. Park trees: generic symbols by id. Translucent, NW-lit radial gradient, blurred SE shadow |
 | Pitches | procedural white line markings from `pitch_markings` |
 | Railways | gravel bed, two rails, sleepers from z18; below streets/bridges |
-| Details | hedges, walls, fences, embankment combs, benches, bins, lamps, bicycle stands, play equipment |
-| Labels | street names (Avenir Next Medium, spaced caps, z17+), area names (Avenir Next Demi Bold, spaced caps) |
+| Bridges | `bridge` polygons: soft SE shadow (grows with `layer`) onto rails, water and roads below, light deck, crisp parapet outline over the street surface; street areas drawn ground level → bridge → raised |
+| Details | hedges, walls, fences, embankment combs. Benches with backrest line (side opposite `direction`), picnic tables, table tennis with net, bins, lamps; bicycle stands as a row of U-shapes (count from `capacity`) across the nearest street; drinking water, street pumps and fountains as water circles, fountain basins with a double rim |
+| Play | sandpits with timber edge, water basins/channels, slides (white chute, ladder rungs), swing frames with seats, seesaws, springers, rotators, white structures with outline (plan cross on playhouses/platforms) |
+| Labels | street names (Avenir Next Medium, spaced caps, z17+), area names (Avenir Next Demi Bold, spaced caps), water names (Avenir Next italic, bank colour, z17+) |
+| Not available | parked cars: the QGIS layer reads `data/parking/street_parking_points_processed.geojson`, which is not generated in this checkout and has no table in PostGIS — skipped |
 
 Variant: `SRK_LA_PALETTE=vivid` — saturated greens of modern competition plans for lawns, beds and crowns (see [step 11](steps/11-vivid-palette-variant/)).
 
