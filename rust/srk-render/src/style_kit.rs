@@ -895,7 +895,8 @@ pub fn hachures(pts: &[(f32, f32)], spacing: f32, len: f32) -> Option<Path> {
 
 /// Railway lines (not tunnels/subways underground): returns (pixel polyline, is_main) pairs.
 pub fn railway_lines(ctx: &mut Ctx) -> Result<Vec<(Vec<(f32, f32)>, bool)>> {
-    let lines = ctx.lines(
+    // whole lines, not clipped: along()-based sleepers and ties then start at a world-stable point
+    let lines = ctx.lines_full(
         "osm_id AS id, railway AS class, COALESCE(service, '') AS sub, 0::float8 AS num",
         "railway_way WHERE railway IN ('rail', 'light_rail', 'subway', 'disused', 'tram', 'narrow_gauge') AND COALESCE(tunnel, 'no') = 'no'",
         "ORDER BY COALESCE(layer, 0)",
