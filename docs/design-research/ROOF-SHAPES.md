@@ -7,7 +7,7 @@ Branch `claude/design-roof-shapes-5961f4`. Scope: research, a data probe, and a 
 - **Built:** `data/processing/sql/roof_shape.sql` creates three tables from building outlines: `roof_mass` (one roof per group of touching buildings), `roof_facet` (planes with compass aspect) and `roof_shape_line` (ridge, hip, parapet). Hooked into `data_preparation.sh` right after `building.sql`.
 - **Method:** touching outlines of the same roof kind are merged into one mass, the mass is closed and simplified, and hipped roofs come from the **straight skeleton** (SFCGAL `CG_StraightSkeleton`). Gabled roofs are a **centreline split** of the oriented envelope. Flat roofs get a parapet line.
 - **Works:** courtyard blocks (holes) and Gründerzeit rows read as roofs in plan: hips at corners, ridges along the wings, slopes into the courtyard. Tagged pyramids and gables read correctly. No skeleton failures on the Schillerkiez bbox.
-- **Does not (yet):** tiny bowtie facets where courtyard wings are narrow; L-shaped gables are only approximated; skillions are treated as flat because `roof:direction` is not imported; valleys are not classified separately (they come out as `hip`).
+- **Does not (yet):** L-shaped gables are replaced by hips rather than gabled properly; skillions are treated as flat because `roof:direction` is not imported.
 - **Runtime:** about 65 s for the whole bbox on first run; later runs took 4–6 min on the shared dev DB while other sessions were busy (measured, not optimised).
 
 ## 2. Data coverage (dev DB, Schillerkiez–Körnerpark bbox, 2026-10-16)
@@ -63,6 +63,8 @@ Precedents (from memory, not re-checked in this session): the OSM wiki's *Simple
 | gabled, saltbox, double_saltbox, quadruple_saltbox, gambrel | → **gabled** (centreline split). |
 | hipped, pyramidal, mansard, round, onion, cone, dome | → **hipped** (straight skeleton; a square footprint gives a pyramid). |
 | Unknown, multi-valued (`hipped;flat`, `many`) | → default rule. |
+| Gabled mass with area / oriented-envelope area < 0.75 (L and U shapes) | → hipped. A centreline split on such a mass gives planes that do not read as a gable. |
+| Facets under 3 m² | Merged into the neighbour with the longest shared edge (removes the bowties). |
 | Default, sheds/garages, `building` in garage(s), shed, carport, service, greenhouse, storage_tank, hut, kiosk | flat |
 | Default, area < 25 m² | flat |
 | Default, attached, 3–6 storeys | **hipped** (Gründerzeit row or block) |
@@ -96,51 +98,36 @@ Rendered with `docs/design-research/tools/render_scenes.sh roofs /tmp/roofs`; sc
 - **Courtyard blocks (d) are flat, and that is correct for the data:** the six-storey apartment blocks there are tagged `roof:shape=flat`.
 - **Does not work well:** small bowtie facets where narrow courtyard wings meet (b, centre); L-shaped gables are approximate; at z19 the ridge lines are only slightly heavier than the outlines, so a style needs a clearly heavier ridge stroke than the base line width.
 
-## 8. How each style should use the data (not yet integrated)
+## 8. Integration (implemented, default on)
 
-Both snippets assume `roof_shapes::lit_factor(aspect_deg)` is available. It is in `roof_shapes.rs` and returns 1 for facets facing the NW light and 0 for facets facing away.
+Switches:
+
+| Where | Switch | Effect |
+| --- | --- | --- |
+| Render (`srk-render`, both styles) | `SRK_ROOFS=0` | Off: the styles draw exactly as before (ink: per-building hatch and ridge; LA: plain white volume). |
+| Render | (automatic) | Off when `roof_mass` / `roof_facet` / `roof_shape_line` are missing. |
+| Pipeline (`data/data_preparation.sh`) | `ROOF_SHAPES=false` | Skips `roof_shape.sql`. Default `true`. |
+
+Shared code: `rust/srk-render/src/roof_shapes.rs`. `load()` reads facets, lines and flat masses for the tile, indexed by building `osm_id` (a building belongs to the mass that lists its id in `roof_mass.osm_ids`). Buildings with no roof data keep the old drawing.
 
 ### Ink (`style_ink.rs`, `draw_buildings`)
 
-Sketch, not compiled: `w`, `h` are the tile's pixel size and `ink`, `lw`, `pm`, `ctx` are the locals of `draw_buildings`.
-
-Replace the current ridge from `ST_OrientedEnvelope` and the single hatch with per-facet hatching. Lines run **along the ridge**, which is perpendicular to the downslope direction, so each facet gets `aspect + 90°`. Shaded facets get a second hatch at a different angle (cross-hatch, as now).
-
-```rust
-// in draw_buildings, after the footprint fill
-let facets = ctx.polygons(
-    "mass_id::bigint AS id, kind AS class, dir AS sub, aspect_deg AS num",
-    "roof_facet",
-    "",
-)?;
-for f in &facets {
-    let shade = 1.0 - crate::roof_shapes::lit_factor(f.num);
-    let Some(mask) = mask_of(&ctx, &[&f.geom]) else { continue };
-    // lit facets: one hatch along the ridge; shaded facets: second hatch 60° off
-    let ridge_deg = (f.num as f32) + 90.0;
-    if let Some(p) = hatch_path(&ctx, 5.0, ridge_deg, 0.0, 0.0, w, h) {
-        line(pm, &p, &paint(with_alpha(ink, 0.25 + 0.2 * shade)), &stroke(lw * 0.5), Some(&mask));
-    }
-    if shade > 0.5 {
-        if let Some(p) = hatch_path(&ctx, 5.0, ridge_deg + 60.0, 0.0, 0.0, w, h) {
-            line(pm, &p, &paint(with_alpha(ink, 0.3)), &stroke(lw * 0.5), Some(&mask));
-        }
-    }
-}
-// ridges and hips (replace the ST_OrientedEnvelope ridge)
-let lines = ctx.lines("mass_id::bigint AS id, class, '' AS sub, 0::float8 AS num", "roof_shape_line", "")?;
-// class "ridge": heavy line (lw * 1.2); class "hip": thin (lw * 0.5); class "parapet": hairline.
-```
-
-Check `hatch_path`'s angle convention before merging: `aspect` is a map bearing (0 = north = up), so verify the screen-angle mapping in `style_kit.rs`. Keep the hatch anchoring world-based so tiles stay seamless. Painter's order and the paper fill of the footprint stay as they are.
+- **Light and shade:** ink's light comes from the south-west, so the north-east half is the shaded one (`roof_shapes::ink_shaded`: `cos(aspect − 45°) > 0`). This binary rule avoids flicker between neighbouring hip facets.
+- **Hatch:** every facet gets the main hatch **along the downslope direction** (screen angle `aspect − 90°`, the same convention as `axis_px`), clipped to the building footprint. Shaded facets get a second hatch along the ridge (screen angle `aspect`, spacing ×1.3, alpha 0.38).
+- **Lines:** ridge (weight `lw × 1.1`, alpha 0.9) always; hip, valley (`lw × 0.6`, 0.7) and parapet (`lw × 0.5`, 0.5) from z18.
+- **Oblique mode:** facets and lines are shifted by the same lift as the roof.
+- Flat masses get no slope hatch; they show a parapet line at z18+.
 
 ### Landscape architecture (`style_la.rs`)
 
-White buildings and a crisp outline stay. Add:
+- **Facet tone:** `SHADOW` at alpha `0.03 + 0.10 × shade`, where `shade = 1 − lit_factor` (NW light, the same light as the SE shadow). Clipped to the footprint, from z17. Peak 0.13 stays below the 0.34 shadow layer, so buildings still read white.
+- **Ridge hairline:** only the `ridge` class, 0.35 px, alpha 0.5, from z18. No hips, no valleys, no parapets.
 
-- **Facet shading:** a very light tone per facet, e.g. `with_alpha(ink, 0.04 + 0.12 * shade)` on the white roof. The SE shadow already encodes the same NW light.
-- **Ridge hairline:** `class = 'ridge'` only, `stroke(0.35 px)`, low opacity. No hips and no parapets: a landscape plan shows roofs as planes, not construction lines.
-- Do not draw the `hip` class at all; the facet tone already shows the planes.
+### Edge classes (`roof_shape.sql`, `roof_edge_class`)
+
+- `ridge`: the two facets face ≥ 150° apart.
+- `valley`: both facets drain towards the other's centroid (a concave crease, e.g. the inner corners of a courtyard block).
+- `hip`: everything else.
 
 ## 9. Reproduce
 
@@ -153,9 +140,11 @@ cd ../.. && docs/design-research/tools/render_scenes.sh roofs /tmp/roofs
 
 ## 10. Next steps
 
-1. **Lua import:** add `roof:direction`, `roof:orientation` to `building` in `data/lua/osm_import.lua`, so skillions and some gables become exact. Needs a re-import.
-2. **Narrow courtyard wings:** drop facets below ~3 m² *before* polygonizing (merge them into the neighbour) instead of leaving bowties. Or raise the closing radius only for courtyard holes.
-3. **L-shaped gables:** decompose into rectangles, then gable each; or use the skeleton with the short ends clipped.
-4. **Valleys:** classify skeleton edges that start at a reflex vertex as `valley`; the ink style can draw them dashed.
-5. **Speed:** the facet and line queries dominate; the `ST_DWithin` per line piece could become a single join on the skeleton edges.
-6. **Integration:** after the branches merge, implement section 8 in `style_ink.rs` and `style_la.rs`, and check the render at z17 and z19 with the seam check.
+Done in this round: sliver merge, rectangularity fallback for gables, valley class, render switch, pipeline switch, ink and LA integration.
+
+Still open:
+
+1. **Lua import:** add `roof:direction` and `roof:orientation` to `building` in `data/lua/osm_import.lua`, so skillions and some gables become exact. Needs a re-import.
+2. **L-shaped gables:** decompose into rectangles, then gable each. Today such masses fall back to hips.
+3. **Speed:** the facet and line queries dominate; `roof_shape_line` needs an index on `mass_id`.
+4. **Check at z17 and z19 with the seam check** (`docs/design-research/tools/seam_check.sh`) before merging.
