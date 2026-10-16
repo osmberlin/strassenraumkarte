@@ -19,6 +19,7 @@ mod sql_cache;
 mod style_ink;
 mod style_kit;
 mod style_la;
+#[cfg(test)] mod style_tests;
 mod svg_stamps;
 mod textures;
 mod tile;
