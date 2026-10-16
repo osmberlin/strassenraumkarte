@@ -556,11 +556,23 @@ fn xml_escape(s: &str) -> String {
 
 /// Street names along `label_highway`, placed at world-stable arc positions (seamless tiles).
 pub fn draw_street_labels(ctx: &mut Ctx, pm: &mut Pixmap, st: &LabelStyle) -> Result<()> {
-    let labels = ctx.lines_full("0::bigint AS id, name AS class, class AS sub, 0::float8 AS num", "label_highway WHERE name IS NOT NULL", "")?;
+    // Seam safety: the set of candidate labels and the de-duplication must not depend on the
+    // render extent. So (1) query with a wide margin, so every candidate that can suppress a
+    // visible one is known in every metatile layout, and (2) decide duplicates by a world-anchored
+    // key instead of by query order.
+    let margin = ctx.margin_m;
+    ctx.margin_m = margin.max(250.0);
+    let labels = ctx.lines_full(
+        "0::bigint AS id, name AS class, class AS sub, 0::float8 AS num",
+        "label_highway WHERE name IS NOT NULL",
+        "ORDER BY name, ST_XMin(geom), ST_YMin(geom)",
+    );
+    ctx.margin_m = margin;
+    let labels = labels?;
     let mut defs = String::new();
     let mut texts = String::new();
-    // dual carriageways come as two parallel label lines: keep one label per name and place
-    let mut placed: Vec<(String, f32, f32)> = Vec::new();
+    // candidates: (name, line index, arc offset, pixel anchor, world key, text length)
+    let mut cands: Vec<(String, usize, f32, (f32, f32), (i64, i64), f32)> = Vec::new();
     for (i, f) in labels.iter().enumerate() {
         let mut pts = line_pts(ctx, &f.geom);
         if pts.len() < 2 {
@@ -596,15 +608,23 @@ pub fn draw_street_labels(ctx: &mut Ctx, pm: &mut Pixmap, st: &LabelStyle) -> Re
                 continue;
             }
             let (ax, ay) = point_at(&pts, a);
-            if placed.iter().any(|(n, x, y)| *n == name && (x - ax).powi(2) + (y - ay).powi(2) < (est * 1.2).powi(2)) {
-                continue;
-            }
-            placed.push((name.clone(), ax, ay));
-            texts.push_str(&format!(
-                "<text><textPath href=\"#l{i}\" startOffset=\"{a:.1}\" text-anchor=\"middle\">{}</textPath></text>",
-                xml_escape(&name)
-            ));
+            let (wx, wy) = ctx.world(ax, ay);
+            cands.push((name.clone(), i, a, (ax, ay), ((wx * 10.0).round() as i64, (wy * 10.0).round() as i64), est));
         }
+    }
+    // dual carriageways come as two parallel label lines: of all same-name candidates closer than
+    // 1.2 text lengths, keep the one with the smallest world key — the same choice in every tile
+    for (k, (name, i, a, (ax, ay), key, est)) in cands.iter().enumerate() {
+        let beaten = cands.iter().enumerate().any(|(j, (n2, _, _, (x2, y2), key2, _))| {
+            j != k && n2 == name && key2 < key && (x2 - ax).powi(2) + (y2 - ay).powi(2) < (est * 1.2).powi(2)
+        });
+        if beaten {
+            continue;
+        }
+        texts.push_str(&format!(
+            "<text><textPath href=\"#l{i}\" startOffset=\"{a:.1}\" text-anchor=\"middle\">{}</textPath></text>",
+            xml_escape(name)
+        ));
     }
     render_svg_text(ctx, pm, &defs, &texts, st);
     Ok(())
