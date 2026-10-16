@@ -330,6 +330,7 @@
         SCENES = area.scenes || [];
       }
       if (SCENES.length) {
+        $('scene').add(new Option('–', ''));  // placeholder: nothing selected = no jump yet
         SCENES.forEach(s => {
           $('scene').add(new Option(`${s.id.toUpperCase()} · ${s.label}`, s.id));
           frameGroups.forEach(g => L.rectangle(s.bounds, { color: '#d2552d', weight: 2, dashArray: '6 4', fill: false, interactive: false })

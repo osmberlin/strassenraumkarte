@@ -28,9 +28,11 @@
 # (title, start view, scene list). The viewer reads both from its own folder.
 #
 set -euo pipefail
+DEFAULT_BBOX=13.4132,52.4695,13.4465,52.4821
+BBOX=${1:-$DEFAULT_BBOX}
+# the Berlin scenes belong to the default bbox; any other bbox (even with the default port) has none
 DEFAULT_AREA=""
-[[ $# -eq 0 ]] && DEFAULT_AREA=berlin
-BBOX=${1:-13.4132,52.4695,13.4465,52.4821}
+[[ $BBOX == "$DEFAULT_BBOX" ]] && DEFAULT_AREA=berlin
 PORT=${2:-8017}
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 BIN=${SRK_BIN:-"$ROOT/rust/srk-render/target/release/srk-render"}

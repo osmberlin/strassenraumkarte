@@ -69,7 +69,9 @@ All tools live in `tools/`, run from the repository root, and use `rust/srk-rend
 - Modes: *Eine Ebene*, *Wischen* (swipe: two layers, draggable divider) and *Nebeneinander* (two synced maps). Keys `1`/`2`/`3`, `x` swaps A and B, `←`/`→` jump through the scenes.
 - Scene jump list (A–F) and optional scene frames; the whole state is in the URL, so a link shows exactly the same comparison, e.g. `#map=19/52.47735/13.42185&a=la&b=qgis&mode=swipe&split=0.5`.
 - Reference layer `qgis`: today's QGIS tiles (jpg, z15–20), symlinked from `render/tiles` of this checkout or the main checkout (`QGIS_TILES=<dir>` to point elsewhere).
-- `SKIP_RENDER=1` serves existing tiles, `VARIANTS="la ink"` renders only some variants, `ZMAX=20` renders z20 too. `layers.json` (written by the script) tells the viewer which variants exist.
+- `SKIP_RENDER=1` serves existing tiles, `VARIANTS="la ink"` renders only some variants, `ZMAX=20` renders z20 too.
+- The script writes `layers.json` (which variant folders exist, format, zoom range) and `area.json` (title, bounds, start view, scene list) next to the tiles. `AREA_NAME`, `SCENES=berlin|none`, `VIEW_CENTER=lat,lng` and `VIEW_ZOOM` set the area; the Berlin scenes apply only to the default bbox.
+- `INDEX_ONLY=1 OUT=<dir>` writes just `index.html`, `layers.json` and `area.json` into another tile folder (no render, no server), e.g. for the Langerwehe viewer.
 
 **Scenes** — `render_scenes.sh [options] <layers> <out-dir> [zoom]` renders the six scenes (z19, or the same area at 16–18) and stitches them to `<out-dir>/<scene>.png`.
 
