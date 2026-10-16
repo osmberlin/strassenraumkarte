@@ -60,7 +60,7 @@ These are observations from the three crops and the import log, not measured res
 
 ```bash
 # extract (run from repo root)
-osmium extract -b 6.335,50.805,6.381,50.827 ~/Development/_osm-pbfs/germany-latest.osm.pbf \
+osmium extract -b 6.335,50.805,6.381,50.827 <path-to>/germany-latest.osm.pbf \
   -o tmp/langerwehe/langerwehe.osm.pbf --overwrite
 
 # import into a separate DB (tools container; docker/.env needs BERLIN_PBF_MOUNT set to the extract)

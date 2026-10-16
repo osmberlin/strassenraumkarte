@@ -1,5 +1,8 @@
 # Design research: two style explorations
 
+> **Map data:** all renderings, scenes, showcases and map sheets in this folder are made from OpenStreetMap data, © OpenStreetMap contributors, available under the [Open Database License (ODbL)](https://www.openstreetmap.org/copyright). Reference images collected during the research (`*/references/web/`, `*/references/user/`) are third-party work and are kept local only; they are not part of this repository.
+
+
 Two alternative looks for the Straßenraumkarte, each with a mission statement, style attributes, research notes, reference images and — since the night of 2026-10-15 — a **working renderer** in `rust/srk-render` that draws the style directly from PostGIS.
 
 | | Exploration | Mission in one line |
