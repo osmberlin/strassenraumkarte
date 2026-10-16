@@ -68,3 +68,11 @@ Checked in the built-in browser and with `bun run capture-viewers` (Playwright):
 - `docs/design-research/tools/serve_viewer.sh`: prints the vector compare URL; QGIS layer only for the Berlin bbox unless `QGIS_TILES` is set; a line about the viewer in its header comment.
 - `docs/design-research/README.md`: section "Szenen vergleichen / Comparing scenes".
 - Top-level `README.md`: pointer to this file.
+
+## Running the viewers in a worktree (lessons)
+
+- Git-ignored data is not in a new worktree: `render/tiles/`, `audit/tile-regression/runs/`, `vector/public/tiles/strassenraumkarte.pmtiles`, `vector/node_modules/`, `tmp/`. Without the PMTiles file the vector map logs `Wrong magic number for PMTiles archive` (the dev server answers with its HTML fallback) and stays empty. Link the files from the main checkout with `ln -s`, and do not commit the links.
+- `ln -s <target> <dir>` puts the link **inside** `<dir>` when `<dir>` already exists (it made `runs/runs` here). Check the path first, or use `ln -sfn` on a path that does not exist yet.
+- Port 8017 may be taken by a viewer from another checkout. Start this one on another port (`serve_viewer.sh "" 8019`) and point the capture script at it (`VIEWER_URL=http://127.0.0.1:8019/`).
+- `vector/node_modules` can be a symlink to the main checkout's copy to skip `bun install`; `bun run dev` works with it.
+- Rust tiles for the vector compare: `RUST_TILES_ROOT=<dir>` takes precedence over `audit/tile-regression/runs`; a run that is missing a preset's area leaves that pane empty and logs 404s.
