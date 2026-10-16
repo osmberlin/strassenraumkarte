@@ -43,6 +43,8 @@ pub enum LayerPreset {
     La,
     /// Design research: fantasy-book ink map.
     Ink,
+    /// Design research: roof shapes preview (roof_mass / roof_facet / roof_shape_line).
+    Roofs,
 }
 
 impl LayerPreset {
@@ -64,8 +66,11 @@ impl LayerPreset {
         if names.len() == 1 && names[0] == "ink" {
             return Ok(Self::Ink);
         }
+        if names.len() == 1 && names[0] == "roofs" {
+            return Ok(Self::Roofs);
+        }
         anyhow::bail!(
-            "supported --layers: highway_area | full-approx | la | ink (got {:?})",
+            "supported --layers: highway_area | full-approx | la | ink | roofs (got {:?})",
             layers
         )
     }
@@ -210,6 +215,7 @@ pub fn render_style(
     let extent = RenderExtent::for_metatile(&mt);
     let pixmap = match preset {
         LayerPreset::La => crate::style_la::render(client, prep_cache, extent, mt.z)?,
+        LayerPreset::Roofs => crate::roof_shapes::render(client, prep_cache, extent, mt.z)?,
         _ => crate::style_ink::render(client, prep_cache, extent, mt.z)?,
     };
     let written = write_meta_cores(&mt, &pixmap, out_dir, format_ext, webp_quality, timers)?;

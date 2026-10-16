@@ -15,6 +15,7 @@ mod paint;
 mod palette;
 mod pitch_markings;
 mod profile;
+mod roof_shapes;
 mod sql_cache;
 mod style_ink;
 mod style_kit;
@@ -300,7 +301,7 @@ fn render_one_metatile(
                 timers,
             )
         }
-        LayerPreset::La | LayerPreset::Ink => render_style(
+        LayerPreset::La | LayerPreset::Ink | LayerPreset::Roofs => render_style(
             client,
             prep_cache,
             mt,
