@@ -382,7 +382,8 @@ pub fn draw_play(ctx: &mut Ctx, pm: &mut Pixmap) -> Result<()> {
             _ => outlined(pm, &p, Color::WHITE, thin),
         }
     }
-    let pgw = ctx.lines("osm_id AS id, COALESCE(playground, '') AS class, NULL::text AS sub, 0::float8 AS num", "playground_way", "")?;
+    // unclipped: slide rungs and swing seats are placed from the line ends
+    let pgw = ctx.lines_full("osm_id AS id, COALESCE(playground, '') AS class, NULL::text AS sub, 0::float8 AS num", "playground_way", "")?;
     let dark = hex(FURNITURE);
     for f in &pgw {
         let pts = line_pts(ctx, &f.geom);

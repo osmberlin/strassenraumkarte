@@ -244,7 +244,13 @@ pub fn render(client: &mut Client, prep: &mut PreparedCache, extent: RenderExten
     if z >= 19 {
         let joint = paint(with_alpha(hex("#B9B5AA"), 0.55));
         let mut pb = PathBuilder::new();
-        for f in paths.iter().filter(|f| f.sub == "sidewalk") {
+        // unclipped sidewalks, so the tick phase does not depend on the metatile layout
+        let sidewalks = ctx.lines_full(
+            "osm_id AS id, highway AS class, class AS sub, COALESCE(width, 0)::float8 AS num",
+            "highway WHERE type = 'path' AND class = 'sidewalk'",
+            "",
+        )?;
+        for f in &sidewalks {
             let w = ctx.m(if f.num > 0.0 { f.num } else { 1.8 }) * 0.5;
             let pts = line_pts(&ctx, &f.geom);
             for (x, y, a) in along(&pts, ctx.m(1.5).max(4.0), 0.0) {
@@ -492,7 +498,7 @@ fn draw_trees(ctx: &mut Ctx, pm: &mut Pixmap, woods: &[&Polygon<f64>], green: &[
 fn draw_crown(pm: &mut Pixmap, c: &Crown, k: f32) {
     let dark = shade(c.colour, 0.72);
     let w = (c.r * 0.06).clamp(0.5, 1.2);
-    let phase = rand01(c.seed, 1) * 6.28;
+    let phase = rand01(c.seed, 1) * std::f32::consts::TAU;
     match c.variant {
         // board canonical: translucent disc, thin ring, centre dot
         0 => {
@@ -569,7 +575,9 @@ pub fn point_in_polygon(pt: geo_types::Coord<f64>, poly: &Polygon<f64>) -> bool 
 
 fn draw_details(ctx: &mut Ctx, pm: &mut Pixmap) -> Result<()> {
     // embankments: soft shaded band on the downhill side + fine comb
-    let slopes = ctx.lines("osm_id AS id, class, NULL::text AS sub, 0::float8 AS num", "landscape_way WHERE class IN ('cliff', 'embankment', 'earth_bank')", "")?;
+    // marks placed along lines (combs, dabs, ticks, sleepers) need the *unclipped* line: `along`
+    // counts from the line start, and a clipped start differs between metatile layouts
+    let slopes = ctx.lines_full("osm_id AS id, class, NULL::text AS sub, 0::float8 AS num", "landscape_way WHERE class IN ('cliff', 'embankment', 'earth_bank')", "")?;
     for f in &slopes {
         let pts = line_pts(ctx, &f.geom);
         let l = ctx.m(1.8).max(4.0);
@@ -580,7 +588,7 @@ fn draw_details(ctx: &mut Ctx, pm: &mut Pixmap) -> Result<()> {
             line(pm, &p, &paint(with_alpha(hex("#6C6B5A"), 0.7)), &stroke(0.8), None);
         }
     }
-    let barriers = ctx.lines("osm_id AS id, barrier AS class, NULL::text AS sub, 0::float8 AS num", "barrier_way", "")?;
+    let barriers = ctx.lines_full("osm_id AS id, barrier AS class, NULL::text AS sub, 0::float8 AS num", "barrier_way", "")?;
     let hedge = hex("#8E8F70");
     for f in &barriers {
         let pts = line_pts(ctx, &f.geom);
@@ -641,7 +649,14 @@ fn sphere_paint(c: &Crown, alpha: f32) -> tiny_skia::Paint<'static> {
 /// Railways sit below streets and bridges, so they are drawn before the street layer.
 fn draw_railways(ctx: &mut Ctx, pm: &mut Pixmap) -> Result<()> {
     // railways: gravel bed, two rails, sleepers from z18
-    for (pts, main) in railway_lines(ctx)? {
+    // unclipped (sleepers are spaced from the line start; see draw_details)
+    let rails = ctx.lines_full(
+        "osm_id AS id, railway AS class, COALESCE(service, '') AS sub, 0::float8 AS num",
+        "railway_way WHERE railway IN ('rail', 'light_rail', 'subway', 'disused', 'tram', 'narrow_gauge') AND COALESCE(tunnel, 'no') = 'no'",
+        "ORDER BY COALESCE(layer, 0)",
+    )?;
+    let rails: Vec<(Vec<(f32, f32)>, bool)> = rails.iter().map(|f| (line_pts(ctx, &f.geom), f.sub.is_empty() && f.class != "disused")).collect();
+    for (pts, main) in rails {
         let Some(p) = pts_path(&pts, false) else { continue };
         let bed = ctx.m(if main { 3.4 } else { 2.6 }).max(2.0);
         line(pm, &p, &paint(hex("#D3CDBF")), &stroke(bed), None);
