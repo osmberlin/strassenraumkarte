@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="-150 -150 300 300">
+  <!-- QGIS street_lamp (plain): SimpleMarker "circle" 0.67 m filled, then SimpleMarker "cross2" 0.45 m drawn as an outline only. Marker size = 200 units (see SHAPE_BOX in vector/src/style/sprite-icons.ts). -->
+  <circle r="100" fill="param(fill) #000000" stroke="param(outline) none" stroke-width="param(outline-width) 0"/>
+  <path d="M-67,-67L67,67M-67,67L67,-67" fill="none" stroke="param(outline) none" stroke-width="param(outline-width) 0"/>
+</svg>

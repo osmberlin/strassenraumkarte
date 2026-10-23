@@ -1,0 +1,50 @@
+{
+  "run": "bench-large-fullapprox-20260801-175340",
+  "format": "webp",
+  "quality": 90,
+  "bbox": "13.3958,52.4243,13.4874,52.4849",
+  "zmin": 15,
+  "zmax": 20,
+  "tiles": 103915,
+  "total_bytes": 82180770,
+  "total_mib": 78.4,
+  "avg_bytes": 790.8,
+  "by_zoom": {
+    "15": {
+      "tiles": 90,
+      "total_bytes": 141558,
+      "avg_bytes": 1572.9,
+      "total_mib": 0.1
+    },
+    "16": {
+      "tiles": 342,
+      "total_bytes": 460900,
+      "avg_bytes": 1347.7,
+      "total_mib": 0.4
+    },
+    "17": {
+      "tiles": 1258,
+      "total_bytes": 1432684,
+      "avg_bytes": 1138.9,
+      "total_mib": 1.4
+    },
+    "18": {
+      "tiles": 4964,
+      "total_bytes": 4735158,
+      "avg_bytes": 953.9,
+      "total_mib": 4.5
+    },
+    "19": {
+      "tiles": 19564,
+      "total_bytes": 16297980,
+      "avg_bytes": 833.1,
+      "total_mib": 15.5
+    },
+    "20": {
+      "tiles": 77697,
+      "total_bytes": 59112490,
+      "avg_bytes": 760.8,
+      "total_mib": 56.4
+    }
+  }
+}

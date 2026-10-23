@@ -31,10 +31,14 @@
 
 set -euo pipefail
 
-export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-offscreen}"
-
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
+# Prefer macOS QGIS.app PyQGIS when available (override with QGIS_APP / PYTHON).
+# shellcheck source=qgis_env.sh
+source "$SCRIPT_DIR/qgis_env.sh"
+
+export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-offscreen}"
+PYTHON="${PYTHON:-python3}"
 # shellcheck source=../data/db_config.sh
 source "$REPO_ROOT/data/db_config.sh"
 # shellcheck source=../log_tee.sh
@@ -185,7 +189,8 @@ if ! [[ "$bg_hex" =~ ^[0-9A-Fa-f]{6}$ ]]; then
   log ERROR "Invalid --background (expected #rrggbb): $BACKGROUND"
   exit 1
 fi
-BACKGROUND="#${bg_hex,,}"
+# bash 3.2 (macOS /bin/bash) has no ${var,,}; use tr
+BACKGROUND="#$(printf '%s' "$bg_hex" | tr '[:upper:]' '[:lower:]')"
 
 case "$FORMAT" in
   webp|WEBP|png|PNG|jpg|jpeg|JPG|JPEG) ;;
@@ -201,7 +206,7 @@ if ! [[ "$QUALITY" =~ ^[0-9]+$ && "$QUALITY" -ge 0 && "$QUALITY" -le 100 ]]; the
 fi
 
 if [[ -n "$JOBS" ]]; then
-  jobs_lc="${JOBS,,}"
+  jobs_lc="$(printf '%s' "$JOBS" | tr '[:upper:]' '[:lower:]')"
   if [[ "$jobs_lc" != "dynamic" ]] && ! [[ "$JOBS" =~ ^[0-9]+$ && "$JOBS" -ge 1 ]]; then
     log ERROR "Invalid --jobs: $JOBS (use dynamic or >= 1)"
     exit 1
@@ -218,7 +223,7 @@ if [[ -n "$BBOX" ]]; then
   log INFO "Using bbox extent: $EXTENT"
 else
   log INFO "No --bbox given; computing combined project layer extent..."
-  EXTENT=$(python3 "$SCRIPT_DIR/project_extent.py" "$PROJECT") || {
+  EXTENT=$("$PYTHON" "$SCRIPT_DIR/project_extent.py" "$PROJECT") || {
     log ERROR "Failed to determine project extent."
     exit 1
   }
@@ -228,6 +233,7 @@ fi
 mkdir -p "$OUT"
 
 log INFO "Starting PyQGIS metatile renderer..."
+log INFO "  python=$PYTHON"
 log INFO "  project=$PROJECT"
 log INFO "  out=$OUT"
 log INFO "  zoom=${ZMIN}-${ZMAX} metatile=$METATILE gutter=$GUTTER dpi=$DPI format=$FORMAT quality=$QUALITY jobs=${JOBS:-dynamic} bg=$BACKGROUND"
@@ -249,4 +255,4 @@ XYZ_ARGS=(
 [[ "$RESUME" = "true" ]] && XYZ_ARGS+=(--resume)
 [[ "$INSIDE" = "true" ]] && XYZ_ARGS+=(--inside)
 
-exec python3 "$SCRIPT_DIR/xyz_tiles.py" "${XYZ_ARGS[@]}"
+exec "$PYTHON" "$SCRIPT_DIR/xyz_tiles.py" "${XYZ_ARGS[@]}"

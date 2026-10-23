@@ -1,0 +1,36 @@
+{
+  "expression_count": 4416,
+  "functions": {
+    "to_real": 299,
+    "string_to_array": 208,
+    "array_foreach": 180,
+    "array_to_string": 152,
+    "to_string": 112,
+    "radians": 56,
+    "array_get": 35,
+    "cos": 28,
+    "sin": 28,
+    "rand": 17,
+    "array_length": 14,
+    "randf": 9,
+    "max": 7,
+    "min": 7,
+    "regexp_match": 7,
+    "array_sum": 7,
+    "tostring": 7,
+    "ratio": 1,
+    "pi": 1,
+    "clamp": 1,
+    "log10": 1
+  },
+  "variables": {
+    "@mercator_scale": 2618,
+    "@project_folder": 321,
+    "@element": 180,
+    "@map_scale": 7,
+    "@scale_factor": 7,
+    "@modell": 1,
+    "@colour": 1
+  },
+  "note": "Functions/vars extracted with regex over PyQGIS expression strings; not a full QgsExpression AST. 'if'/'case' keywords excluded from function counts."
+}
