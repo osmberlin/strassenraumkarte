@@ -4,7 +4,7 @@
 #
 #   docs/design-research/tools/render_scenes.sh [options] <layers> <out-dir> [zoom]
 #
-# <layers>: srk-render preset (full-approx | la | ink …)
+# <layers>: srk-render preset (full-approx | la | ink | bold …)
 # Writes <out-dir>/tiles/{z}/{x}/{y}.png and <out-dir>/<scene>.png
 # zoom: 19 (default, 4×4 tiles per scene) or lower (same area, fewer tiles: 18 → 2×2, 17 → 1×1)
 #

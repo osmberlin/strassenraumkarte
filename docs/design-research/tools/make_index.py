@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Write docs/design-research/index.html: a static overview of both style explorations.
+"""Write docs/design-research/index.html: a static overview of the style explorations.
 
     python3 docs/design-research/tools/make_index.py
 
@@ -16,6 +16,7 @@ BASE = os.path.abspath(os.path.join(HERE, ".."))
 EXPLORATIONS = [
     ("01-landscape-architecture", "Landschaftsarchitektur", "la"),
     ("02-fantasy-ink-map", "Fantasy-Tuschekarte", "ink"),
+    ("03-bold-line-print", "Strichgrafik", "bold"),
 ]
 # order and captions of the "current state" images; anything else at top level is appended
 CURRENT = [
@@ -24,6 +25,7 @@ CURRENT = [
     ("legend.jpg", "Legende"),
     ("showcase-z17.jpg", "Übersicht z17"),
     ("showcase-z18.jpg", "Übersicht z18"),
+    ("map-sheet-neukoelln.jpg", "A0-Blatt Neukölln"),
 ]
 
 

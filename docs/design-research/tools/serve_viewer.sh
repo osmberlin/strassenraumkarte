@@ -65,6 +65,8 @@ if [[ -z ${SKIP_RENDER:-} ]]; then
   render ink-cars ink playground SRK_CARS=on
   render ink-bench ink bench
   render ink-tree ink tree
+  render bold bold
+  render bold-print bold playground SRK_BOLD_W=5
   render full-approx full-approx
 fi
 

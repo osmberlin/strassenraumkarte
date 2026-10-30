@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Golden-image regression check for the design-research presets (la, ink + variants).
+# Golden-image regression check for the design-research presets (la, ink, bold + variants).
 #
 #   docs/design-research/tools/regress.sh [--update] [--only <case>] [--threshold <pct>] [--no-seam] [--keep]
 #
@@ -51,6 +51,8 @@ CASES=(
   "ink-white|ink|SRK_INK_PAPER=white"
   "ink-oblique|ink|SRK_INK_OBLIQUE=freestanding"
   "ink-accent-tree|ink|SRK_ACCENT=tree"
+  "bold|bold|"
+  "bold-print|bold|SRK_BOLD_W=5"
 )
 
 # Per scene (see render_scenes.sh): two inner z19 tiles and the z17 tile that holds them.
@@ -155,7 +157,7 @@ fi
 if ((SEAM)); then
   echo
   echo "seam check (metatile 1 vs 4, threshold 0.1 % mean):"
-  for p in la ink; do
+  for p in la ink bold; do
     [[ -n $ONLY && $p != "${ONLY%%-*}" ]] && continue
     line=$("$TOOLS/seam_check.sh" "$p")
     mean=$(sed -n 's/.*mean \([0-9.]*\) %.*/\1/p' <<<"$line")
