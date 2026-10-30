@@ -45,6 +45,8 @@ pub enum LayerPreset {
     La,
     /// Design research: fantasy-book ink map.
     Ink,
+    /// Design research: bold-line print.
+    Bold,
     /// Design research: roof shapes preview (roof_mass / roof_facet / roof_shape_line).
     Roofs,
 }
@@ -68,11 +70,14 @@ impl LayerPreset {
         if names.len() == 1 && names[0] == "ink" {
             return Ok(Self::Ink);
         }
+        if names.len() == 1 && names[0] == "bold" {
+            return Ok(Self::Bold);
+        }
         if names.len() == 1 && names[0] == "roofs" {
             return Ok(Self::Roofs);
         }
         anyhow::bail!(
-            "supported --layers: highway_area | full-approx | la | ink | roofs (got {:?})",
+            "supported --layers: highway_area | full-approx | la | ink | bold | roofs (got {:?})",
             layers
         )
     }
@@ -202,7 +207,7 @@ fn write_meta_cores(
     Ok(written)
 }
 
-/// Design-research presets (`la`, `ink`): own paint stacks in `style_la` / `style_ink`.
+/// Design-research presets (`la`, `ink`, `bold`): own paint stacks in `style_la` / `style_ink`.
 pub fn render_style(
     client: &mut Client,
     prep_cache: &mut PreparedCache,
@@ -218,6 +223,7 @@ pub fn render_style(
     let pixmap = match preset {
         LayerPreset::La => crate::style_la::render(client, prep_cache, extent, mt.z)?,
         LayerPreset::Roofs => crate::roof_shapes::render(client, prep_cache, extent, mt.z)?,
+        LayerPreset::Bold => crate::style_bold::render(client, prep_cache, extent, mt.z)?,
         _ => crate::style_ink::render(client, prep_cache, extent, mt.z)?,
     };
     let written = write_meta_cores(&mt, &pixmap, out_dir, format_ext, webp_quality, timers)?;

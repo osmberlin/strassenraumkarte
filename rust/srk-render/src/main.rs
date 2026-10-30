@@ -19,6 +19,8 @@ mod profile;
 mod roof_shapes;
 mod sql_cache;
 mod style_cars;
+mod style_bold;
+mod style_bold_facade;
 mod style_ink;
 mod style_ink_extra;
 mod style_kit;
@@ -306,7 +308,7 @@ fn render_one_metatile(
                 timers,
             )
         }
-        LayerPreset::La | LayerPreset::Ink | LayerPreset::Roofs => render_style(
+        LayerPreset::La | LayerPreset::Ink | LayerPreset::Bold | LayerPreset::Roofs => render_style(
             client,
             prep_cache,
             mt,
