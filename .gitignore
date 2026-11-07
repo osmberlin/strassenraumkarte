@@ -32,8 +32,6 @@ backup/
 .cursor/*
 !.cursor/plans/
 !.cursor/plans/**
-!.cursor/agents/
-!.cursor/agents/**
 !.cursor/rules/
 !.cursor/rules/**
 
