@@ -1,0 +1,116 @@
+{
+  "generated_at": "2026-08-01",
+  "layer": "highway_area",
+  "bbox": "13.4132,52.4715,13.4312,52.4821",
+  "notes": "Smoke suite for highway_area isolate. Tiles chosen inside fixture-lock starter bbox with PostGIS ST_Intersects(highway_area.geom, ST_TileEnvelope). COMPARE_LOCATIONS outside the bbox (dense-trees, dense-housing, parking-street, park-water) are skipped; intersection (13.4222,52.4768) seeds several zoom levels.",
+  "tiles": [
+    {
+      "id": "17/70422/43008",
+      "z": 17,
+      "x": 70422,
+      "y": 43008,
+      "label": "anchor",
+      "strata": ["anchor"],
+      "suite": "smoke"
+    },
+    {
+      "id": "17/70422/43011",
+      "z": 17,
+      "x": 70422,
+      "y": 43011,
+      "label": "intersection z17",
+      "strata": ["compare-location", "intersection"],
+      "suite": "smoke"
+    },
+    {
+      "id": "17/70422/43009",
+      "z": 17,
+      "x": 70422,
+      "y": 43009,
+      "label": "anchor neighbor S",
+      "strata": ["neighbor", "anchor"],
+      "suite": "smoke"
+    },
+    {
+      "id": "17/70425/43010",
+      "z": 17,
+      "x": 70425,
+      "y": 43010,
+      "label": "density peak z17",
+      "strata": ["density"],
+      "suite": "smoke"
+    },
+    {
+      "id": "15/17605/10752",
+      "z": 15,
+      "x": 17605,
+      "y": 10752,
+      "label": "intersection parent z15",
+      "strata": ["compare-location", "intersection", "zoom"],
+      "suite": "smoke"
+    },
+    {
+      "id": "15/17606/10752",
+      "z": 15,
+      "x": 17606,
+      "y": 10752,
+      "label": "density z15",
+      "strata": ["density", "zoom"],
+      "suite": "smoke"
+    },
+    {
+      "id": "16/35211/21505",
+      "z": 16,
+      "x": 35211,
+      "y": 21505,
+      "label": "intersection z16",
+      "strata": ["compare-location", "intersection", "zoom"],
+      "suite": "smoke"
+    },
+    {
+      "id": "16/35212/21505",
+      "z": 16,
+      "x": 35212,
+      "y": 21505,
+      "label": "density z16",
+      "strata": ["density", "zoom"],
+      "suite": "smoke"
+    },
+    {
+      "id": "16/35211/21504",
+      "z": 16,
+      "x": 35211,
+      "y": 21504,
+      "label": "anchor parent z16",
+      "strata": ["anchor", "zoom"],
+      "suite": "smoke"
+    },
+    {
+      "id": "18/140845/86023",
+      "z": 18,
+      "x": 140845,
+      "y": 86023,
+      "label": "intersection z18",
+      "strata": ["compare-location", "intersection", "zoom"],
+      "suite": "smoke"
+    },
+    {
+      "id": "18/140851/86021",
+      "z": 18,
+      "x": 140851,
+      "y": 86021,
+      "label": "density peak z18",
+      "strata": ["density", "zoom"],
+      "suite": "smoke"
+    },
+    {
+      "id": "18/140844/86016",
+      "z": 18,
+      "x": 140844,
+      "y": 86016,
+      "label": "anchor child z18 (sparse)",
+      "strata": ["anchor", "sparse", "zoom"],
+      "suite": "smoke"
+    }
+  ]
+}

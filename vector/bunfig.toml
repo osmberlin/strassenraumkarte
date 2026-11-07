@@ -1,0 +1,5 @@
+[install]
+# Prefer the shared Bun package cache when available.
+globalStore = true
+# react-map-gl 8.1.2+ is required for maplibre-gl v6 (transform API); allow through cooldown.
+minimumReleaseAgeExcludes = ["react-map-gl", "@vis.gl/react-maplibre", "@vis.gl/react-mapbox"]

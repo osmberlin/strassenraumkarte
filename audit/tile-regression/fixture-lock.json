@@ -1,0 +1,78 @@
+{
+  "recorded_at": "2026-08-01T15:25:00Z",
+  "git_sha": "562ca964fb14389295bc5926ddced1ba51b58a68",
+  "git_sha_short": "562ca96",
+  "sql_compare_freeze": {
+    "status": "present",
+    "path": "audit/sql-compare/reference/baseline.json",
+    "meta_path": "audit/sql-compare/reference/baseline.meta.json",
+    "label": "baseline",
+    "sha256": "bf1a594c49a021805d44d4bb546c79ac7d3a307f9211d8aa9546b0c92fd863a9",
+    "size_bytes": 3372,
+    "mtime_local": "2026-08-01T14:59:33+02:00",
+    "mtime_unix": 1785589173,
+    "snapshot_ts": "2026-08-01T12:59:31Z",
+    "freeze_git_sha": "e3d3df8239abfa40f41bf55168798f19fc4d6ea2",
+    "freeze_bbox": "13.3958,52.4243,13.4874,52.4849",
+    "freeze_bbox_note": "Large Neukölln SQL-compare bbox (not the starter tile-regression bbox).",
+    "grid_m": 0.001,
+    "fingerprint_groups": [
+      "building",
+      "lanes_offset",
+      "lanes_connectivity",
+      "road_marking_stop_lines",
+      "road_marking_lane_divider",
+      "road_marking_crossing",
+      "label_highway"
+    ],
+    "sample_digest": {
+      "group": "building",
+      "table": "building",
+      "count": 34523,
+      "digest": "b5561d3d64fa14f4bf3ce2efb8160c80"
+    }
+  },
+  "live_db_pin": {
+    "status": "starter_snapshot",
+    "path": "audit/sql-compare/reference/starter.json",
+    "meta_path": "audit/sql-compare/reference/starter.meta.json",
+    "label": "starter",
+    "sha256": "6ab38d9a2f32d7b2bb5111a20d0297e78c4dd9cb10819613282eeb6593d340dd",
+    "snapshot_ts": "2026-08-01T15:25:00Z",
+    "bbox": "13.4132,52.4715,13.4312,52.4821",
+    "matches_baseline": false,
+    "mismatch_note": "Live DB is the docker/.env starter bbox; baseline.json is the large SQL-compare bbox. compare.py reports 13/13 fingerprint mismatches (counts only — expected). Use starter.json to detect renderer-adjacent data drift on the harness bbox; use baseline.json when re-running the large-bbox SQL audit.",
+    "sample_digest": {
+      "group": "building",
+      "table": "building",
+      "count": 1561,
+      "digest": "6f96da5ef1782943841338c0098f96ef"
+    },
+    "highway_area_count": 527
+  },
+  "notes": "Full digest freeze already exists (baseline.json). No multi-hour re-freeze. Live harness DB pinned separately as starter.json. Re-run ./audit/sql-compare/run-reference.sh only after intentional large-bbox data changes.",
+  "docker": {
+    "compose_file": "docker/docker-compose.yml",
+    "db_image": "imresamu/postgis:17-3.5-bookworm",
+    "db_image_id": "35fe7dceda62",
+    "db_image_digest": "sha256:35fe7dceda62bfe7d2965b0ba78d915ff9f901b5e0466d633ecc58421b5b5210",
+    "osm2pgsql_version": "2.1.1"
+  },
+  "pbf": {
+    "symlink": "data/osm/berlin-latest.osm.pbf",
+    "resolved_path": "/Users/tordans/Development/OSM/osm-processing-pipeline-comparison/data/raw/berlin-latest.osm.pbf",
+    "size_bytes": 97558645,
+    "mtime": "2026-04-10T12:27:44+02:00",
+    "sha256": "b18255b80fdc8a83343c5c67a4218c7b080536066fbbcb7ce151afa9f89146df"
+  },
+  "db": {
+    "host": "localhost",
+    "port": 5433,
+    "name": "strassenraumkarte",
+    "user": "postgres"
+  },
+  "bbox": "13.4132,52.4715,13.4312,52.4821",
+  "bbox_source": "docker/.env starter (Neukölln); same default as audit/tile-compare/freeze-reference.sh",
+  "example_tile": "17/70422/43008",
+  "example_tile_note": "Inside docker starter BBOX; present under render/tiles/ when a starter render has been run."
+}

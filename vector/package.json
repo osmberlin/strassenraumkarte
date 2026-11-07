@@ -1,0 +1,47 @@
+{
+  "name": "strassenraumkarte-vector",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "export": "bun run scripts/export.ts",
+    "tiles": "bun run scripts/build-tiles.ts",
+    "tile-report": "bun run scripts/tile-report.ts",
+    "pipeline": "bun run export && bun run tiles && bun run tile-report",
+    "verify-preview": "bun run scripts/verify-preview.ts",
+    "validate-style": "bun run scripts/validate-style.ts",
+    "sprite": "bun run scripts/build-sprite.ts",
+    "screenshots": "bun run scripts/screenshots.ts",
+    "capture-viewers": "bun run scripts/capture-viewers.ts",
+    "e2e": "playwright test",
+    "test": "bun test src/style",
+    "type-check": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.scripts.json",
+    "check": "bun run type-check && bun run validate-style && bun test src/style"
+  },
+  "dependencies": {
+    "maplibre-gl": "6.0.0",
+    "pmtiles": "^4",
+    "react": "^19",
+    "react-dom": "^19",
+    "react-map-gl": "8.1.2"
+  },
+  "devDependencies": {
+    "@maplibre/maplibre-gl-style-spec": "^26.2.1",
+    "@playwright/test": "^1.62.1",
+    "@types/pngjs": "^6.0.5",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "bun-types": "^1.3.14",
+    "pixelmatch": "^7.2.0",
+    "playwright": "^1.62.0",
+    "pngjs": "^7.0.0",
+    "sharp": "^0.35.3",
+    "typescript": "^5",
+    "vite": "^6"
+  },
+  "patchedDependencies": {
+    "maplibre-gl@6.0.0": "patches/maplibre-gl@6.0.0.patch",
+    "@maplibre/maplibre-gl-style-spec@26.2.1": "patches/@maplibre%2Fmaplibre-gl-style-spec@26.2.1.patch"
+  }
+}

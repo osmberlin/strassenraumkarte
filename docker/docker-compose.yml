@@ -1,0 +1,65 @@
+# Straßenraumkarte Berlin test stack: PostGIS + data-prep tools.
+# Usage: see docker/README.md
+#
+# From repo root:
+#   docker compose -f docker/docker-compose.yml --env-file docker/.env up -d db
+#   docker compose -f docker/docker-compose.yml --env-file docker/.env run --rm tools ./run.sh …
+
+name: strassenraumkarte
+
+services:
+  db:
+    image: imresamu/postgis:17-3.5-bookworm
+    shm_size: 2gb
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-strassenraumkarte}
+      LANG: en_US.UTF-8
+      LC_ALL: en_US.UTF-8
+      TZ: Europe/Berlin
+    ports:
+      - "${DB_HOST_PORT:-5433}:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    command: ["-c", "config_file=/etc/postgresql/postgresql.conf"]
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-strassenraumkarte}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  tools:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    working_dir: /work
+    volumes:
+      - ..:/work
+      # Overlay the host symlink: Docker Desktop does not follow symlinks that
+      # point outside the repo bind mount. Absolute path is written by link-berlin-pbf.sh.
+      - ${BERLIN_PBF_MOUNT:?Run ./docker/link-berlin-pbf.sh first}:/work/data/osm/berlin-latest.osm.pbf:ro
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: ${POSTGRES_DB:-strassenraumkarte}
+      DB_USER: ${POSTGRES_USER:-postgres}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      PGUSER: ${POSTGRES_USER:-postgres}
+      CRS: "3857"
+      OSM2PGSQL_NUMBER_PROCESSES: ${OSM2PGSQL_NUMBER_PROCESSES:-8}
+      PERF_AUDIT_DIR: ${PERF_AUDIT_DIR:-}
+      PERF_AUDIT_LABEL: ${PERF_AUDIT_LABEL:-}
+      TZ: Europe/Berlin
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db_data:

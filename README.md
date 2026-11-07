@@ -6,6 +6,8 @@ The appeal of the style, which is aesthetically inspired by architectural plans,
 
 Technically, the style combines a QGIS project (with the layer styling) and an involved data pipeline based on osm2pgsql and SQL post-processing that prepares geometries and attributes for rendering.
 
+A second **vector output channel** lives in [`vector/`](vector/): PostGIS → GeoJSONSeq → tippecanoe → PMTiles, styled in MapLibre (QGIS-faithful core paints) with a raster/vector compare UI. See [`vector/README.md`](vector/README.md).
+
 Note: This repository is a new, modernised version based on an osm2pgsql / SQL / QGIS workflow; the original version (Overpass / Python / QGIS) lives at [osmberlin/strassenraumkarte-neukoelln](https://github.com/osmberlin/strassenraumkarte-neukoelln).
 
 Example of the Straßenraumkarte
@@ -66,6 +68,22 @@ Console output from `run.sh`, `data/data_preparation.sh`, and `render/render_til
 ## Tile rendering
 
 Tiles are rendered by a custom PyQGIS metatile loop (`[render/xyz_tiles.py](render/xyz_tiles.py)`), not `qgis_process`. Metatiles run in parallel; `--jobs dynamic` (default) scales workers to available RAM (cap `min(CPU−1, 8)`), with a gutter so labels can cross edges. Under memory pressure, extra workers are killed and the metatile size may be halved; crashed workers are re-queued. Use `--resume` to skip tiles already on disk; `render/profile_metatile.py` and `data/diagnose_db.sql` help find slow layers. Smaller extents (individual street corridors or neighbourhoods) usually finish in a few minutes. Whole districts or cities take correspondingly longer — e.g. about 1 hour for Berlin-Neukölln (ca. 20 km²) or about 4 hours for Berlin’s inner city (ca. 180 km²), each measured on a system with 32 GB RAM and an Intel i7-7700HQ (8 threads), for z15–z20.
+
+## Docker (Berlin test)
+
+For a contained PostGIS + data-prep environment (Berlin PBF via configurable symlink, host QGIS for rendering), see [`docker/README.md`](docker/README.md).
+
+## Vector output (prep)
+
+Experimental MapLibre / tippecanoe channel lives in [`vector/`](vector/README.md): export PostGIS → GeoJSONSeq → `.pmtiles`, then `bun run dev` for a basic blue/purple/red geometry preview.
+
+## Performance audits
+
+To time every pipeline step (ingest / import / SQL / render), write gitignored raw data under `audit/runs/`, and generate a findings report (safe to run beside agent work), see [`audit/README.md`](audit/README.md).
+
+```bash
+PERF_AUDIT_LABEL=berlin-starter ./audit/run-with-audit.sh ./docker/run-berlin.sh
+```
 
 ## Usage
 
@@ -143,6 +161,10 @@ Serve the tile directory with a small local server that also lists PBFs under `d
 ```
 
 The preview page can optionally show classic OSM tiles underneath the Straßenraumkarte, overlay a second local XYZ tile directory for comparison (checkbox + folder picker), and includes a metatile/gutter debug overlay. For tiles-only viewing without the run API, `cd render/tiles && python3 -m http.server 8000` still works.
+
+### Viewers and scene comparison
+
+There are four viewers (the QGIS preview above, the design-research viewer, the MapLibre vector app with its QGIS · Rust · Vector compare, and the static galleries). [docs/VIEWERS.md](docs/VIEWERS.md) says which one to use. To compare scenes between styles, see [Szenen vergleichen / Comparing scenes](docs/design-research/README.md#szenen-vergleichen--comparing-scenes).
 
 ### Data preparation only
 

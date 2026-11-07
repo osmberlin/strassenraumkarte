@@ -60,6 +60,11 @@ from qgis.core import (  # noqa: E402
 from qgis.PyQt.QtCore import QSize, qInstallMessageHandler  # noqa: E402
 from qgis.PyQt.QtGui import QColor, QImage, QPainter  # noqa: E402
 
+# Qt6 / QGIS 4 (e.g. macOS QGIS.app): alias the unscoped enum names used below.
+import qt_compat  # noqa: E402
+
+qt_compat.install()
+
 ORIGIN_SHIFT = 20037508.342789244
 TILE_SIZE_PX = 256
 DEFAULT_BACKGROUND = "#ededed"
